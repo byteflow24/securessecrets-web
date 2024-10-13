@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}Secures Secrets{% endblock %}
+
+{% block content %}
+{% include "header.html" %}
+<div class="container position-relative px-4 px-lg-5">
+    <div class="row gx-4 gx-lg-5 justify-content-center">
+        <div class="col-md-10 col-lg-8 col-xl-7 text-center">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} text-center mt-3 alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <div class="site-heading">
+                <h1 class="mb-4" style="font-size: 3rem; font-weight: bold; color: #2c3e50;">Save Your Secret</h1>
+                <p class="lead text-muted" style="font-size: 1.25rem;">Keep your secrets safe!</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row gx-4 gx-lg-5 justify-content-center mt-5 mb-5">
+        <div class="col-md-8">
+            <div class="card p-4 shadow-lg border-0 rounded-lg" style="background: linear-gradient(to right, #ffffff, #f9f9f9);">
+                <h4 class="card-title text-center mb-4" style="font-size: 1.75rem; font-weight: bold; color: #2c3e50;">Create a New Secret</h4>
+                <form method="POST" class="needs-validation" novalidate enctype="multipart/form-data">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        <label for="title" class="form-label" style="font-weight: bold; color: #2c3e50;">Title</label>
+                        {{ form.title(class="form-control", placeholder="Write a title...", style="border-color: #2c3e50;") }}
+                        {% for error in form.title.errors %}
+                            <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label for="secret" class="form-label" style="font-weight: bold; color: #2c3e50;">Secret</label>
+                        {{ form.secret(class="form-control", placeholder="Write your secret here!", rows=5, style="border-color: #2c3e50;") }}
+                        {% for error in form.secret.errors %}
+                            <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label for="file" class="form-label" style="font-weight: bold; color: #2c3e50;">Upload File</label>
+                        {{ form.file(class="form-control-file") }}
+                        {% for error in form.file.errors %}
+                            <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="background-color: #3498db; border-color: #3498db; font-size: 1.1rem;">Save</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include "footer.html" %}
+{% endblock %}

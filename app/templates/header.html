@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block content %}
+    <div class="container-fluid" id="mainNav">
+        <header class="d-flex flex-wrap align-items-center justify-content-center justify-content-md-between py-3 mb-4 border-bottom fixed-top bg-white shadow-sm">
+            <div class="col-md-3 mb-2 mb-md-0">
+                <a href="/" class="d-inline-flex link-body-emphasis">
+                    <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" style="width: 200px; padding-left: 30px;">
+                </a>
+            </div>
+            {% if not current_user.is_authenticated %}
+            <ul class="nav col-12 col-md-auto mb-2 justify-content-center mb-md-0">
+                <li><a href="{{ url_for('main.home') }}" class="nav-link px-2 link-secondary">
+                    <i class="bi bi-plus-circle-dotted"></i>
+                    Add Secret  
+                </a></li>
+                <li><a href="{{ url_for('main.pricing') }}" class="nav-link px-2">Pricing</a></li>
+                <li><a href="{{ url_for('main.about') }}" class="nav-link px-2">About Us</a></li>
+                <li><a href="{{ url_for('main.contact') }}" class="nav-link px-2">Contact Us</a></li>
+            </ul>
+            {% else %}
+            <ul class="nav col-12 col-md-auto mb-2 justify-content-center mb-md-0">
+                <li><a href="{{ url_for('main.home') }}" class="nav-link px-2 link-secondary">
+                    <i class="bi bi-plus-circle-dotted"></i>
+                    Add Secret
+                </a></li>
+                <li><a href="{{ url_for('main.all_secrets', user_id=current_user.id) }}" class="nav-link px-2">My Secrets</a></li>
+            </ul>
+            {% endif %}
+            
+            <div class="col-md-3 text-end" style="padding-right: 30px;">
+                {% if not current_user.is_authenticated %}
+                    <a href="{{ url_for('main.login') }}" class="btn btn-outline-secondary me-2">Login</a>
+                    <!-- <a href="{{ url_for('main.register') }}" class="btn btn-secondary">Sign-up</a> -->
+                {% else %}
+                    <div class="dropdown">
+                        <a href="#" class="d-block link-dark text-decoration-none dropdown-toggle" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i>
+                            {{ current_user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+                            <li><a class="dropdown-item" href="{{ url_for('main.update_profile') }}">Profile</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('main.billing') }}">Billing</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('main.about') }}">About Us</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('main.contact') }}">Contact Us</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('main.logout') }}">Logout</a></li>
+                        </ul>
+                    </div>
+                {% endif %}
+            </div>
+        </header>
+    </div>
+{% endblock %}

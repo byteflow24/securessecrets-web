@@ -531,7 +531,7 @@ def generate_token():
 
 # Sender details which SS email, and pswd
 EMAIL = "Support@securessecrets.com"
-PSWD = "Securessecrets@24"
+PSWD = os.environ.get("EMAIL_PSWD")
 SERVER = 'smtp.titan.email'
 PORT = 587
 

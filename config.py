@@ -9,6 +9,6 @@ class Config:
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB limit
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=15)
 
-    SERVER_NAME = 'advocate-phones-isolation-airports.trycloudflare.com'
-    APPLICATION_ROOT = '/'
-    PREFERRED_URL_SCHEME = 'https'
+    # SERVER_NAME = 'advocate-phones-isolation-airports.trycloudflare.com'
+    # APPLICATION_ROOT = '/'
+    # PREFERRED_URL_SCHEME = 'https'

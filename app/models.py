@@ -1,7 +1,6 @@
 from . import db
-from sqlalchemy import Integer, String, ForeignKey, Boolean, DECIMAL, TIMESTAMP, JSON, func, Date
+from sqlalchemy import Integer, String, ForeignKey, Boolean, DECIMAL, TIMESTAMP, func, Date
 from flask_login import UserMixin
-from datetime import date, timedelta
 
 # Users DB
 class User(UserMixin, db.Model):
@@ -12,7 +11,7 @@ class User(UserMixin, db.Model):
     email = db.Column(String(255), unique=True, nullable=False)
     password = db.Column(String(255), nullable=False)
     username = db.Column(String(255), unique=True, nullable=False)
-    customer_id = db.Column(String(255), nullable=True)  # Customer ID from payment gateway
+    customer_id = db.Column(String(255), nullable=True)
     card_id = db.Column(String(255), nullable=True)
     payment_agreement_id = db.Column(String(255), nullable=True)
     last_login = db.Column(TIMESTAMP, nullable=False, default=func.now())
@@ -92,8 +91,8 @@ class HistoryPayment(db.Model):
     __tablename__ = "history_payments"
 
     id = db.Column(Integer, primary_key=True)
-    user_id = db.Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)  # Set user_id to NULL on delete
-    plan_id = db.Column(Integer, ForeignKey('plans.id', ondelete='SET NULL'), nullable=True)  # Set plan_id to NULL on delete
+    user_id = db.Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    plan_id = db.Column(Integer, ForeignKey('plans.id', ondelete='SET NULL'), nullable=True)
     amount = db.Column(DECIMAL(10, 2), nullable=False)
     currency = db.Column(String(10), nullable=False)
     payment_date = db.Column(TIMESTAMP, default=func.now())

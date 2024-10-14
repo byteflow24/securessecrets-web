@@ -3,8 +3,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from . import db
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm
 from .models import User, Secret, Payment, Plan, SharedSecret, HistoryPayment
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, generate_token, send_verification_email, is_safe_url, create_charge, populate_plan_choices, get_charge_details, get_ip, get_user_agent, initiate_recurring_payment, encrypt_secret, decrypt_secret, refund_method, send_payment_email, trial_end_reminder, recurring_payment, reset_password_email, not_paied_reminder
-# from .celery_worker import send_email_task, generate_unique_token
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, generate_token, send_verification_email, is_safe_url, create_charge, populate_plan_choices, get_charge_details, get_ip, get_user_agent, encrypt_secret, decrypt_secret, refund_method, send_payment_email, recurring_payment, reset_password_email
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError

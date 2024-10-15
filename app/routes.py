@@ -21,6 +21,8 @@ main = Blueprint('main', __name__)
 @main.route('/register', methods=['GET', 'POST'])
 @require_pricing_session()
 def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.home'))
     form = RegisterForm()
     plan_id = request.args.get('plan_id')
     
@@ -72,6 +74,8 @@ def register():
 # Log in server
 @main.route('/login', methods=['GET', 'POST'])
 def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.home'))
     form = LoginForm()
 
     next_page = request.args.get('next') or request.form.get('next')  # Get next from both GET and POST
@@ -572,6 +576,8 @@ def update_secret(secret_id):
 # Pricing page
 @main.route('/pricing')
 def pricing():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.home'))
     session['from_pricing'] = True
     if current_user.is_authenticated and not current_user.is_confirmed:
         return redirect(url_for('main.confirmation_pending'))

@@ -188,7 +188,7 @@ def refund_method(charge_id, amount, currency):
         "amount": amount,
         "currency": currency,
         "reason": "Saving card details for next payments",
-        "post": { "url": "https://transparent-fire-horse-circle.trycloudflare.com" }
+        "post": { "url": "https://www.securessecrets.com" }
     }
 
     url = f"{API_URL}/refunds"

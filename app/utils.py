@@ -116,7 +116,6 @@ def populate_plan_choices(form, user):
         ]
 
 
-
 # Configures Tap payment
 API_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
 # API_KEY = os.environ.get("TAP_TEST_API_SECRET")
@@ -143,7 +142,7 @@ def create_charge(amount, currency, description, email, phone_country_code, phon
             'first_name': first_name
         },
         'source': {
-            'id': 'src_all',  # Using 'src_all' to let Tap choose the payment method
+            'id': 'src_card',  # Using 'src_all' to let Tap choose the payment method
         },
         'redirect': {
             'url': url_for('main.payment_complete', _external=True, plan_id=plan_id)  # Redirect URL after payment

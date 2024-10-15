@@ -545,20 +545,20 @@ def reset_password_email(email, username, token):
 def email_reminder(email, username, trial_end_date, reminder_type):
     # Construct the email message
     msg = MIMEMultipart("related")  # Use "related" for images
-    msg['From'] = formataddr(('SecureSecrets Team', EMAIL))
+    msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = email
 
     if reminder_type == "trial_week":
-        msg['Subject'] = Header('Your SecureSecrets Trial Ends in 1 Week – Don’t Miss Out!', 'utf-8')
+        msg['Subject'] = Header('Your SecuresSecrets Trial Ends in 1 Week – Don’t Miss Out!', 'utf-8')
         body = (
             f"<html>"
             f"<body>"
             f"<h2>Hi {username},</h2>"
-            f"<p>We hope you're enjoying your experience with SecureSecrets!<p><br>"
+            f"<p>We hope you're enjoying your experience with SecuresSecrets!<p><br>"
             f"<p>This is a friendly reminder that your free trial will end in 1 week, on {trial_end_date}.</p>"
             f"<p>After the trial ends, your plan will automatically upgrade to a paid subscription so you can continue enjoying our service without interruption.</p><br>"
             f"<p>Best regards,</p>"
-            f"<p>The SecureSecrets Team</p>"
+            f"<p>The SecuresSecrets Team</p>"
             f"<div style='padding-left: 30px;'>"
             f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
             f"</div>"
@@ -567,15 +567,15 @@ def email_reminder(email, username, trial_end_date, reminder_type):
         )
         
     elif reminder_type == "trial_day":
-        msg['Subject'] = Header('Your SecureSecrets Trial Ends Tomorrow – Don’t Miss Out!', 'utf-8')
+        msg['Subject'] = Header('Your SecuresSecrets Trial Ends Tomorrow – Don’t Miss Out!', 'utf-8')
         body = (
             f"<html>"
             f"<body>"
             f"<h2>Hi {username},</h2>"
-            f"<p>We wanted to remind you that your free trial with SecureSecrets will end tomorrow, on {trial_end_date}.</p>"
+            f"<p>We wanted to remind you that your free trial with SecuresSecrets will end tomorrow, on {trial_end_date}.</p>"
             f"<p>Your plan will automatically upgrade to a paid subscription so you can continue using all the features seamlessly.</p><br>"
             f"<p>Best regards,</p>"
-            f"<p>The SecureSecrets Team</p>"
+            f"<p>The SecuresSecrets Team</p>"
             f"<div style='padding-left: 30px;'>"
             f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
             f"</div>"
@@ -613,7 +613,7 @@ def email_reminder(email, username, trial_end_date, reminder_type):
 def reminder_to_pay_email(username, email, plan_name, days_left):
 
     msg = MIMEMultipart("related")  # Use "related" for images
-    msg['From'] = formataddr(('SecureSecrets Team', EMAIL))
+    msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = email  # Adjust accordingly
 
     if days_left == 5:
@@ -625,7 +625,7 @@ def reminder_to_pay_email(username, email, plan_name, days_left):
             f"<p>This is a reminder that you have <strong>5 days</strong> left to renew your subscription for the {plan_name} plan.</p>"
             f"<p>If you do not renew, your account will be deleted after this period.</p><br>"
             f"<p>Best regards,</p>"
-            f"<p>The SecureSecrets Team</p>"
+            f"<p>The SecuresSecrets Team</p>"
             f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
             f"</body>"
             f"</html>"
@@ -640,7 +640,7 @@ def reminder_to_pay_email(username, email, plan_name, days_left):
             f"<p>This is a reminder that you have <strong>3 days</strong> left to renew your subscription for the {plan_name} plan.</p>"
             f"<p>If you do not renew, your account will be deleted after this period.</p><br>"
             f"<p>Best regards,</p>"
-            f"<p>The SecureSecrets Team</p>"
+            f"<p>The SecuresSecrets Team</p>"
             f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
             f"</body>"
             f"</html>"
@@ -656,7 +656,7 @@ def reminder_to_pay_email(username, email, plan_name, days_left):
             f"<p>Unfortunately, if you do not renew today, your account will be deleted.</p><br>"
             f"<p>We hope to see you back soon!</p>"
             f"<p>Best regards,</p>"
-            f"<p>The SecureSecrets Team</p>"
+            f"<p>The SecuresSecrets Team</p>"
             f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
             f"</body>"
             f"</html>"
@@ -691,7 +691,7 @@ def reminder_to_pay_email(username, email, plan_name, days_left):
 def send_payment_email(email, username, plan_name, payment_amount, payment_date, subscription_type, card_type, last_4_digit):
     # Construct the email message
     msg = MIMEMultipart("related")  # Use "related" for images
-    msg['From'] = formataddr(('SecureSecrets Team', EMAIL))
+    msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = email
 
     # Determine subject and body based on subscription type
@@ -701,7 +701,7 @@ def send_payment_email(email, username, plan_name, payment_amount, payment_date,
             f"<html>"
             f"<body>"
             f"<p>Dear {username},</p>"
-            f"<p>Thank you for upgrading your subscription with SecureSecrets.</p>"
+            f"<p>Thank you for upgrading your subscription with SecuresSecrets.</p>"
             f"<p>Your account has been charged the following amount:</p>"
             f"<ul>"
             f"<li>Plan Name: {plan_name}</li>"
@@ -719,7 +719,7 @@ def send_payment_email(email, username, plan_name, payment_amount, payment_date,
             f"<p>Timeline:</p>"
             f"<p>{payment_date.strftime('%B %d, %Y')} - Plan upgraded successful</p>"
             f"<p>If you have any questions or need further assistance, feel free to contact our support team.</p>"
-            f"<p>Best regards,<br>The SecureSecrets Team</p>"
+            f"<p>Best regards,<br>The SecuresSecrets Team</p>"
             f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
             f"</body>"
             f"</html>"
@@ -731,7 +731,7 @@ def send_payment_email(email, username, plan_name, payment_amount, payment_date,
             f"<html>"
             f"<body>"
             f"<p>Dear {username},</p>"
-            f"<p>Thank you for renewing your subscription with SecureSecrets.</p>"
+            f"<p>Thank you for renewing your subscription with SecuresSecrets.</p>"
             f"<p>Your account has been charged the following amount:</p>"
             f"<ul>"
             f"<li>Plan Name: {plan_name}</li>"
@@ -749,7 +749,7 @@ def send_payment_email(email, username, plan_name, payment_amount, payment_date,
             f"<p>Timeline:</p>"
             f"<p>{payment_date.strftime('%B %d, %Y')} - Payment successful</p>"
             f"<p>If you have any questions or need further assistance, feel free to contact our support team.</p>"
-            f"<p>Best regards,<br>The SecureSecrets Team</p>"
+            f"<p>Best regards,<br>The SecuresSecrets Team</p>"
             f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
             f"</body>"
             f"</html>"
@@ -784,7 +784,7 @@ def send_payment_email(email, username, plan_name, payment_amount, payment_date,
 def send_payment_failed_email(email, username, failure_status, plan_name, card_type, last_4_digit):
     # Construct the email message
     msg = MIMEMultipart("related")
-    msg['From'] = formataddr(('SecureSecrets Team', EMAIL))
+    msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = email
     msg['Subject'] = Header('Payment Failure Notice', 'utf-8')
 
@@ -797,7 +797,7 @@ def send_payment_failed_email(email, username, failure_status, plan_name, card_t
         f"<p>Payment Method: {card_type} ending in {last_4_digit}</p>"
         f"<p>Please update your payment details or try again to avoid any interruptions in your service.</p>"
         f"<p>If you have any questions or need further assistance, feel free to contact our support team.</p>"
-        f"<p>Best regards,<br>The SecureSecrets Team</p>"
+        f"<p>Best regards,<br>The SecuresSecrets Team</p>"
         f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
         f"</body>"
         f"</html>"
@@ -832,9 +832,9 @@ def send_payment_failed_email(email, username, failure_status, plan_name, card_t
 def send_verification_email(user_email, username, token):
     
     msg = MIMEMultipart()
-    msg['From'] = formataddr(('SecureSecrets Team', EMAIL))
+    msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = user_email
-    msg['Subject'] = Header('Welcome to SecureSecrets!', 'utf-8')
+    msg['Subject'] = Header('Welcome to SecuresSecrets!', 'utf-8')
 
     # Use external=True to generate an absolute URL
     verification_url = url_for('main.confirm_email', token=token, _external=True)
@@ -843,17 +843,17 @@ def send_verification_email(user_email, username, token):
         f"<html>"
         f"<body>"
         f"<h2>Hi {username},</h2>"
-        f"<p>Thanks for signing up to SecureSecrets. Before we can continue, we need to validate your email address.</p>"
+        f"<p>Thank you for signing up to SecuresSecrets. Before we can continue, we need to validate your email address.</p>"
         f"<p>Please click the link below to verify your email:</p>"
         f"<p><a href='{verification_url}'>{verification_url}</a></p>"
-        f"<p>Best regards,<br>The SecureSecrets Team</p>"
-        f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='SecureSecrets Logo'>"
+        f"<p>Best regards,<br>The SecuresSecrets Team</p>"
+        f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='SecuresSecrets Logo'>"
         f"</body>"
         f"</html>"
 
     )
     
-    msg.attach(MIMEText(body, 'plain'))
+    msg.attach(MIMEText(body, 'html'))
 
     # Add the logo image to the email
     logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.png')

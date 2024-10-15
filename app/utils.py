@@ -118,33 +118,9 @@ def populate_plan_choices(form, user):
 
 
 # Configures Tap payment
-# API_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
-API_KEY = os.environ.get("TAP_TEST_API_SECRET")
+API_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
+# API_KEY = os.environ.get("TAP_TEST_API_SECRET")
 API_URL = "https://api.tap.company/v2"
-
-
-# Savig card token before the end of the trial
-# def tokenize_card(details):
-#     headers = {
-#         "Authorization": f'Bearer {API_KEY}',
-#         "Content-Type": "application/json"
-#     }
-#     payload = {
-#         "card": {
-#             "number": details["number"],
-#             "exp_month": details["exp_month"],
-#             "exp_year": details["exp_year"],
-#             "cvc": details["cvc"],
-#             "name": details["name"]
-#         }
-#     }
-#     url = f"{API_URL}/tokens"
-#     response = requests.post(url, headers=headers, json=payload)
-#     if response.status_code == 200:
-#             return response.json()
-#     else:
-#         raise Exception("Failed to fetch saved card token")
-
 
 # Creating a charge and redirecting to Tap's hosted payment page, handling 3D Secure if needed
 def create_charge(amount, currency, description, email, phone_country_code, phone_number, first_name, plan_id):

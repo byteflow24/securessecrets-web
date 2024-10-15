@@ -17,54 +17,6 @@ import traceback
 main = Blueprint('main', __name__)
 
 
-new_plan = Plan(
-    plan="Basic",
-    price=0.99,
-    currency="USD",
-    description=["100 MB", "Upload large files"],
-    billing_cycle="monthly",
-    storage_limit=104857600,
-)
-
-new_plan1 = Plan(
-    plan="Premuim",
-    price=1.99,
-    currency="USD",
-    description=["500 MB", "Upload large files"],
-    billing_cycle="monthly",
-    storage_limit=524288000,
-)
-
-from datetime import datetime
-
-admin_user = User(
-    plan_id=None,  
-    email="admin@securessecrets.com",
-    password="pbkdf2:sha256:600000$GklbgjlKIuuuaeD1$adab82f24845d3f75f769dd558b6d8a1edf4acc8157f7ef479bb7cba75d38285",  
-    username="admin",
-    customer_id=None,
-    card_id=None,
-    payment_agreement_id=None,
-    last_login=datetime.now(timezone.utc),
-    phone="30016379",
-    country_code="+974",
-    storage_used=0,
-    verification_sent=True,
-    is_confirmed=True,
-    trial_start_date=datetime.now(timezone.utc),
-    trial_end_date=None,
-    subscription_start_date=datetime.now(timezone.utc),
-    subscription_end_date=datetime.now(timezone.utc) + timedelta(days=10800),  
-    subscription_status="active",
-)
-
-db.session.add(admin_user)
-db.session.add(new_plan)
-db.session.add(new_plan1)
-db.session.commit()
-
-
-
 # Registeration server @sign-up
 @main.route('/register', methods=['GET', 'POST'])
 @require_pricing_session()
@@ -142,7 +94,7 @@ def login():
                 return redirect(url_for('main.confirmation_pending', user=user.id))
             login_user(user)
             # Update last login time
-            user.last_login = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            user.last_login = datetime.now().strftime("%Y-%m-%d %H:%M")
             db.session.commit()
             # Session timeout, after 15 mins user will be logged out
             session.permanent = True

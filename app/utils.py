@@ -142,10 +142,10 @@ def create_charge(amount, currency, description, email, phone_country_code, phon
             'first_name': first_name
         },
         'source': {
-            'id': 'src_card',  # Using 'src_all' to let Tap choose the payment method
+            'id': 'CARD',  
         },
         'redirect': {
-            'url': url_for('main.payment_complete', _external=True, plan_id=plan_id)  # Redirect URL after payment
+            'url': url_for('main.payment_complete', _external=True, plan_id=plan_id)
         }
     }
 

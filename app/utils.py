@@ -142,7 +142,7 @@ def create_charge(amount, currency, description, email, phone_country_code, phon
             'first_name': first_name
         },
         'source': {
-            'id': 'CARD',  
+            'id': 'src_all', 
         },
         'redirect': {
             'url': url_for('main.payment_complete', _external=True, plan_id=plan_id)

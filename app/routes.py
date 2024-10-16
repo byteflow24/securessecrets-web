@@ -246,11 +246,8 @@ def home():
         # Retrieve the storage limit based on the user's plan
         storage_limit = current_user.plan.storage_limit  # Storage limit is already set based on user's plan
 
-        # Calculate the size of the secret text
-        secret_size = len(form.secret.data.encode('utf-8'))  # Convert text to bytes
-
-        # Initialize total size with the size of the secret text
-        total_size = secret_size
+        # Initialize total size
+        total_size = 0
 
         filename = ""
         if form.file.data:
@@ -258,9 +255,10 @@ def home():
             if file:
                 filename = secure_filename(file.filename)
                 file_size = len(file.read())  # Get the size of the file in bytes
+                print("file size", file_size)
                 file.seek(0)  # Reset file pointer
 
-                total_size += file_size
+                total_size = file_size
 
                 # Check if the new file + secret will exceed the user's storage limit
                 if current_user.storage_used + total_size > storage_limit:
@@ -275,15 +273,19 @@ def home():
                 file_path = os.path.join(upload_folder, filename)
                 file.save(file_path)
 
-        # Update the user's storage used (text + file)
-        current_user.storage_used += total_size
-        db.session.commit()
-
         # Generate a unique title
         unique_title = get_unique_title(form.title.data, current_user.id)
 
         # Encrypt the secret text
         encrypted_secret = encrypt_secret(form.secret.data)
+
+        # Convert encrypted_secret text to bytes
+        secret_size = len(encrypted_secret.encode('utf-8'))
+        total_size += secret_size
+
+        # Update the user's storage used (text + file)
+        current_user.storage_used += total_size
+        db.session.commit()
 
         # Create a new Secret instance and add it to the database
         new_secret = Secret(
@@ -311,14 +313,6 @@ def home():
 
     return render_template('index.html', form=form, current_user=current_user)
 
-
-# @main.route('/trigger-tasks', methods=['GET'])
-# def trigger_tasks():
-#     from .celery_worker import initiate_recurring_payment_task, trial_end_reminder_task, not_paied_reminder_task
-#     initiate_recurring_payment_task.apply_async()
-#     trial_end_reminder_task.apply_async()
-#     not_paied_reminder_task.apply_async()
-#     return "Tasks have been triggered!"
 
 # List of all secerts for the user 
 @main.route('/all-secrets', methods=['GET', 'POST'])
@@ -462,7 +456,7 @@ def delete_secret(sec_id):
 
         # Update the user's storage used
         total_size = text_size + file_size
-        current_user.storage_used -= total_size
+        current_user.storage_used = max(0, current_user.storage_used - total_size)  # Prevent negative storage
 
         # Commit the changes to update storage
         db.session.commit()
@@ -477,6 +471,7 @@ def delete_secret(sec_id):
         db.session.rollback()
         # Handle error (e.g., notify the user, log the error, etc.)
         return "An error occurred while deleting the secret.", 500
+
     
 
 # User to delete his account

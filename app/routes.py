@@ -109,7 +109,7 @@ def login():
             if not secrets:
                 return redirect(url_for('main.home'))
             else:
-                return redirect(url_for('main.all_secrets', user_id=current_user.id))
+                return redirect(url_for('main.all_secrets'))
     
     return render_template('login.html', form=form, current_user=current_user)
 
@@ -266,7 +266,7 @@ def home():
                 if current_user.storage_used + total_size > storage_limit:
                     flash(f"Adding this secret will exceed your {current_user.plan.plan} plan's storage limit.", "warning")
                     # send email to the ADMIN about the user storage
-                    return redirect(url_for('main.all_secrets', user_id=current_user.id))
+                    return redirect(url_for('main.all_secrets'))
 
                 # Save the file
                 upload_folder = current_app.config['UPLOAD_FOLDER']
@@ -303,7 +303,7 @@ def home():
 
         # Clear session form data
         session.pop('form_data', None)
-        return redirect(url_for('main.all_secrets', user_id=new_secret.user_id))
+        return redirect(url_for('main.all_secrets'))
 
     if 'form_data' in session:
         form.title.data = session['form_data'].get('title', '')
@@ -321,13 +321,13 @@ def home():
 #     return "Tasks have been triggered!"
 
 # List of all secerts for the user 
-@main.route('/all-secrets/<int:user_id>', methods=['GET', 'POST'])
+@main.route('/all-secrets', methods=['GET', 'POST'])
 @login_required
 @current_user_only
-def all_secrets(user_id):
+def all_secrets():
     form = SearchForm()
     share_form = ShareForm()
-    query = db.select(Secret).where(Secret.user_id == user_id)
+    query = db.select(Secret).where(Secret.user_id == current_user.id)
 
     if current_user.is_authenticated and not current_user.is_confirmed:
         return redirect(url_for('main.confirmation_pending'))
@@ -403,13 +403,13 @@ def share():
             db.session.commit()
 
             flash(f"Your secret is scheduled to be sent on {date} at {time.strftime('%H:%M')}.", "success")
-            return redirect(url_for('main.all_secrets', user_id=current_user.id))
+            return redirect(url_for('main.all_secrets'))
         except (SQLAlchemyError, SMTPException) as e:
             db.session.rollback()
             flash(f"An error occurred: {e}", "warning")
-            return redirect(url_for('main.all_secrets', user_id=current_user.id))
+            return redirect(url_for('main.all_secrets'))
 
-    return redirect(url_for('main.all_secrets', user_id=current_user.id))
+    return redirect(url_for('main.all_secrets'))
 
 
 # The link where that person will read the >>SHARED_SECRET<<
@@ -553,7 +553,7 @@ def update_secret(secret_id):
         # Check if the new storage exceeds the user's plan limit
         if storage_used > current_user.plan.storage_limit:
             flash("You have exceeded your storage limit. Please delete some files or secrets.", "danger")
-            return redirect(url_for('main.all_secrets', user_id=current_user.id))
+            return redirect(url_for('main.all_secrets'))
 
         # Update the user's storage used
         current_user.storage_used = storage_used
@@ -569,7 +569,7 @@ def update_secret(secret_id):
             secret.date = date.today().strftime("%B %d, %Y")
             db.session.commit()
 
-        return redirect(url_for('main.all_secrets', user_id=current_user.id))
+        return redirect(url_for('main.all_secrets'))
 
     return render_template('edit_secret.html', form=form)
 

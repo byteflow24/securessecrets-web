@@ -265,6 +265,7 @@ def home():
                 # Check if the new file + secret will exceed the user's storage limit
                 if current_user.storage_used + total_size > storage_limit:
                     flash(f"Adding this secret will exceed your {current_user.plan.plan} plan's storage limit.", "warning")
+                    # send email to the ADMIN about the user storage
                     return redirect(url_for('main.all_secrets', user_id=current_user.id))
 
                 # Save the file

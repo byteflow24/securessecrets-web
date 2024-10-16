@@ -323,7 +323,6 @@ def home():
 # List of all secerts for the user 
 @main.route('/all-secrets', methods=['GET', 'POST'])
 @login_required
-@current_user_only
 def all_secrets():
     form = SearchForm()
     share_form = ShareForm()

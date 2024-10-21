@@ -1,8 +1,9 @@
 from flask import Blueprint, render_template, redirect, url_for, send_from_directory, flash, request, session, jsonify, current_app, abort
 from flask_login import login_user, logout_user, login_required, current_user
+from flask_babel import gettext
 from . import db
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm
-from .models import User, Secret, Payment, Plan, SharedSecret, HistoryPayment
+from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, HistoryPayment
 from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, generate_token, send_verification_email, is_safe_url, create_charge, populate_plan_choices, get_charge_details, get_ip, get_user_agent, encrypt_secret, decrypt_secret, refund_method, send_payment_email, recurring_payment, reset_password_email
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -15,6 +16,15 @@ import traceback
 
 
 main = Blueprint('main', __name__)
+
+
+# allows users to change the language
+@main.route('/set_language/<lang>')
+def set_language(lang):
+    # Set the selected language in the session
+    session['lang'] = lang
+    # print(f"Language set to: {session['lang']}")
+    return redirect(request.referrer or url_for('main.home'))
 
 
 # Registeration server @sign-up
@@ -97,8 +107,13 @@ def login():
                 flash('Please confirm your email address before logging in.', 'warning')
                 return redirect(url_for('main.confirmation_pending', user=user.id))
             login_user(user)
+
             # Update last login time
-            user.last_login = datetime.now().strftime("%Y-%m-%d %H:%M")
+            ip_address = request.remote_addr  # This retrieves the client's IP address
+    
+            # Add a new entry in the LoginHistory table
+            login_history = LoginHistory(user_id=user.id, login_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ip_address=ip_address)
+            db.session.add(login_history)
             db.session.commit()
             # Session timeout, after 15 mins user will be logged out
             session.permanent = True
@@ -185,6 +200,8 @@ def reset_password():
 @login_required
 def update_profile():
     pr_form = ProfileForm(obj=current_user)
+    login = LoginHistory.query.filter_by(user_id=current_user.id).all()
+    last_login = LoginHistory.query.filter_by(user_id=current_user.id).order_by(LoginHistory.login_time.desc()).first()
     if pr_form.validate_on_submit():
         # Handle profile update (only profile details)
         current_user.username = pr_form.username.data
@@ -193,16 +210,18 @@ def update_profile():
         db.session.commit()
         flash('Profile updated successfully!', 'success')
         return redirect(url_for('main.update_profile'))
-    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm())
+    pr_form.code.data = current_user.country_code
+    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login)
 
-
+# Update password
 @main.route('/change-password', methods=['POST'])
 @login_required
 def change_password():
-    ps_form = ChangePasswordForm()
-    print(request.form)
+    pr_form = ProfileForm(obj=current_user)
+    ps_form = ChangePasswordForm(request.form)
+    login = LoginHistory.query.filter_by(user_id=current_user.id).all()
+    last_login = LoginHistory.query.filter_by(user_id=current_user.id).order_by(LoginHistory.login_time.desc()).first()
     if ps_form.validate_on_submit():
-        print("here")
         current_password = ps_form.current_password.data
         new_password = ps_form.new_password.data
         confirm_password = ps_form.confirm_password.data
@@ -219,11 +238,11 @@ def change_password():
                 return redirect(url_for('main.update_profile'))
         else:
             flash('Current password is incorrect.', 'danger')
-    else:
-        # Debug validation errors
-        print(ps_form.errors)
 
-    return redirect(url_for('main.update_profile'))
+    pr_form.code.data = current_user.country_code
+
+    # Instead of redirecting, return to the profile page with the form
+    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login)
 
 
 # Home page

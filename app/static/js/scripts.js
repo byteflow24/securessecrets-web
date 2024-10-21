@@ -3,6 +3,12 @@
 * Copyright 2013-2023 Start Bootstrap
 * Licensed under MIT (https://github.com/StartBootstrap/startbootstrap-clean-blog/blob/master/LICENSE)
 */
+
+function googleTranslateElementInit() {
+    new google.translate.TranslateElement({pageLanguage: 'en', includedLanguages: 'ar,en,es,tr,fr,ja,de,ru'}, 'google_translate_element');
+}
+
+
 window.addEventListener('DOMContentLoaded', () => {
     let scrollPos = 0;
     const mainNav = document.getElementById('mainNav');
@@ -155,6 +161,28 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
+    // last login
+    const loginHistoryModal = document.getElementById('loginHistoryModal');
+    loginHistoryModal.addEventListener('show.bs.modal', function() {
+        // Fetch login history from the server
+        fetch('/api/login-history')  // Replace with your endpoint
+            .then(response => response.json())
+            .then(data => {
+                const loginHistoryList = document.getElementById('loginHistoryList');
+                loginHistoryList.innerHTML = '';  // Clear the list
+
+                data.forEach(login => {
+                    const listItem = document.createElement('li');
+                    listItem.className = 'list-group-item';
+                    listItem.textContent = `Login Time: ${login.login_time}, IP Address: ${login.ip_address}`;
+                    loginHistoryList.appendChild(listItem);
+                });
+            })
+            .catch(error => {
+                console.error('Error fetching login history:', error);
+            });
+    });
+
 });
 
 
@@ -162,7 +190,3 @@ document.addEventListener("DOMContentLoaded", function() {
 function closePopup(index) {
     document.getElementById('share-popup-' + index).style.display = 'none';
 }
-
-
-
-

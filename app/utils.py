@@ -117,8 +117,8 @@ def populate_plan_choices(form, user):
 
 
 # Configures Tap payment
-API_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
-# API_KEY = os.environ.get("TAP_TEST_API_SECRET")
+# API_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
+API_KEY = os.environ.get("TAP_TEST_API_SECRET")
 API_URL = "https://api.tap.company/v2"
 
 # Creating a charge and redirecting to Tap's hosted payment page, handling 3D Secure if needed
@@ -186,7 +186,7 @@ def refund_method(charge_id, amount, currency):
         "charge_id": charge_id,
         "amount": amount,
         "currency": currency,
-        "reason": "Saving card details for next payments",
+        "reason": "Test Transaction",
         "post": { "url": "https://www.securessecrets.com" }
     }
 

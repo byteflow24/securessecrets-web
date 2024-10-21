@@ -21,7 +21,40 @@
     </div>
 
     <!-- Last Login Info -->
-    <p class="text-muted text-center">Last Login: {{ current_user.last_login }}</p>
+    <div class="text-center">
+        <p class="text-muted" style="margin-bottom: 0;">Last Login: {{ last_login.login_time }}</p>
+        <a href="#" data-bs-toggle="modal" data-bs-target="#loginHistoryModal" class="btn link-primary">View all account accesses</a>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="loginHistoryModal" tabindex="-1" aria-labelledby="loginHistoryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="loginHistoryModalLabel">Login History</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Login Time</th>
+                                <th scope="col">IP Address</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for login in login_history %}
+                            <tr>
+                                <td>{{ login.login_time }}</td>
+                                <td>{{ login.ip_address }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="row">
         <!-- Profile Info Section -->
@@ -47,7 +80,7 @@
                         <div class="row mb-3">
                             <div class="col-md-3">
                                 {{ pr_form.code.label(class="form-label") }}
-                                {{ pr_form.code(class="form-control", id="code") }}
+                                {{ pr_form.code(class="form-control", id="country_code") }}
                             </div>
                             <div class="col-md-9">
                                 {{ pr_form.phone.label(class="form-label") }}
@@ -70,7 +103,7 @@
                 <div class="card-body">
                     <h5 class="card-title text-center pb-3">Change Password</h5>
                     <form method="POST" action="{{ url_for('main.change_password') }}" novalidate>
-                        {{ pr_form.csrf_token(id="csrf_token_pr_form") }}
+                        {{ ps_form.csrf_token(id="csrf_token_pr_form") }}
                         <div class="mb-3">
                             {{ ps_form.current_password.label(class="form-label") }}
                             {{ ps_form.current_password(class="form-control", id="current_password") }}
@@ -96,7 +129,7 @@
                         <div class="text-center">
                             {{ ps_form.submit(class="btn btn-danger w-50 py-2", id="submit_password") }}
                         </div>
-                    </form>
+                    </form>                    
                 </div>
             </div>
         </div>

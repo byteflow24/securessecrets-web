@@ -1,7 +1,10 @@
-test.py
 # Project-wide
 .DS_Store
 celerybeat-schedule.db
+test.py
+translations
+babel.cfg
+messages.pot
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

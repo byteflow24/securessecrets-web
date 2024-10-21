@@ -1,5 +1,5 @@
 from . import db
-from sqlalchemy import Integer, String, ForeignKey, Boolean, DECIMAL, TIMESTAMP, func, Date
+from sqlalchemy import Integer, String, ForeignKey, Boolean, DECIMAL, TIMESTAMP, func, Date, Text
 from flask_login import UserMixin
 
 # Users DB
@@ -11,13 +11,12 @@ class User(UserMixin, db.Model):
     email = db.Column(String(255), unique=True, nullable=False)
     password = db.Column(String(255), nullable=False)
     username = db.Column(String(255), unique=True, nullable=False)
+    country_code = db.Column(String(4), nullable=True)
+    phone = db.Column(String(20), nullable=True)
+    storage_used = db.Column(Integer, default=0, nullable=False)
     customer_id = db.Column(String(255), nullable=True)
     card_id = db.Column(String(255), nullable=True)
     payment_agreement_id = db.Column(String(255), nullable=True)
-    last_login = db.Column(TIMESTAMP, nullable=False, default=func.now())
-    phone = db.Column(String(20), nullable=True)
-    country_code = db.Column(String(4), nullable=True)
-    storage_used = db.Column(Integer, default=0, nullable=False)
     verification_sent = db.Column(db.Boolean, default=False)
     is_confirmed = db.Column(db.Boolean, default=False)
     email_token = db.Column(db.String(64), nullable=True)
@@ -37,6 +36,20 @@ class User(UserMixin, db.Model):
     plan = db.relationship('Plan', back_populates='users')
     shared_secrets = db.relationship('SharedSecret', back_populates='user')
     history_payments = db.relationship('HistoryPayment', back_populates='user')
+    login_history = db.relationship('LoginHistory', back_populates='user', cascade="all, delete-orphan")
+
+
+class LoginHistory(db.Model):
+    __tablename__ = "login_history"
+
+    id = db.Column(Integer, primary_key=True)
+    user_id = db.Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    login_time = db.Column(TIMESTAMP, nullable=False, default=func.now())
+    ip_address = db.Column(String(45), nullable=False)
+    
+    # Relationship to access user from the login history
+    user = db.relationship('User', back_populates='login_history')
+
 
 # Secrets DB
 class Secret(db.Model):
@@ -45,7 +58,7 @@ class Secret(db.Model):
     id = db.Column(Integer, primary_key=True)
     user_id = db.Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     title = db.Column(String(100), nullable=False)
-    secret = db.Column(String(255), nullable=False)
+    secret = db.Column(Text, nullable=False)
     file = db.Column(String(255), nullable=True)
     date = db.Column(Date, nullable=True)
     share = db.Column(Boolean, default=False)

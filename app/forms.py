@@ -12,10 +12,21 @@ class SecretForm(FlaskForm):
     submit = SubmitField("Save")
 
 
+# Regular expression for password complexity
+password_regex = r'^(?=.*[A-Z])(?=.*\d)(?=.*\W)(?=.*[a-z]).{8,}$'
+
 # Create a form to register new users
 class RegisterForm(FlaskForm):
     email = EmailField("Email", validators=[DataRequired(), Email()])
-    password = PasswordField("Password", validators=[DataRequired()])
+    password = PasswordField("Password", validators=[DataRequired(),
+        Regexp(
+            regex=password_regex,
+            message=(
+                "Password must be at least 8 characters long, "
+                "contain at least one uppercase letter, one number, and one symbol."
+            )
+        )
+    ])
     confirm_password = PasswordField("Confirm Password", validators=[DataRequired()])
     username = StringField("Username", validators=[DataRequired()])
     code = SelectField("Country Code", 
@@ -88,7 +99,15 @@ class ProfileForm(FlaskForm):
 # ChangePasswordForm
 class ChangePasswordForm(FlaskForm):
     current_password = PasswordField("Current Password", validators=[DataRequired()])
-    new_password = PasswordField("New Password", validators=[DataRequired()])
+    new_password = PasswordField("New Password", validators=[DataRequired(),
+        Regexp(
+            regex=password_regex,
+            message=(
+                "Password must be at least 8 characters long, "
+                "contain at least one uppercase letter, one number, and one symbol."
+            )
+        )
+    ])
     confirm_password = PasswordField("Confirm New Password", validators=[DataRequired()])
     submit = SubmitField("Change Password")
 

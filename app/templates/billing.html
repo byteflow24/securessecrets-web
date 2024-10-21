@@ -25,7 +25,7 @@
                 <div class="card-body text-center">
                     <h4 class="card-title">Current Plan</h4>
                     <p class="lead"><strong>{{ user.plan.plan }}</strong></p>
-                    <p>Status: <span class="badge {% if user.subscription_status == 'active' %}badge-success{% else %}badge-danger{% endif %} text-black">
+                    <p>Status: <span class="badge {% if user.subscription_status == 'active' %}bg-success{% else %}bg-danger{% endif %} text-white">
                         {{ user.subscription_status|capitalize }}
                     </span></p>
                 </div>
@@ -65,8 +65,11 @@
             </div>
 
             <!-- Pay Now Button -->
+            <!-- Notification to the user -->
             {% if user.subscription_status != 'active' %}
             <div class="text-center mb-4">
+                <p class="text-warning">Your bill has not been paid yet. You can pay it now by clicking the button below.</p>
+                <!-- Pay Now Button -->
                 <button type="button" class="btn btn-danger btn-lg" data-bs-toggle="modal" data-bs-target="#payNowModal">
                     Pay Now
                 </button>
@@ -160,7 +163,7 @@
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
                             <div class="modal-body">
-                                You are about to upgrade your plan. After this step, you will be redirected to complete your payment. Are you sure you want to proceed?
+                                You are about to upgrade your plan. Your payment will be processed automatically. Are you sure you want to proceed?
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

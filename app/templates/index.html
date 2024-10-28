@@ -26,7 +26,7 @@
     <div class="row gx-4 gx-lg-5 justify-content-center mt-5 mb-5">
         <div class="col-md-8">
             <div class="card p-4 shadow-lg border-0 rounded-lg" style="background: linear-gradient(to right, #ffffff, #f9f9f9);">
-                <h4 class="card-title text-center mb-4" style="font-size: 1.75rem; font-weight: bold; color: #2c3e50;">Create a New Secret</h4>
+                <h4 class="card-title text-center mb-4" style="font-size: 1.75rem; font-weight: bold; color: #2c3e50;">New Secret</h4>
                 <form method="POST" class="needs-validation" novalidate enctype="multipart/form-data">
                     {{ form.hidden_tag() }}
                     <div class="mb-3">
@@ -38,19 +38,28 @@
                     </div>
                     <div class="mb-3">
                         <label for="secret" class="form-label" style="font-weight: bold; color: #2c3e50;">Secret</label>
-                        {{ form.secret(class="form-control", placeholder="Write your secret here!", rows=5, style="border-color: #2c3e50;") }}
+                        {{ form.secret(class="form-control", placeholder="Write your secret here!", rows=5, style="border-color: #2c3e50; height: 80px;") }}
                         {% for error in form.secret.errors %}
                             <div class="text-danger">{{ error }}</div>
                         {% endfor %}
                     </div>
                     <div class="mb-3">
-                        <label for="file" class="form-label" style="font-weight: bold; color: #2c3e50;">Upload File</label>
-                        {{ form.file(class="form-control-file") }}
+                        <label for="fileInput" class="btn btn-primary" style="background-color: #2b52d3; border-color: #2b52d3; padding: 0.5rem 1rem;">Upload File</label>
+                        <!-- Hidden file input -->
+                        {{ form.file(class="form-control-file d-none", id="fileInput") }}
+                        <span id="fileName" class="ms-2" style="color: #2c3e50;"></span>
+                        <!-- Image preview for image files -->
+                        <div id="filePreview" class="mt-2" style="display: none;">
+                            <img id="previewImage" src="" alt="File Preview" class="img-fluid" style="max-height: 150px;"/>
+                        </div>
+                        <div id="errorFlash" style="display:none; color:red; font-size:small;"></div>
                         {% for error in form.file.errors %}
                             <div class="text-danger">{{ error }}</div>
                         {% endfor %}
                     </div>
-                    <button type="submit" class="btn btn-primary" style="background-color: #3498db; border-color: #3498db; font-size: 1.1rem;">Save</button>
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-primary" style="background-color: #2b52d3; border-color: #2b52d3; padding: 0.5rem 1rem;">Save</button>
+                    </div>
                 </form>
             </div>
         </div>

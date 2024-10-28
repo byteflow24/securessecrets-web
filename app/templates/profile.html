@@ -68,23 +68,23 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 {{ pr_form.username.label(class="form-label") }}
-                                {{ pr_form.username(class="form-control bg-light", id="username", readonly=true) }}
+                                {{ pr_form.username(class="form-control bg-light", id="username", autocomplete="username", readonly=true) }}
                             </div>
                             <div class="col-md-6">
                                 {{ pr_form.email.label(class="form-label") }}
-                                {{ pr_form.email(class="form-control bg-light", id="email", readonly=true) }}
+                                {{ pr_form.email(class="form-control bg-light", id="email", readonly=true, autocomplete="email") }}
                             </div>
                         </div>
                         
                         <!-- Phone Code and Phone Number Row -->
                         <div class="row mb-3">
                             <div class="col-md-3">
-                                {{ pr_form.code.label(class="form-label") }}
+                                {{ pr_form.code.label(class="form-label", for="country_code") }}
                                 {{ pr_form.code(class="form-control", id="country_code") }}
                             </div>
                             <div class="col-md-9">
-                                {{ pr_form.phone.label(class="form-label") }}
-                                {{ pr_form.phone(class="form-control", id="phone_number", type="number") }}
+                                {{ pr_form.phone.label(class="form-label", for="phone_number") }}
+                                {{ pr_form.phone(class="form-control", id="phone_number", type="number", autocomplete="phone") }}
                             </div>
                         </div>
                     

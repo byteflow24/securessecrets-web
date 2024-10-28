@@ -7,7 +7,7 @@ from wtforms.validators import DataRequired, Optional, Length, Regexp, Email, An
 # WTForm for creating a secret
 class SecretForm(FlaskForm):
     title = StringField("Title", validators=[DataRequired()], render_kw={"placeholder": "Write a title..."})
-    secret = TextAreaField("Keep Your Secret Here", validators=[DataRequired()], render_kw={"placeholder": "Write your secret here!", "rows": 5})
+    secret = TextAreaField("Keep Your Secret Here", validators=[DataRequired()], render_kw={"placeholder": "Write your secret here!", "rows": 3})
     file = FileField("Upload File e.g. pdf, png, xls (Optional)", validators=[Optional()], render_kw={"class": "form-control", "style": "width: 400px;"})
     submit = SubmitField("Save")
 
@@ -116,7 +116,7 @@ class ChangePasswordForm(FlaskForm):
 class LoginForm(FlaskForm):
     user = StringField("Email/ Username", validators=[DataRequired()], render_kw={'placeholder': 'Email, username'})
     password = PasswordField("Password", validators=[DataRequired()], render_kw={'placeholder': 'Password'})
-    submit = SubmitField("Let Me In!")
+    submit = SubmitField("Log In")
 
 # Forget password
 class ForgetPaswdForm(FlaskForm):
@@ -151,6 +151,17 @@ class ShareForm(FlaskForm):
     confirm_deletion = BooleanField(
         "I want the link to be deleted 1 hour after it is opened.", validators=[Optional()]
     )
+    public_sharing = BooleanField(
+        "Share Publicly",
+        validators=[Optional()],
+        render_kw={"class": "form-check-input"}
+    )
+
+    deadline_date = DateField(
+        "Deadline for sharing",
+        validators=[Optional()],
+        render_kw={"class": "form-control"})
+    
     submit = SubmitField("Send", render_kw={"class": "btn btn-primary w-50"})
 
 # Deleting account

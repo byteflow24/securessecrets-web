@@ -1,58 +1,62 @@
 {% extends 'base.html' %}
 {% block content %}
-    <div class="container-fluid" id="mainNav">
-        <header class="d-flex flex-wrap align-items-center justify-content-between py-3 mb-4 border-bottom fixed-top bg-white shadow-sm">
-            <div class="col-md-3 mb-2 mb-md-0 d-flex align-items-center">
-                <a href="/" class="d-inline-flex link-body-emphasis">
-                    <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" style="width: 200px; padding-left: 30px;">
+    <!-- Navigation Bar -->
+<div class="contaner" style="margin-bottom:110px">
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm border-bottom fixed-top" id="mainNav">
+            <div class="container-fluid px-4">
+                <!-- Logo, slightly offset from the left edge -->
+                <a href="{{ url_for('main.login') }}" class="navbar-brand d-inline-flex align-items-center">
+                    <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" alt="Logo" style="width: 150px; padding-left: 15px;">
                 </a>
-            </div>
 
-            <nav class="col-12 col-md-auto mb-2 justify-content-center mb-md-0">
-                {% if not current_user.is_authenticated %}
-                <ul class="nav">
-                    <li class="nav-item"><a href="{{ url_for('main.home') }}" class="nav-link px-2 link-secondary">
-                        <i class="bi bi-plus-circle-dotted"></i> Add Secret  
-                    </a></li>
-                    <li class="nav-item"><a href="{{ url_for('main.pricing') }}" class="nav-link px-2">Pricing</a></li>
-                    <li class="nav-item"><a href="{{ url_for('main.about') }}" class="nav-link px-2">About Us</a></li>
-                    <li class="nav-item"><a href="{{ url_for('main.contact') }}" class="nav-link px-2">Contact Us</a></li>
-                </ul>
-                {% else %}
-                <ul class="nav">
-                    <li class="nav-item"><a href="{{ url_for('main.home') }}" class="nav-link px-2 link-secondary">
-                        <i class="bi bi-plus-circle-dotted"></i> Add Secret
-                    </a></li>
-                    <li class="nav-item"><a href="{{ url_for('main.all_secrets') }}" class="nav-link px-2">My Secrets</a></li>
-                </ul>
-                {% endif %}
-            </nav>
+                <!-- Navbar Toggler for Mobile View -->
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
 
-            <div class="col-md-3 text-end d-flex justify-content-end align-items-center">
-                <!-- Language selection dropdown -->
-                <div id="google_translate_element"></div>
-            
-                <!-- User Authentication Section -->
-                {% if not current_user.is_authenticated %}
-                    <a href="{{ url_for('main.login') }}" class="btn btn-outline-secondary me-2">Login</a>
-                {% else %}
-                    <div class="dropdown" style="margin-right: 10px;">
-                        <a href="#" class="d-block link-dark text-decoration-none dropdown-toggle" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i>
-                            {{ current_user.username }}
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
-                            <li><a class="dropdown-item" href="{{ url_for('main.update_profile') }}">Profile</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('main.billing') }}">Billing</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('main.about') }}">About Us</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('main.contact') }}">Contact Us</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('main.logout') }}">Logout</a></li>
-                        </ul>
-                    </div>
-                {% endif %}
+                <!-- Navbar Links and Dropdown -->
+                <div class="collapse navbar-collapse justify-content-between" id="navbarResponsive">
+                    <!-- Centered Links -->
+                    <ul class="navbar-nav mx-auto">
+                        {% if not current_user.is_authenticated %}
+                            <li class="nav-item"><a class="nav-link text-dark px-lg-3 py-3 py-lg-4" href="{{ url_for('main.pricing') }}">Pricing</a></li>
+                            <li class="nav-item"><a class="nav-link text-dark px-lg-3 py-3 py-lg-4" href="{{ url_for('main.about') }}">About Us</a></li>
+                            <li class="nav-item"><a class="nav-link text-dark px-lg-3 py-3 py-lg-4" href="{{ url_for('main.contact') }}">Contact Us</a></li>
+                        {% else %}
+                            <li class="nav-item">
+                                <a class="nav-link text-dark px-lg-3 py-3 py-lg-4" href="{{ url_for('main.home') }}">
+                                    <i class="bi bi-plus-circle-dotted"></i> Add Secret
+                                </a>
+                            </li>
+                            <li class="nav-item"><a class="nav-link text-dark px-lg-3 py-3 py-lg-4" href="{{ url_for('main.all_secrets') }}">My Secrets</a></li>
+                        {% endif %}
+                    </ul>
+
+                    <!-- Right-aligned Login or Dropdown -->
+                    <ul class="navbar-nav">
+                        {% if not current_user.is_authenticated %}
+                            <li class="nav-item">
+                                <a class="btn btn-outline-secondary px-lg-3 py-2" href="{{ url_for('main.login') }}">Login</a>
+                            </li>
+                        {% else %}
+                            <li class="nav-item dropdown">
+                                <a href="#" class="nav-link dropdown-toggle text-dark px-lg-3 py-3 py-lg-4" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i> {{ current_user.username }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+                                    <li><a class="dropdown-item" href="{{ url_for('main.update_profile') }}">Profile</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('main.billing') }}">Billing</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('main.about') }}">About Us</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('main.contact') }}">Contact Us</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('main.logout') }}">Logout</a></li>
+                                </ul>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </div>
             </div>
-        </header>
-    </div>
+    </nav>
+</div>
 {% endblock %}

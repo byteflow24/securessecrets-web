@@ -82,7 +82,7 @@ def register():
 
 
 # Log in server
-@main.route('/login', methods=['GET', 'POST'])
+@main.route('/', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.home'))
@@ -116,7 +116,7 @@ def login():
             db.session.add(login_history)
             db.session.commit()
             # Session timeout, after 15 mins user will be logged out
-            session.permanent = True
+            # session.permanent = True
             if next_page and is_safe_url(next_page):
                 return redirect(next_page)
             
@@ -246,7 +246,7 @@ def change_password():
 
 
 # Home page
-@main.route('/', methods=['GET', 'POST'])
+@main.route('/new-secret', methods=['GET', 'POST'])
 def home():
 
     if current_user.is_authenticated and not current_user.is_confirmed:
@@ -274,7 +274,6 @@ def home():
             if file:
                 filename = secure_filename(file.filename)
                 file_size = len(file.read())  # Get the size of the file in bytes
-                print("file size", file_size)
                 file.seek(0)  # Reset file pointer
 
                 total_size = file_size

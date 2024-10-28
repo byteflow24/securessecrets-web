@@ -1,45 +1,38 @@
-/*!
-* Start Bootstrap - Clean Blog v6.0.9 (https://startbootstrap.com/theme/clean-blog)
-* Copyright 2013-2023 Start Bootstrap
-* Licensed under MIT (https://github.com/StartBootstrap/startbootstrap-clean-blog/blob/master/LICENSE)
-*/
-
-function googleTranslateElementInit() {
-    new google.translate.TranslateElement({pageLanguage: 'en', includedLanguages: 'ar,en,es,tr,fr,ja,de,ru'}, 'google_translate_element');
-}
-
-
 window.addEventListener('DOMContentLoaded', () => {
+    // Scroll handling for the main navigation
     let scrollPos = 0;
     const mainNav = document.getElementById('mainNav');
+
+    if (!mainNav) {
+        console.error('Element with ID "mainNav" not found.');
+        return; // Exit if mainNav is not found
+    }
+
     const headerHeight = mainNav.clientHeight;
+
     window.addEventListener('scroll', function() {
         const currentTop = document.body.getBoundingClientRect().top * -1;
-        if ( currentTop < scrollPos) {
+        if (currentTop < scrollPos) {
             // Scrolling Up
             if (currentTop > 0 && mainNav.classList.contains('is-fixed')) {
                 mainNav.classList.add('is-visible');
             } else {
-                console.log(123);
                 mainNav.classList.remove('is-visible', 'is-fixed');
             }
         } else {
             // Scrolling Down
-            mainNav.classList.remove(['is-visible']);
+            mainNav.classList.remove('is-visible');
             if (currentTop > headerHeight && !mainNav.classList.contains('is-fixed')) {
                 mainNav.classList.add('is-fixed');
             }
         }
         scrollPos = currentTop;
     });
-})
 
+    // CSRF token for AJAX requests
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-// Pin & Star functions
-document.addEventListener("DOMContentLoaded", function() {
-    var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-    // Toggle Pin
+    // Toggle Pin functionality
     document.querySelectorAll('.toggle-pin').forEach(function(button) {
         button.addEventListener('click', function() {
             var secretId = this.getAttribute('data-id');
@@ -60,7 +53,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     });
 
-    // Toggle Star
+    // Toggle Star functionality
     document.querySelectorAll('.toggle-star').forEach(function(button) {
         button.addEventListener('click', function() {
             var secretId = this.getAttribute('data-id');
@@ -81,66 +74,98 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     });
 
-    // Show the correct popup on Share button click
+    // Share button click event
     document.querySelectorAll('.share-button').forEach(function(button) {
         button.addEventListener('click', function() {
             var targetPopup = this.getAttribute('data-target');
             document.querySelector(targetPopup).style.display = 'block';
-            
-            // Reset the date and time field display when opening the modal
-            var dateField = document.querySelector(targetPopup).querySelector('.date-field');
-            var dateLabel = document.querySelector(targetPopup).querySelector('.date-label');
-            var timeField = document.querySelector(targetPopup).querySelector('.time-field');
-            var timeLabel = document.querySelector(targetPopup).querySelector('.time-label');
-            
-            dateField.style.display = 'none'; // Hide date field initially
-            dateLabel.style.display = 'none'; // Hide label initially
-            timeField.style.display = 'none'; // Hide time field initially
-            timeLabel.style.display = 'none'; // Hide time label initially
+            // Reset fields in the modal
+            resetModalFields(targetPopup);
         });
     });
 
-    // Toggle the date and time field visibility
-    document.querySelectorAll('.toggle-date-button').forEach(function(button) {
+    // Function to reset modal fields
+    function resetModalFields(targetPopup) {
+        const modal = document.querySelector(targetPopup);
+        const dateFieldSelect = modal.querySelector('.date-field-select');
+        const dateLabelSelect = modal.querySelector('.date-label-select');
+        const timeFieldSelect = modal.querySelector('.time-field-select');
+        const timeLabelSelect = modal.querySelector('.time-label-select');
+        const dateFieldPublic = modal.querySelector('.date-field-public');
+        const dateLabelPublic = modal.querySelector('.date-label-public');
+
+        // Initialize states
+        dateFieldSelect.style.display = 'none';
+        dateLabelSelect.style.display = 'none';
+        timeFieldSelect.style.display = 'none';
+        timeLabelSelect.style.display = 'none';
+        dateFieldPublic.style.display = 'none';
+        dateLabelPublic.style.display = 'none';
+    }
+
+    // Toggle public share date field
+    document.querySelectorAll('.toggle-date-button-public').forEach(function(button) {
         button.addEventListener('click', function() {
-            var targetPopup = this.closest('.modal'); // Get the closest modal
-            var dateField = targetPopup.querySelector('.date-field');
-            var dateLabel = targetPopup.querySelector('.date-label');
-            var timeField = targetPopup.querySelector('.time-field');
-            var timeLabel = targetPopup.querySelector('.time-label');
-            
-            if (dateField.style.display === 'none') {
-                dateField.style.display = 'block';
-                dateLabel.style.display = 'block';
-                timeField.style.display = 'block';  // Show time field
-                timeLabel.style.display = 'block';  // Show time label
-            } else {
-                dateField.style.display = 'none';
-                dateLabel.style.display = 'none';
-                timeField.style.display = 'none';  // Hide time field
-                timeLabel.style.display = 'none';  // Hide time label
-            }
+            var targetPopup = this.closest('.modal');
+            toggleVisibility(targetPopup.querySelector('.date-field-public'));
+            toggleVisibility(targetPopup.querySelector('.date-label-public'));
         });
     });
 
-    // Add event listener for upgrading the plan
-    document.getElementById('confirm-upgrade').addEventListener('click', function () {
-        var planSelect = document.getElementById("upgrade-form").querySelector("select[name='plan_id']");
-        if (planSelect.value == 0) {
-            alert("Please select a valid plan to upgrade.");
-            return false; // Prevent form submission
-        } else {
-            // Submit the form after the user confirms
-            document.getElementById('upgrade-form').submit();
+    // Toggle email input visibility
+    document.querySelectorAll('.toggle-email-button').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var targetPopup = this.closest('.modal');
+            toggleVisibility(targetPopup.querySelector('.email-container'));
+        });
+    });
+
+    // Toggle date and time visibility for Share via Email
+    document.querySelectorAll('.toggle-date-button-email').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var targetPopup = this.closest('.modal');
+            toggleVisibility(targetPopup.querySelector('.date-field-email'));
+            toggleVisibility(targetPopup.querySelector('.time-field-email'));
+        });
+    });
+
+    // Function to toggle visibility
+    function toggleVisibility(element) {
+        element.style.display = (element.style.display === 'none' || element.style.display === '') ? 'block' : 'none';
+    }
+
+    // Deadline field visibility
+    document.querySelectorAll('.modal').forEach(function(modal) {
+        var confirmDeletionCheck = modal.querySelector('.form-check-input#confirmDeletionCheck');
+        if (confirmDeletionCheck) {
+            confirmDeletionCheck.addEventListener('change', function() {
+                toggleDeadlineField(modal);
+            });
         }
     });
-    
 
-    document.querySelectorAll('.btn-outline-secondary').forEach(button => {
-        button.addEventListener('click', function() {
-            const secretId = this.getAttribute('data-id');
+    // Function to handle visibility of deadline date field
+    function toggleDeadlineField(modal) {
+        var confirmDeletionCheck = modal.querySelector('.form-check-input#confirmDeletionCheck');
+        var publicSharingCheck = modal.querySelector('.form-check-input#publicSharingCheck');
+        var deadlineDateContainer = modal.querySelector('.deadline-date-container');
+
+        deadlineDateContainer.style.display = (confirmDeletionCheck.checked && publicSharingCheck.checked) ? 'block' : 'none';
+    }
+
+    // Upgrade plan event listener
+    var confirmUpgradeButton = document.getElementById('confirm-upgrade');
+    if (confirmUpgradeButton) {
+        confirmUpgradeButton.addEventListener('click', function() {
+            var planSelect = document.getElementById("upgrade-form").querySelector("select[name='plan_id']");
+            if (planSelect.value == 0) {
+                alert("Please select a valid plan to upgrade.");
+                return false; // Prevent form submission
+            } else {
+                document.getElementById('upgrade-form').submit();
+            }
         });
-    });
+    }
 
     // Pay Now Modal Logic
     const savedCardRadio = document.getElementById('savedCard');
@@ -161,32 +186,83 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // last login
+    // Last login
     const loginHistoryModal = document.getElementById('loginHistoryModal');
-    loginHistoryModal.addEventListener('show.bs.modal', function() {
-        // Fetch login history from the server
-        fetch('/api/login-history')  // Replace with your endpoint
-            .then(response => response.json())
-            .then(data => {
-                const loginHistoryList = document.getElementById('loginHistoryList');
-                loginHistoryList.innerHTML = '';  // Clear the list
-
-                data.forEach(login => {
-                    const listItem = document.createElement('li');
-                    listItem.className = 'list-group-item';
-                    listItem.textContent = `Login Time: ${login.login_time}, IP Address: ${login.ip_address}`;
-                    loginHistoryList.appendChild(listItem);
+    if (loginHistoryModal) {
+        loginHistoryModal.addEventListener('show.bs.modal', function() {
+            fetch('/api/login-history')
+                .then(response => response.json())
+                .then(data => {
+                    const loginHistoryList = document.getElementById('loginHistoryList');
+                    loginHistoryList.innerHTML = '';
+                    data.forEach(login => {
+                        const listItem = document.createElement('li');
+                        listItem.className = 'list-group-item';
+                        listItem.textContent = `Login Time: ${login.login_time}, IP Address: ${login.ip_address}`;
+                        loginHistoryList.appendChild(listItem);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching login history:', error);
                 });
-            })
-            .catch(error => {
-                console.error('Error fetching login history:', error);
-            });
-    });
+        });
+    }
 
+    // File upload and preview functionality
+    const fileInput = document.getElementById('fileInput');
+    const fileNameDisplay = document.getElementById('fileName');
+    const previewContainer = document.getElementById('filePreview');
+    const previewImage = document.getElementById('previewImage');
+    const errorFlash = document.getElementById('errorFlash'); // Assuming this is your error message element
+
+    const MAX_FILE_SIZE_MB = 500; // Maximum file size in MB
+    const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024; // Convert MB to bytes
+
+    if (fileInput) {
+        fileInput.addEventListener('change', function () {
+            const file = this.files[0];
+            const fileName = file ? file.name : '';
+            fileNameDisplay.textContent = fileName;
+
+            // Reset error message
+            if (errorFlash) {
+                errorFlash.style.display = 'none';
+            }
+
+            // Check file size
+            if (file && file.size > MAX_FILE_SIZE_BYTES) {
+                // Show error flash if the file is too large
+                if (errorFlash) {
+                    errorFlash.textContent = `Error: The file size exceeds ${MAX_FILE_SIZE_MB} MB. Please select a smaller file.`;
+                    errorFlash.style.display = 'block'; // Show the error message
+                }
+                // Clear the file input
+                fileInput.value = '';
+                fileNameDisplay.textContent = '';
+                previewContainer.style.display = 'none'; // Hide the preview
+                return; // Exit the function
+            }
+
+            // Handle image preview if the file is an image
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    previewImage.src = e.target.result;
+                    previewContainer.style.display = 'block'; // Show the preview
+                };
+                reader.readAsDataURL(file);
+            } else {
+                previewContainer.style.display = 'none'; // Hide the preview if not an image
+            }
+        });
+    }
+
+    
+
+    // Close popup function
+    window.closePopup = function(index) {
+        document.getElementById('share-popup-' + index).style.display = 'none';
+    };
 });
 
 
-// Close popup function
-function closePopup(index) {
-    document.getElementById('share-popup-' + index).style.display = 'none';
-}

@@ -144,6 +144,8 @@ class SharedSecret(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     secret_id = db.Column(db.Integer, db.ForeignKey('secrets.id', ondelete='CASCADE'), nullable=False)
     email = db.Column(db.String(255), nullable=False)
+    public = db.Column(db.Boolean, nullable=True, default=False)
+    deadline_date = db.Column(db.DateTime, nullable=True) #the deadline time that user set if he didn't login
     token = db.Column(db.String(255), unique=True, nullable=False)
     date_to_send = db.Column(db.DateTime, nullable=False)
     time_to_send = db.Column(db.Time)

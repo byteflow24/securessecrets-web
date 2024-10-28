@@ -5,6 +5,10 @@ test.py
 translations
 babel.cfg
 messages.pot
+node_modules
+package-lock.json
+package.json
+purgecss.config.js
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

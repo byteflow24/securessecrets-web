@@ -1,0 +1,99 @@
+<div class="container-fluid">
+    <div class="row h-100 justify-content-center align-items-center">
+        <!-- Centered Title Section -->
+        <div class="col-12 title-container pb-3">
+            <a href="{{ url_for('main.login') }}" class="d-inline-flex link-body-emphasis">
+                <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" style="width: 250px;">
+            </a>
+            <p>Your secrets, your control. Store private messages or a last will, set a timer, and let us handle the rest—whether it's sharing with loved ones or publicly.</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="alert-container text-center">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <div class="container-fluid" style="padding-bottom: 100px;">
+          <div class="row centered-row h-100 align-items-center">
+              <!-- Left Login Section -->
+              <div class="col-md-6 d login-section">
+                  <h2 class="news-heading mb-4">Log In</h2>
+                    <div class="form-container">
+                        <form method="POST" action="{{ url_for('main.login', next=request.args.get('next')) }}">
+                          <input type="hidden" name="csrf_token" id="login_csrf_token" value="{{ form.csrf_token._value() }}">
+                            <div class="mb-3">
+                                <label for="user" class="form-label">Email/ Username</label>
+                                {{ form.user(class="form-control", id="user", placeholder="Email or username") }}
+                                {% for error in form.user.errors %}
+                                    <div class="text-danger">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Password</label>
+                                {{ form.password(class="form-control", id="password", placeholder="Password") }}
+                                {% for error in form.password.errors %}
+                                    <div class="text-danger">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <button type="submit" class="btn btn-primary" id="submit">{{ form.submit.label }}</button>
+                                <a class="btn btn-link" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal">Forgot my password?</a>
+                            </div>
+                        </form>
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <p class="mb-0">Don't have an account? <a href="{{ url_for('main.pricing') }}" class="custom-link">Check out our plans</a></p>
+                        </div>
+                    </div>
+                </div>         
+              <!-- Right Public Section -->
+              <div class="col-md-6 news-section">
+                  <div class="news-heading">Public Secrets</div>
+                  <div class="news-container">
+                      <div class="news-content">
+                          <div class="d-flex justify-content-between" style="gap: 5px; align-items: center;">
+                              <p style="margin-bottom: 0;"><strong>@user:</strong></p>
+                              <p style="font-size: 0.75rem; margin-bottom: 0;">12:30</p>
+                          </div>
+                          <p style="margin-top: 2px;">Secret: Stay updated with security tips.</p>
+                          <hr>
+                          <!-- Repeat more content as necessary -->
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </div>          
+    </div>
+</div>
+
+<!-- Forgot Password Modal -->
+<div class="modal fade" id="forgotPasswordModal" tabindex="-1" aria-labelledby="forgotPasswordModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+      <div class="modal-content">
+          <div class="modal-header">
+              <h5 class="modal-title" id="forgotPasswordModalLabel">Forgot Password</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+              <form method="POST" action="{{ url_for('main.forget_password_email') }}">
+                <input type="hidden" name="csrf_token" id="csrf_token_forget_pswd" value="{{ form.csrf_token._value() }}">
+                <div class="mb-3">
+                    <label for="email" class="form-label">Enter your email address</label>
+                    <input type="email" class="form-control" id="email" name="email" placeholder="Email", autocomplete="email", required>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Send Reset Link</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </form>
+          </div>
+      </div>
+  </div>
+</div>

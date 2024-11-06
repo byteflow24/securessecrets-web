@@ -2,29 +2,7 @@
 {% block title %}Contact Us - Secures Secrets{% endblock %}
 
 {% block content %}
-{% include "header.html" %}
-<div class="container position-relative px-4 px-lg-5">
-    <div class="row gx-4 gx-lg-5 justify-content-center">
-        <div class="col-md-10 col-lg-8 col-xl-7">
-            <h1 class="text-center mt-4 mb-3" style="color: #2c3e50; font-weight: bold;">Contact Us</h1>
-            <p class="text-center" style="color: #34495e; font-size: 1.2rem;">We’re here to help. Get in touch with the Secures Secrets team.</p>
-            
-            <div class="contact-section" style="color: #2c3e50; line-height: 1.7; font-size: 1.1rem;">
-                
-                <h3 style="color: #16a085; font-weight: bold; margin-top: 2rem;">Customer Support</h3>
-                <p>If you have any questions or need help with your account, feel free to reach out to our support team. We’re available to assist you with any issue or inquiry you may have. You can contact us via email at <a href="mailto:support@securessecrets.com" style="color: #16a085; text-decoration: none;">support@securessecrets.com</a>.</p>
-                
-                <h3 style="color: #16a085; font-weight: bold; margin-top: 2rem;">Business Inquiries</h3>
-                <p>For partnership or business inquiries, we’d love to hear from you. Reach out to our business development team at <a href="mailto:business@securessecrets.com" style="color: #16a085; text-decoration: none;">business@securessecrets.com</a> and let us know how we can collaborate.</p>
-
-                <h3 style="color: #16a085; font-weight: bold; margin-top: 2rem;">Media and Press</h3>
-                <p>Members of the media can contact our communications team at <a href="mailto:media@securessecrets.com" style="color: #16a085; text-decoration: none;">media@securessecrets.com</a> for press releases, interviews, or any media-related inquiries.</p>
-                
-                <h3 style="color: #16a085; font-weight: bold; margin-top: 2rem;">Visit Our Help Center</h3>
-                <p>Need quick answers? Visit our <a href="#" style="color: #16a085; text-decoration: none;">Help Center</a> to explore FAQs, tutorials, and troubleshooting guides. Our Help Center is available 24/7 for your convenience.</p>
-            </div>
-        </div>
-    </div>
+<div id="content-container" data-page-title="Contact Us - Secure Secrets">
+    {% include 'partials/contact_content.html' %}
 </div>
-{% include "footer.html" %}
 {% endblock %}

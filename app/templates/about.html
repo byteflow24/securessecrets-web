@@ -2,39 +2,7 @@
 {% block title %}About Us - Secures Secrets{% endblock %}
 
 {% block content %}
-{% include "header.html" %}
-<div class="container position-relative px-4 px-lg-5">
-    <div class="row gx-4 gx-lg-5 justify-content-center">
-        <div class="col-md-10 col-lg-8 col-xl-7">
-            <h1 class="text-center mt-4 mb-3" style="color: #2c3e50; font-weight: bold;">About Us</h1>
-            <p class="text-center" style="color: #34495e; font-size: 1.2rem;">Learn more about Secures Secrets and our mission</p>
-            
-            <div class="about-section" style="color: #2c3e50; line-height: 1.7; font-size: 1.1rem;">
-                
-                <h3 style="color: #16a085; font-weight: bold; margin-top: 2rem;">Our Mission</h3>
-                <p><strong>At Secures Secrets, our mission</strong> is to empower individuals and businesses to protect their most sensitive information. We believe in a future where privacy is a right, not a privilege, and we are dedicated to providing the tools that make secure, confidential data storage accessible to everyone.</p>
-                
-                <h3 style="color: #16a085; font-weight: bold; margin-top: 2rem;">Our Origins</h3>
-                <p><strong>Secures Secrets was born</strong> out of a need for truly secure, easy-to-use solutions for storing confidential information. Frustrated by the lack of privacy in today’s digital world, our founders set out to build a platform where users can store and manage their secrets without worrying about breaches or data misuse.</p>
-                
-                <h3 style="color: #16a085; font-weight: bold; margin-top: 2rem;">Our Core Values</h3>
-                <p><strong>We believe that privacy</strong> is non-negotiable. Our values revolve around transparency, user control, and creating a world where individuals can protect their most sensitive information without compromise.</p>
-                
-                <h3 style="color: #16a085; font-weight: bold; margin-top: 2rem;">What Makes Us Different</h3>
-                <p><strong>What makes Secures Secrets stand out</strong> is our focus on user-controlled encryption. Unlike other services, we provide our users with the tools to manage their own security, ensuring that even we, as the service provider, cannot access their stored data.</p>
-                
-                <h3 style="color: #16a085; font-weight: bold; margin-top: 2rem;">Looking Ahead</h3>
-                <p><strong>Looking ahead, we’re working</strong> on expanding our platform with even more advanced security features and global access. Our goal is to become the world’s leading secure storage platform, trusted by individuals and businesses alike.</p>
-                
-                <h3 style="color: #16a085; font-weight: bold; margin-top: 2rem;">Join Us</h3>
-                <p><strong>Join us on our mission</strong> to protect privacy. Sign up today and take control of your data with Secures Secrets.</p>
-                
-                <h3 style="color: #16a085; font-weight: bold; margin-top: 2rem;">Contact Us</h3>
-                <p><strong>Have questions or want to learn more</strong> about what we do? Contact us at <a href="mailto:support@securessecrets.com" style="color: #16a085; text-decoration: none;">support@securessecrets.com</a>, or visit our <a href="#" style="color: #16a085; text-decoration: none;">Help Center</a>.</p>
-                
-            </div>
-        </div>
-    </div>
+<div id="content-container" data-page-title="About Us - Secure Secrets">
+    {% include 'partials/about_content.html' %}
 </div>
-{% include "footer.html" %}
 {% endblock %}

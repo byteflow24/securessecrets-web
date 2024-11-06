@@ -8,10 +8,10 @@
             background-size: cover;
             background-position: center;
             color: #333;
-            overflow-x: hidden; /* Prevents horizontal scrolling */
-            display: flex; /* Enable flexbox layout */
-            flex-direction: column; /* Arrange children vertically */
-            min-height: 100vh; /* Full height of the viewport */
+            overflow-x: hidden;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
 
         /* Add box-sizing globally */
@@ -21,8 +21,7 @@
 
         .container-fluid {
             padding: 0;
-            flex: 1; /* Allow the main content to grow and take available space */
-            margin-top: 0px; /* Adjust this to reduce space at the top */
+            flex: 1;
         }
 
         /* To avoid negative margins from Bootstrap row */
@@ -32,9 +31,15 @@
             margin-top: 15px;
         }
 
+        .row.centered-row {
+            display: flex;
+            justify-content: center;
+            gap: 20px; /* Adjust gap as needed */
+        }
+
         .title-container {
             text-align: center;
-            margin-top: 10px; /* Adjust to reduce space above the paragraph */
+            margin-top: 10px;
             margin-bottom: 0;
         }
 
@@ -44,15 +49,10 @@
             color: #555;
             max-width: 600px;
             margin: auto;
-            margin-top: 20px;
-            margin-bottom: 0px;
         }
 
         .news-section {
-            background-color: rgba(255, 255, 255, 0.85);
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.1);
+            max-width: 450px;
         }
 
         .news-heading {
@@ -86,6 +86,10 @@
         }
 
         .login-section {
+            max-width: 450px;
+        }
+
+        .news-section, .login-section {
             background-color: rgba(255, 255, 255, 0.9);
             padding: 30px;
             border-radius: 15px;
@@ -93,10 +97,10 @@
         }
 
         .form-container {
-            border: 1px solid #ddd;
             padding: 20px;
-            border-radius: 10px;
             background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 10px;
             box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.1);
         }
 
@@ -122,7 +126,7 @@
             font-size: 1rem;
         }
 
-        .btn-link, .link-primary {
+        .btn-link, .custom-link {
             font-size: 0.9rem;
             color: #2b52d3 !important;
             text-decoration: underline;
@@ -141,15 +145,27 @@
             font-size: 0.85rem;
         }
 
+        .alert {
+            max-width: 400px; /* Limit the width of the alert */
+            margin: 0 auto 15px auto; /* Center align and add spacing below */
+            padding: 10px 15px; /* Reduce padding for a smaller appearance */
+            font-size: 0.85rem; /* Smaller font size */
+            border-radius: 8px; /* Rounded corners for a softer look */
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1); /* Light shadow for subtle emphasis */
+        }
+    
+        .alert .btn-close {
+            padding: 0.25rem; /* Smaller close button */
+        }
+
+
         @media (max-width: 768px) {
             .login-section, .news-section {
-                margin-bottom: 20px;
                 width: 100%;
-                padding: 20px;
+                margin-bottom: 20px;
             }
-
-            .news-container, .form-container {
-                padding: 15px;
+            .alert {
+                width: 90%; /* Alert takes more space on smaller screens */
             }
         }
     </style>
@@ -158,17 +174,60 @@
     <div class="container-fluid">
         <div class="row h-100 justify-content-center align-items-center">
             <!-- Centered Title Section -->
-            <div class="col-12 title-container pb-5">
+            <div class="col-12 title-container pb-3">
                 <a href="{{ url_for('main.login') }}" class="d-inline-flex link-body-emphasis">
                     <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" style="width: 250px;">
                 </a>
                 <p>Your secrets, your control. Store private messages or a last will, set a timer, and let us handle the rest—whether it's sharing with loved ones or publicly.</p>
+    
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="alert-container text-center">
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
             </div>
-            
-            <div class="container-fluid" style="padding-bottom: 100px; margin-bottom: 0px;">
-              <div class="row h-100 justify-content-center align-items-center">
-                  <!-- Left Public Section -->
-                  <div class="col-md-5 col-lg-4 offset-md-1 news-section">
+
+            <div class="container-fluid" style="padding-bottom: 100px;">
+              <div class="row centered-row h-100 align-items-center">
+                  <!-- Left Login Section -->
+                  <div class="col-md-6 d login-section">
+                      <h2 class="news-heading mb-4">Log In</h2>
+                        <div class="form-container">
+                            <form method="POST" action="{{ url_for('main.login', next=request.args.get('next')) }}">
+                              <input type="hidden" name="csrf_token" id="login_csrf_token" value="{{ form.csrf_token._value() }}">
+                                <div class="mb-3">
+                                    <label for="user" class="form-label">Email/ Username</label>
+                                    {{ form.user(class="form-control", id="user", placeholder="Email or username") }}
+                                    {% for error in form.user.errors %}
+                                        <div class="text-danger">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="mb-3">
+                                    <label for="password" class="form-label">Password</label>
+                                    {{ form.password(class="form-control", id="password", placeholder="Password") }}
+                                    {% for error in form.password.errors %}
+                                        <div class="text-danger">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <button type="submit" class="btn btn-primary" id="submit">{{ form.submit.label }}</button>
+                                    <a class="btn btn-link" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal">Forgot my password?</a>
+                                </div>
+                            </form>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <p class="mb-0">Don't have an account? <a href="{{ url_for('main.pricing') }}" class="custom-link">Check out our plans</a></p>
+                            </div>
+                        </div>
+                    </div>         
+                  <!-- Right Public Section -->
+                  <div class="col-md-6 news-section">
                       <div class="news-heading">Public Secrets</div>
                       <div class="news-container">
                           <div class="news-content">
@@ -179,50 +238,6 @@
                               <p style="margin-top: 2px;">Secret: Stay updated with security tips.</p>
                               <hr>
                               <!-- Repeat more content as necessary -->
-                          </div>
-                      </div>
-                  </div>
-          
-                  <!-- Right Login Section -->
-                  <div class="col-md-6 d-flex align-items-center justify-content-center">
-                      <div class="login-section">
-                        <h2 class="news-heading mb-4">Log In</h2>
-                          <div class="form-container">
-                              {% with messages = get_flashed_messages(with_categories=true) %}
-                                  {% if messages %}
-                                      {% for category, message in messages %}
-                                          <div class="alert alert-{{ category }} text-center alert-dismissible fade show" role="alert">
-                                              {{ message }}
-                                              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                                          </div>
-                                      {% endfor %}
-                                  {% endif %}
-                              {% endwith %}
-          
-                              <form method="POST" action="{{ url_for('main.login', next=request.args.get('next')) }}">
-                                <input type="hidden" name="csrf_token" id="login_csrf_token" value="{{ form.csrf_token._value() }}">
-                                  <div class="mb-3">
-                                      <label for="user" class="form-label">Email/ Username</label>
-                                      {{ form.user(class="form-control", id="user", placeholder="Email or username") }}
-                                      {% for error in form.user.errors %}
-                                          <div class="text-danger">{{ error }}</div>
-                                      {% endfor %}
-                                  </div>
-                                  <div class="mb-3">
-                                      <label for="password" class="form-label">Password</label>
-                                      {{ form.password(class="form-control", id="password", placeholder="Password") }}
-                                      {% for error in form.password.errors %}
-                                          <div class="text-danger">{{ error }}</div>
-                                      {% endfor %}
-                                  </div>
-                                  <div class="d-flex justify-content-between align-items-center">
-                                      <button type="submit" class="btn btn-primary" id="submit">{{ form.submit.label }}</button>
-                                      <a class="btn btn-link" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal">Forgot my password?</a>
-                                  </div>
-                              </form>
-                              <div class="d-flex justify-content-between align-items-center mt-3">
-                                  <p class="mb-0">Don't have an account? <a href="{{ url_for('main.pricing') }}" class="link-primary custom-link">Check out our plans</a></p>
-                              </div>
                           </div>
                       </div>
                   </div>
@@ -255,5 +270,4 @@
           </div>
       </div>
     </div>
-{% include "footer.html" %}
 {% endblock %}

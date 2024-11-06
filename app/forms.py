@@ -1,6 +1,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, PasswordField, FileField, TextAreaField, SelectField, EmailField, DateField, BooleanField, DateTimeField, HiddenField
 from wtforms.validators import DataRequired, Optional, Length, Regexp, Email, AnyOf
+from .utils import email_domain_validator
 
 
 
@@ -17,7 +18,7 @@ password_regex = r'^(?=.*[A-Z])(?=.*\d)(?=.*\W)(?=.*[a-z]).{8,}$'
 
 # Create a form to register new users
 class RegisterForm(FlaskForm):
-    email = EmailField("Email", validators=[DataRequired(), Email()])
+    email = EmailField("Email", validators=[DataRequired(), Email(), email_domain_validator])
     password = PasswordField("Password", validators=[DataRequired(),
         Regexp(
             regex=password_regex,

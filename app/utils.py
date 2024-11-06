@@ -6,6 +6,7 @@ from . import db, login_manager
 from .models import User, Secret, Plan, Payment, HistoryPayment
 from datetime import datetime, timezone, timedelta
 from cryptography.fernet import Fernet
+from wtforms.validators import DataRequired, Email, Regexp, ValidationError
 import base64
 import requests
 import secrets
@@ -114,6 +115,34 @@ def populate_plan_choices(form, user):
         form.plan_id.choices = [
             (0, "You are on the highest plan available")
         ]
+
+# Comprehensive list of common email domains and TLDs
+ALLOWED_DOMAINS = {
+    "gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "icloud.com", "aol.com",
+    "live.com", "msn.com", "comcast.net", "yandex.com", "mail.ru", "protonmail.com",
+    "zoho.com", "gmx.com", "fastmail.com", "yahoo.co.uk", "hotmail.co.uk"
+}
+
+ALLOWED_TLDS = {".com", ".net", ".org", ".edu", ".gov", ".mil", ".qa", ".fr", ".de", ".uk", ".ca", ".us"}
+
+# Define the custom email validator
+def email_domain_validator(form, field):
+    email = field.data.lower()
+    domain_pattern = r'^[a-zA-Z0-9_.+-]+@([a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)$'
+    
+    match = re.match(domain_pattern, email)
+    if match:
+        domain = match.group(1)
+        domain_name, tld = domain.rsplit('.', 1)
+        tld = f".{tld}"
+        
+        if domain not in ALLOWED_DOMAINS or tld not in ALLOWED_TLDS:
+            raise ValidationError(
+                "Email must be from a common provider like Gmail, Hotmail, Outlook, or Yahoo, "
+                "and end with .com, .net, .org, etc."
+            )
+    else:
+        raise ValidationError("Invalid email format.")
 
 
 # Configures Tap payment

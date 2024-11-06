@@ -1,6 +1,5 @@
 from flask import Blueprint, render_template, redirect, url_for, send_from_directory, flash, request, session, jsonify, current_app, abort
 from flask_login import login_user, logout_user, login_required, current_user
-from flask_babel import gettext
 from . import db
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, HistoryPayment
@@ -78,7 +77,7 @@ def register():
         form.code.data = session['form_data'].get('code')
         form.phone.data = session['form_data'].get('phone')
 
-    return render_template('register.html', form=form, current_user=current_user)
+    return render_template('register.html', form=form, current_user=current_user, show_header=False)
 
 
 # Log in server
@@ -120,20 +119,21 @@ def login():
             if next_page and is_safe_url(next_page):
                 return redirect(next_page)
             
+            # Check if user don't have secret to be redirected to add secrets
             secrets = Secret.query.filter_by(user_id=user.id).all()
             if not secrets:
                 return redirect(url_for('main.home'))
             else:
                 return redirect(url_for('main.all_secrets'))
     
-    return render_template('login.html', form=form, current_user=current_user)
+    return render_template('login.html', form=form, current_user=current_user, show_header=False)
 
 
 # Log out server
 @main.route('/logout')
 def logout():
     logout_user()
-    return redirect(url_for('main.home'))
+    return redirect(url_for('main.login'))
 
 # confirmation email to change user password when he press forgot password
 @main.route('/confirm-email-for-password', methods=['POST'])
@@ -152,7 +152,7 @@ def forget_password_email():
             reset_password_email(user.email, user.username, token)
             flash('An email with a password reset link has been sent to your email.', 'info')
         else:
-            flash('This email is not registered in our system.', 'danger')
+            flash('This email is not registered.', 'danger')
         return redirect(url_for('main.login'))
 
 
@@ -162,7 +162,6 @@ def reset_password():
     form = ForgetPaswdForm()
     token = request.args.get("token")
     user = User.query.filter_by(reset_pswd_token=token).first()
-    print(user.reset_pswd_token)
 
     # Ensure token is valid and matches a user
     if not user:
@@ -193,8 +192,6 @@ def reset_password():
 
     return render_template('reset_password.html', form=form)
 
-
-
 # Setting the profile
 @main.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -211,7 +208,10 @@ def update_profile():
         flash('Profile updated successfully!', 'success')
         return redirect(url_for('main.update_profile'))
     pr_form.code.data = current_user.country_code
-    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login)
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('partials/profile_content.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login)
+    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login, show_header=True)
 
 # Update password
 @main.route('/change-password', methods=['POST'])
@@ -241,12 +241,13 @@ def change_password():
 
     pr_form.code.data = current_user.country_code
 
-    # Instead of redirecting, return to the profile page with the form
-    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('partials/profile_content.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login)
+    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login, show_header=True)
 
 
 # Home page
-@main.route('/new-secret', methods=['GET', 'POST'])
+@main.route('/add-secret', methods=['GET', 'POST'])
 def home():
 
     if current_user.is_authenticated and not current_user.is_confirmed:
@@ -263,56 +264,34 @@ def home():
             return redirect(url_for('main.login', next=request.url))
 
         # Retrieve the storage limit based on the user's plan
-        storage_limit = current_user.plan.storage_limit  # Storage limit is already set based on user's plan
+        storage_limit = current_user.plan.storage_limit  
 
-        # Initialize total size
-        total_size = 0
-
-        filename = ""
-        if form.file.data:
-            file = form.file.data
-            if file:
-                filename = secure_filename(file.filename)
-                file_size = len(file.read())  # Get the size of the file in bytes
-                file.seek(0)  # Reset file pointer
-
-                total_size = file_size
-
-                # Check if the new file + secret will exceed the user's storage limit
-                if current_user.storage_used + total_size > storage_limit:
-                    flash(f"Adding this secret will exceed your {current_user.plan.plan} plan's storage limit.", "warning")
-                    # send email to the ADMIN about the user storage
-                    return redirect(url_for('main.all_secrets'))
-
-                # Save the file
-                upload_folder = current_app.config['UPLOAD_FOLDER']
-                if not os.path.exists(upload_folder):
-                    os.makedirs(upload_folder)
-                file_path = os.path.join(upload_folder, filename)
-                file.save(file_path)
-
-        # Generate a unique title
+        # Initialize total size with the encrypted secret size
         unique_title = get_unique_title(form.title.data, current_user.id)
-
-        # Encrypt the secret text
         encrypted_secret = encrypt_secret(form.secret.data)
-
-        # Convert encrypted_secret text to bytes
         secret_size = len(encrypted_secret.encode('utf-8'))
-        total_size += secret_size
 
-        # Update the user's storage used (text + file)
-        current_user.storage_used += total_size
+        # Check if adding this secret will exceed the user's storage limit
+        if current_user.storage_used + secret_size > storage_limit:
+            flash(f"Adding this secret will exceed your {current_user.plan.plan} plan's storage limit.", "warning")
+            return redirect(url_for('main.all_secrets'))
+
+        # Update the user's storage used with the size of the secret
+        current_user.storage_used += secret_size
         db.session.commit()
 
-        # Create a new Secret instance and add it to the database
+        # Retrieve the filename from the hidden field
+        filename = request.form.get('uploadedFileName')
+
+        # Create a new Secret instance without a file and save to the database
         new_secret = Secret(
             title=unique_title,
             secret=encrypted_secret,
-            file=filename,
+            file=filename,  # No file associated
             date=date.today().strftime("%B %d, %Y"),
             user_id=current_user.id
         )
+
         try:
             db.session.add(new_secret)
             db.session.commit()
@@ -325,11 +304,54 @@ def home():
         session.pop('form_data', None)
         return redirect(url_for('main.all_secrets'))
 
+    # Populate form with saved session data if available
     if 'form_data' in session:
         form.title.data = session['form_data'].get('title', '')
         form.secret.data = session['form_data'].get('secret', '')
 
-    return render_template('index.html', form=form, current_user=current_user)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('partials/add_secret_content.html', form=form, current_user=current_user)  # Partial for AJAX
+    return render_template('add_secret.html', form=form, current_user=current_user, show_header=True)
+
+
+# Uploading file
+@main.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part in the request'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    # Check if user is authenticated and retrieve their storage limit
+    if not current_user.is_authenticated:
+        return jsonify({'error': 'User not authenticated'}), 401
+
+    # Check file size
+    try:
+        file_size = len(file.read())
+        file.seek(0)  # Reset file pointer
+        if current_user.storage_used + file_size > current_user.plan.storage_limit:
+            return jsonify({'error': 'Exceeds storage limit'}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    # Save the file
+    filename = secure_filename(file.filename)
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    if not os.path.exists(upload_folder):
+        os.makedirs(upload_folder)
+    file_path = os.path.join(upload_folder, filename)
+
+    try:
+        file.save(file_path)
+        # Update storage usage
+        current_user.storage_used += file_size
+        db.session.commit()
+        return jsonify({'message': 'File successfully uploaded', 'filename': filename}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # List of all secerts for the user 
@@ -368,7 +390,9 @@ def all_secrets():
         secret.secret = decrypted_secret_content
         decrypted_secrets.append(secret)
 
-    return render_template('all_secrets.html', user_secrets=decrypted_secrets, current_user=current_user, form=form, share_form=share_form)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('partials/all_secrets_content.html', form=form, user_secrets=decrypted_secrets, current_user=current_user, share_form=share_form)
+    return render_template('all_secrets.html', user_secrets=decrypted_secrets, current_user=current_user, form=form, share_form=share_form, show_header=True)
 
 # Toggle pinned
 @main.route('/toggle_pin/<int:secret_id>', methods=['POST'])
@@ -413,14 +437,17 @@ def share():
             db.session.add(new_shared_secret)
             db.session.commit()
 
-            flash(f"Your secret is scheduled to be sent on {date} at {time.strftime('%H:%M')}.", "success")
-            return redirect(url_for('main.all_secrets'))
+            # Return JSON response for AJAX success handling
+            message = f"Your secret is scheduled to be sent on {date} at {time.strftime('%H:%M')}."
+            return jsonify({"success": True, "message": message}), 200
         except (SQLAlchemyError, SMTPException) as e:
             db.session.rollback()
-            flash(f"An error occurred: {e}", "warning")
-            return redirect(url_for('main.all_secrets'))
+            # Return JSON error response for AJAX error handling
+            message = f"An error occurred: {e}"
+            return jsonify({"success": False, "message": message}), 500
 
-    return redirect(url_for('main.all_secrets'))
+    # Return JSON error response if form validation fails
+    return jsonify({"success": False, "message": "Form validation failed."}), 400
 
 
 # The link where that person will read the >>SHARED_SECRET<<
@@ -595,7 +622,9 @@ def pricing():
     if current_user.is_authenticated and not current_user.is_confirmed:
         return redirect(url_for('main.confirmation_pending'))
     plan = db.session.execute(db.select(Plan).order_by(Plan.id)).scalars().all()
-    return render_template('pricing.html', current_user=current_user, plans=plan)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('partials/pricing_content.html')
+    return render_template('pricing.html', current_user=current_user, plans=plan, show_header=True)
 
 
 # Payment methods
@@ -854,7 +883,9 @@ def billing():
     # Populate form choices using the helper function
     populate_plan_choices(form, user)
 
-    return render_template('billing.html', user=user, payments=history_payment, form=form, plan=plans)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('partials/billing_content.html', user=user, payments=history_payment, form=form, plan=plans)
+    return render_template('billing.html', user=user, payments=history_payment, form=form, plan=plans, show_header=True)
 
 # to pay the plan if still not paid
 @main.route('/pay_now', methods=['POST'])
@@ -986,12 +1017,16 @@ def terms():
 
 @main.route('/about-us')
 def about():
-    return render_template('about.html')
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('partials/about_content.html')
+    return render_template('about.html', show_header=True)
 
 
 @main.route('/contact-us')
 def contact():
-    return render_template('contact.html')
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('partials/contact_content.html')
+    return render_template('contact.html', show_header=True)
 
 
 @main.route('/privacy-policy')

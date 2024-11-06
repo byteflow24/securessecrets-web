@@ -1,9 +1,10 @@
 from flask import Flask, session, redirect, url_for, flash, current_app
 from flask_sqlalchemy import SQLAlchemy
 from flask_bootstrap import Bootstrap
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from flask_login import LoginManager, current_user
 from flask_migrate import Migrate
+from flask_compress import Compress
 from datetime import timedelta
 
 db = SQLAlchemy()
@@ -20,8 +21,9 @@ def session_expiration_handler():
         session.modified = True  # Update session on each request
     else:
         if 'user_id' in session:  # If session expired
+            session.clear()  # Clear expired session data
             flash('Your session has expired. Please log in again.', 'warning')
-            return redirect(url_for('main.home'))
+            return redirect(url_for('main.login'))
 
 def create_app():
     app = Flask(__name__)
@@ -38,12 +40,19 @@ def create_app():
     login_manager.init_app(app)
     Migrate(app, db)
     bootstrap.init_app(app)
+    Compress(app)
 
     # Set the session lifetime for Flask-Login remember me functionality
     login_manager.remember_cookie_duration = timedelta(minutes=15)
 
     # Register session expiration handler before every request
     app.before_request(session_expiration_handler)
+    # set up a CSRF error handler
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(e):
+        # Redirect to login with a flash message
+        flash('Your session has expired or is invalid. Please log in again.', 'warning')
+        return redirect(url_for('main.login'))
 
     # Import inside function to avoid circular import
     with app.app_context():

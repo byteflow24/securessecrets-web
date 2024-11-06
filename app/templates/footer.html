@@ -1,46 +1,40 @@
-<footer class="bg-light text-dark py-3">
+<footer class="bg-light text-dark py-2"> <!-- Reduced padding -->
     <div class="container">
         <div class="row">
-            <div class="col-md-3">
-                <div class="col-md-3 mb-2 mb-md-0">
-                    <a href="{{ url_for('main.login') }}" class="d-inline-flex link-body-emphasis">
-                        <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" style="width: 7rem;"> <!-- Reduced logo size -->
-                    </a>
-                </div>
-                <p class="mt-1" style="font-size: 0.85rem;">Safeguard your most valuable information with top-tier encryption.</p> <!-- Reduced font size -->
+            <div class="col-md-3 mt-1">
+                <a href="{{ url_for('main.login') }}" class="d-inline-flex link-body-emphasis">
+                    <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" style="width: 7rem;">
+                </a>
+                <p class="mt-1" style="font-size: 0.75rem; margin-bottom: 0.5rem;">Safeguard your most valuable information with top-tier encryption.</p>
             </div>
             <div class="col-md-3">
-                <h5 style="font-size: 1rem;">Quick Links</h5> <!-- Reduced font size -->
-                <ul class="list-unstyled">
-                    <li><a href="{{ url_for('main.about') }}" class="text-dark" style="font-size: 0.85rem;">About Us</a></li>
-                    <li><a href="{{ url_for('main.contact') }}" class="text-dark" style="font-size: 0.85rem;">Contact Us</a></li>
-                    <li><a href="{{ url_for('main.privacy') }}" class="text-dark" style="font-size: 0.85rem;">Privacy Policy</a></li>
-                    <li><a href="{{ url_for('main.terms') }}" class="text-dark" style="font-size: 0.85rem;">Terms of Service</a></li>
-                    <li><a href="{{ url_for('main.cookie') }}" class="text-dark" style="font-size: 0.85rem;">Cookie Policy</a></li>
+                <h5 style="font-size: 0.9rem; margin-bottom: 0.5rem;">Quick Links</h5> <!-- Smaller heading -->
+                <ul class="list-unstyled" style="font-size: 0.75rem; line-height: 2;">
+                    <li><a href="{{ url_for('main.about') }}" class="text-dark">About Us</a></li>
+                    <li><a href="{{ url_for('main.contact') }}" class="text-dark">Contact Us</a></li>
+                    <li><a href="{{ url_for('main.privacy') }}" class="text-dark">Privacy Policy</a></li>
+                    <li><a href="{{ url_for('main.terms') }}" class="text-dark">Terms of Service</a></li>
+                    <li><a href="{{ url_for('main.cookie') }}" class="text-dark">Cookie Policy</a></li>
                 </ul>
             </div>
             <div class="col-md-3">
-                <h5 style="font-size: 1rem;">Follow Us</h5> <!-- Reduced font size -->
-                <a href="#" class="text-dark me-2" style="font-size: 0.9rem;"><i class="fab fa-facebook-f"></i></a>
-                <a href="#" class="text-dark me-2" style="font-size: 0.9rem;"><i class="fab fa-twitter"></i></a>
-                <a href="#" class="text-dark me-2" style="font-size: 0.9rem;"><i class="fab fa-linkedin-in"></i></a>
+                <h5 style="font-size: 0.9rem; margin-bottom: 0.5rem;">Follow Us</h5>
+                <a href="#" class="text-dark me-2" style="font-size: 0.75rem;"><i class="fab fa-facebook-f"></i></a>
+                <a href="#" class="text-dark me-2" style="font-size: 0.75rem;"><i class="fab fa-twitter"></i></a>
+                <a href="#" class="text-dark me-2" style="font-size: 0.75rem;"><i class="fab fa-linkedin-in"></i></a>
             </div>
             <div class="col-md-3">
-                <h5 style="font-size: 1rem;">Contact Us</h5> <!-- Reduced font size -->
-                <p style="font-size: 0.85rem;">Email: <a href="mailto:support@securessecrets.com" class="text-dark" aria-label="Send email to support">support@securessecrets.com</a></p>
-                <p style="font-size: 0.85rem;">&copy; All rights reserved to ByteFlowDigital</p>
+                <h5 style="font-size: 0.9rem; margin-bottom: 0.5rem;">Contact Us</h5>
+                <p style="font-size: 0.75rem; margin-bottom: 0.5rem;">Email: <a href="mailto:support@securessecrets.com" class="text-dark" aria-label="Send email to support">support@securessecrets.com</a></p>
+                <p style="font-size: 0.75rem;">&copy; All rights reserved to ByteFlowDigital</p>
             </div>
         </div>
     </div>
     <!-- Include Bootstrap's JavaScript and Popper.js -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer
     integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.7/dist/umd/popper.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
-    <!-- Bootstrap Bundle with Popper.js -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.3/js/bootstrap.bundle.min.js"></script>
     <!-- Core theme JS-->
     <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
 </footer>

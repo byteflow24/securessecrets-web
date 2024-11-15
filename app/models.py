@@ -143,12 +143,12 @@ class SharedSecret(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     secret_id = db.Column(db.Integer, db.ForeignKey('secrets.id', ondelete='CASCADE'), nullable=False)
-    email = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), nullable=True)
     public = db.Column(db.Boolean, nullable=True, default=False)
-    deadline_date = db.Column(db.DateTime, nullable=True) #the deadline time that user set if he didn't login
-    token = db.Column(db.String(255), unique=True, nullable=False)
-    date_to_send = db.Column(db.DateTime, nullable=False)
-    time_to_send = db.Column(db.Time)
+    time_period = db.Column(db.String(50), nullable=True) #the deadline time that user set if he didn't login
+    token = db.Column(db.String(255), unique=True, nullable=True)
+    date_to_send = db.Column(db.DateTime, nullable=True)
+    time_to_send = db.Column(db.Time, nullable=True)
     received = db.Column(db.Boolean, default=False)
     delete_confirmed = db.Column(db.Boolean, default=False)
     received_time = db.Column(TIMESTAMP, nullable=True, default=func.now())

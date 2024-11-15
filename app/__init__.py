@@ -13,15 +13,16 @@ login_manager = LoginManager()
 bootstrap = Bootstrap()
 migrate = Migrate()
 
+# Manages session expiration by logging out inactive users and clearing expired session data.
 def session_expiration_handler():
-    session.permanent = True  # Ensure the session uses the configured timeout
+    session.permanent = True
     current_app.permanent_session_lifetime = timedelta(minutes=15)
 
     if current_user.is_authenticated:
-        session.modified = True  # Update session on each request
+        session.modified = True  # Update session activity timestamp
     else:
-        if 'user_id' in session:  # If session expired
-            session.clear()  # Clear expired session data
+        if 'user_id' in session:  # If the user is logged out but session data exists
+            session.clear()  # Clear session data
             flash('Your session has expired. Please log in again.', 'warning')
             return redirect(url_for('main.login'))
 
@@ -45,14 +46,11 @@ def create_app():
     # Set the session lifetime for Flask-Login remember me functionality
     login_manager.remember_cookie_duration = timedelta(minutes=15)
 
-    # Register session expiration handler before every request
-    app.before_request(session_expiration_handler)
-    # set up a CSRF error handler
-    @app.errorhandler(CSRFError)
-    def handle_csrf_error(e):
-        # Redirect to login with a flash message
-        flash('Your session has expired or is invalid. Please log in again.', 'warning')
-        return redirect(url_for('main.login'))
+    @app.before_request
+    def check_session_expiration():
+        result = session_expiration_handler()
+        if result:  # Redirect if the session expired
+            return result
 
     # Import inside function to avoid circular import
     with app.app_context():

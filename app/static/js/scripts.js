@@ -4,7 +4,6 @@ window.addEventListener('DOMContentLoaded', () => {
     const mainNav = document.getElementById('mainNav');
 
     if (!mainNav) {
-        console.error('Element with ID "mainNav" not found.');
         return; // Exit if mainNav is not found
     }
 
@@ -222,10 +221,10 @@ window.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('[id^="shareForm-"]').forEach(form => {
             form.addEventListener('submit', function(event) {
                 event.preventDefault(); // Prevent default form submission
-                
-                const url = this.action; // Get the form action URL
-                const formData = new FormData(this); // Create a FormData object to hold the form data
-                
+        
+                const url = this.action;
+                const formData = new FormData(this);
+        
                 fetch(url, {
                     method: 'POST',
                     body: formData,
@@ -234,68 +233,51 @@ window.addEventListener('DOMContentLoaded', () => {
                         'X-CSRFToken': csrfToken // Include CSRF token if required
                     }
                 })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json(); // Parse JSON response
-                })
+                .then(response => response.ok ? response.json() : Promise.reject('Network response was not ok'))
                 .then(data => {
                     if (data.success) {
-                        showFlashMessage(data.message); // Display success message
-    
-                        // Clear the modal fields
-                        clearModalFields(this); // Call to clear modal fields
-                        
-                        // Get and close the modal only within a successful submission
-                        const modalElement = this.closest('.modal'); // Find the closest modal element
-                        if (modalElement) {
-                            try {
-                                const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
-                                modalInstance.hide();  // Close the modal
-                                const backdrop = document.querySelector('.modal-backdrop');
-                                if (backdrop) {
-                                    backdrop.classList.remove('show'); // Remove the 'show' class
-                                    backdrop.remove(); // Clean up backdrop
-                                }
-                                console.log('Modal closed successfully.');
-                            } catch (error) {
-                                console.error('Error closing modal:', error);
-                            }
-                        } else {
-                            console.warn('No modal element found for closing.');
-                        }
+                        showFlashMessage(data.message);
+                        clearModalFields(this);
+                        closeModal(this);
                     } else {
-                        showFlashMessage(data.message, 'danger'); // Display error message if not successful
+                        showFlashMessage(data.message, 'danger');
                     }
                 })
                 .catch(error => console.error('Error submitting form:', error));
             });
         });
 
-        // Add event listener for modal opening
+        // Modal opening and closing events
         document.querySelectorAll('.modal').forEach(modal => {
-            modal.addEventListener('show.bs.modal', function () {
-                // Ensure scrolling is disabled when modal is opened
+            modal.addEventListener('show.bs.modal', function() {
                 document.body.style.overflow = 'hidden';
             });
-
-            modal.addEventListener('hidden.bs.modal', function () {
+    
+            modal.addEventListener('hidden.bs.modal', function() {
                 const backdrop = document.querySelector('.modal-backdrop');
                 if (backdrop) {
-                    backdrop.remove(); // Clean up backdrop on modal close
+                    backdrop.classList.remove('show');
+                    backdrop.remove();
                 }
-                document.body.style.overflow = ''; // Ensure scrolling is enabled
+                document.body.style.overflow = '';
             });
         });
 
         // Share button click event
-        document.querySelectorAll('.share-button').forEach(function(button) {
+        document.querySelectorAll('.share-button').forEach(button => {
             button.addEventListener('click', function() {
                 var targetPopup = this.getAttribute('data-target');
-                document.querySelector(targetPopup).style.display = 'block';
-                // Reset fields in the modal
-                resetModalFields(targetPopup);
+                var modalElement = document.querySelector(targetPopup);
+    
+                if (modalElement) {
+                    var modalInstance = bootstrap.Modal.getInstance(modalElement);
+                    if (modalInstance) {
+                        modalInstance.dispose();  // Dispose of the previous instance
+                    }
+                    modalInstance = new bootstrap.Modal(modalElement);
+                    modalInstance.show();
+                    resetModalFields(modalElement);
+                }
             });
         });
 
@@ -303,86 +285,153 @@ window.addEventListener('DOMContentLoaded', () => {
         function resetModalFields(modal) {
             if (!modal) {
                 console.warn('No modal element provided to resetModalFields.');
-                return; // Exit if modal is not provided
+                return;
             }
-
-            // Use valid selectors to target elements
-            const dateFieldSelect = modal.querySelector('.date-field-select');
-            const dateLabelSelect = modal.querySelector('.date-label-select');
-            const timeFieldSelect = modal.querySelector('.time-field-select');
-            const timeLabelSelect = modal.querySelector('.time-label-select');
-            const dateFieldPublic = modal.querySelector('.date-field-public');
-            const dateLabelPublic = modal.querySelector('.date-label-public');
-
-            // Check if elements exist before trying to set styles
-            if (dateFieldSelect) dateFieldSelect.style.display = 'none';
-            if (dateLabelSelect) dateLabelSelect.style.display = 'none';
-            if (timeFieldSelect) timeFieldSelect.style.display = 'none';
-            if (timeLabelSelect) timeLabelSelect.style.display = 'none';
-            if (dateFieldPublic) dateFieldPublic.style.display = 'none';
-            if (dateLabelPublic) dateLabelPublic.style.display = 'none';
+    
+            // Make sure date and time fields are visible by default
+            const scheduledDateFields = modal.querySelectorAll('.date-field-email-scheduled, .time-field-email-scheduled');
+            scheduledDateFields.forEach(field => field.style.display = 'block');
         }
-
         
-        // Toggle public share date field
-        document.querySelectorAll('.toggle-date-button-public').forEach(function(button) {
-            button.addEventListener('click', function() {
-                var targetPopup = this.closest('.modal');
-                toggleVisibility(targetPopup.querySelector('.date-field-public'));
-                toggleVisibility(targetPopup.querySelector('.date-label-public'));
-            });
-        });
-
         // Function to clear modal fields
         function clearModalFields(form) {
-            // Reset the form fields
             form.reset();
-
-            // Reset visibility of fields if required
+    
             const modal = form.closest('.modal');
             resetModalFields(modal); // Call to reset modal fields visibility
         }
 
-        // Toggle email input visibility
-        document.querySelectorAll('.toggle-email-button').forEach(function(button) {
-            button.addEventListener('click', function() {
-                var targetPopup = this.closest('.modal');
-                toggleVisibility(targetPopup.querySelector('.email-container'));
-            });
-        });
-
-        // Toggle date and time visibility for Share via Email
-        document.querySelectorAll('.toggle-date-button-email').forEach(function(button) {
-            button.addEventListener('click', function() {
-                var targetPopup = this.closest('.modal');
-                toggleVisibility(targetPopup.querySelector('.date-field-email'));
-                toggleVisibility(targetPopup.querySelector('.time-field-email'));
-            });
-        });
-
-        // Function to toggle visibility
-        function toggleVisibility(element) {
-            element.style.display = (element.style.display === 'none' || element.style.display === '') ? 'block' : 'none';
+        // Closing modal with cleanup
+        function closeModal(form) {
+            const modalElement = form.closest('.modal');
+            if (modalElement) {
+                try {
+                    const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                    modalInstance.hide();
+    
+                    const backdrop = document.querySelector('.modal-backdrop');
+                    if (backdrop) {
+                        backdrop.classList.remove('show');
+                        backdrop.remove();
+                    }
+                } catch (error) {
+                    console.error('Error closing modal:', error);
+                }
+            }
         }
+
+        // Email preparation for emailLogin
+        initializeEmailInput('emailLogin', 'emailLoginContainer', 'emails_login');
+        initializeEmailInput('emailScheduled', 'emailScheduledContainer', 'emails_scheduled');
+
+        function initializeEmailInput(inputId, containerId, hiddenFieldName) {
+            const emailInput = document.getElementById(inputId);
+            const emailInputContainer = document.getElementById(containerId);
+            
+            // Hidden field to store email addresses
+            const hiddenEmailField = document.createElement('input');
+            hiddenEmailField.type = 'hidden';
+            hiddenEmailField.name = hiddenFieldName;
+            emailInputContainer.appendChild(hiddenEmailField);
         
-        // Deadline field visibility
-        document.querySelectorAll('.modal').forEach(function(modal) {
-            var confirmDeletionCheck = modal.querySelector('.form-check-input#confirmDeletionCheck');
-            if (confirmDeletionCheck) {
-                confirmDeletionCheck.addEventListener('change', function() {
-                    toggleDeadlineField(modal);
+            let emails = [];
+            const maxEmails = 5; // Set the maximum number of emails allowed
+        
+            // Add email on 'Enter' or comma key press
+            emailInput.addEventListener('keydown', function(event) {
+                if ((event.key === 'Enter' || event.key === ',') && emailInput.value.trim() !== '') {
+                    event.preventDefault();
+                    addEmail(emailInput.value.trim());
+                    emailInput.value = '';
+                }
+            });
+        
+            // Add email on input blur (when the field loses focus)
+            emailInput.addEventListener('blur', function() {
+                addEmail(emailInput.value.trim());
+                emailInput.value = '';
+            });
+        
+            // Function to add email
+            function addEmail(email) {
+                if (email && !emails.includes(email)) {
+                    if (emails.length >= maxEmails) {
+                        alert(`You can only add up to ${maxEmails} emails.`);
+                        return;
+                    }
+                    if (validateEmail(email)) {
+                        emails.push(email);
+                        updateEmails();
+                        createEmailTag(email);
+                        
+                        // Remove placeholder after the first email is added
+                        emailInput.placeholder = '';
+                    } else {
+                        alert("Please enter a valid email address.");
+                    }
+                }
+            }
+        
+            // Function to create a visual email tag
+            function createEmailTag(email) {
+                const tag = document.createElement('span');
+                tag.classList.add('email-tag');
+                tag.innerHTML = `<span>${email}</span><span class="remove-tag" data-email="${email}">&times;</span>`;
+                emailInputContainer.insertBefore(tag, emailInput);
+        
+                // Remove email on click
+                tag.querySelector('.remove-tag').addEventListener('click', function() {
+                    const emailToRemove = this.getAttribute('data-email');
+                    emails = emails.filter(e => e !== emailToRemove);
+                    updateEmails();
+                    tag.remove();
+                    
+                    // Restore placeholder if all emails are removed
+                    if (emails.length === 0) {
+                        emailInput.placeholder = "Enter recipient's email/s";
+                    }
                 });
             }
-        });
-
-        // Function to handle visibility of deadline date field
-        function toggleDeadlineField(modal) {
-            var confirmDeletionCheck = modal.querySelector('.form-check-input#confirmDeletionCheck');
-            var publicSharingCheck = modal.querySelector('.form-check-input#publicSharingCheck');
-            var deadlineDateContainer = modal.querySelector('.deadline-date-container');
-
-            deadlineDateContainer.style.display = (confirmDeletionCheck.checked && publicSharingCheck.checked) ? 'block' : 'none';
+        
+            // Update hidden input with emails array
+            function updateEmails() {
+                hiddenEmailField.value = emails.join(','); // Store emails as comma-separated
+            }
+        
+            // Validate email format
+            function validateEmail(email) {
+                const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                return re.test(email);
+            }
         }
+
+        // Toggle Required Fields Based on Sharing Type
+        const sharingTypeInputs = document.querySelectorAll('input[name="sharing_type"]');
+        const datePeriodInput = document.querySelector('input[name="date_period"]');
+        const dateInput = document.querySelector('input[name="date"]');
+        const timeInput = document.querySelector('input[name="time"]');
+
+        function toggleRequiredFields() {
+            sharingTypeInputs.forEach(input => {
+                if (input.value === "last_login") {
+                    datePeriodInput.required = true;
+                    dateInput.required = false;
+                    timeInput.required = false;
+                } else if (input.value === "scheduled") {
+                    datePeriodInput.required = false;
+                    dateInput.required = true;
+                    timeInput.required = true;
+                }
+            });
+        }
+
+        // Run the toggle function on page load and when sharing type changes
+        toggleRequiredFields();
+
+        sharingTypeInputs.forEach(input => {
+            input.addEventListener('change', toggleRequiredFields);
+        });                
+
     }
 
     // Upgrade plan event listener

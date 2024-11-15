@@ -1,13 +1,14 @@
 from flask import Blueprint, render_template, redirect, url_for, send_from_directory, flash, request, session, jsonify, current_app, abort
 from flask_login import login_user, logout_user, login_required, current_user
 from . import db
-from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm
+from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, CardDetailsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, HistoryPayment
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, generate_token, send_verification_email, is_safe_url, create_charge, populate_plan_choices, get_charge_details, get_ip, get_user_agent, encrypt_secret, decrypt_secret, refund_method, send_payment_email, recurring_payment, reset_password_email
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, generate_token, send_verification_email, is_safe_url, tokenize_card, create_charge, populate_plan_choices, get_charge_details, get_ip, get_user_agent, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError
-from datetime import date, datetime, timedelta, timezone, time
+from datetime import date, datetime, timedelta, timezone
+from dateutil.relativedelta import relativedelta
 from sqlalchemy.exc import SQLAlchemyError
 from smtplib import SMTPException
 import os
@@ -60,16 +61,31 @@ def register():
             return redirect(url_for('main.register', plan_id=plan_id))
         
         # Store registration data in session
-        session['registration_data'] = {
-            'email': form.email.data,
-            'username': form.username.data,
-            'password': generate_password_hash(form.password.data, method='pbkdf2:sha256', salt_length=16),
-            'country_code': form.code.data,
-            'phone': form.phone.data,
-            'plan_id': plan_id  # Store selected plan
-        }
-        
-        return redirect(url_for('main.payment', plan_id=plan_id))
+        new_user = User(
+            email=form.email.data,
+            username=form.username.data,
+            password=generate_password_hash(form.password.data, method='pbkdf2:sha256', salt_length=16),
+            country_code=form.code.data,
+            phone=form.phone.data,
+            plan_id=plan_id,
+            email_token = generate_token()
+        )
+        db.session.add(new_user)
+        try:
+            db.session.commit()
+            login_user(new_user)  # Log in the new user after successful commit
+            # Send verification email
+            send_verification_email(new_user.email, new_user.username, new_user.email_token)
+            # Redirect to confirmation pending page
+            return redirect(url_for('main.confirmation_pending', user=new_user.id))
+
+        except Exception as e:
+            # Rollback in case of an error
+            db.session.rollback()
+            print(f"Error saving user: {e}")
+            # Optionally, flash an error message or handle the error as needed
+            flash('An error occurred during registration. Please try again.', 'danger')
+            return redirect(url_for('main.register'))
 
     if 'form_data' in session:
         form.username.data = session['form_data'].get('username', '')
@@ -77,7 +93,7 @@ def register():
         form.code.data = session['form_data'].get('code')
         form.phone.data = session['form_data'].get('phone')
 
-    return render_template('register.html', form=form, current_user=current_user, show_header=False)
+    return render_template('register.html', form=form, current_user=current_user, show_header=False, show_footer=True)
 
 
 # Log in server
@@ -86,7 +102,20 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.home'))
     form = LoginForm()
+    # Fetch the public shared secrets and eager-load user and secret relationships
+    shared_secret = db.session.execute(
+        db.select(SharedSecret)
+        .where(SharedSecret.public == True)
+        .options(db.joinedload(SharedSecret.user), db.joinedload(SharedSecret.secret))
+    ).scalars().all()
+    
+    # Decrypt each SharedSecret content
+    for secret in shared_secret:
+        decrypted_secret_content = decrypt_secret(secret.secret.secret)  # Assuming `secret.secret.secret` holds the encrypted content
+        secret.secret.secret = decrypted_secret_content  # Set decrypted content
 
+       
+    
     next_page = request.args.get('next') or request.form.get('next')  # Get next from both GET and POST
 
     if form.validate_on_submit():
@@ -115,7 +144,7 @@ def login():
             db.session.add(login_history)
             db.session.commit()
             # Session timeout, after 15 mins user will be logged out
-            # session.permanent = True
+            session.permanent = True
             if next_page and is_safe_url(next_page):
                 return redirect(next_page)
             
@@ -126,7 +155,7 @@ def login():
             else:
                 return redirect(url_for('main.all_secrets'))
     
-    return render_template('login.html', form=form, current_user=current_user, show_header=False)
+    return render_template('login.html', form=form, current_user=current_user, show_header=False, show_footer=True, public_secrets=shared_secret, time=datetime.now().strftime("%H:%M"))
 
 
 # Log out server
@@ -211,7 +240,7 @@ def update_profile():
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return render_template('partials/profile_content.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login)
-    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login, show_header=True)
+    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login, show_header=True, show_footer=True)
 
 # Update password
 @main.route('/change-password', methods=['POST'])
@@ -243,7 +272,7 @@ def change_password():
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return render_template('partials/profile_content.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login)
-    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login, show_header=True)
+    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login, show_header=True, show_footer=True)
 
 
 # Home page
@@ -311,7 +340,7 @@ def home():
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return render_template('partials/add_secret_content.html', form=form, current_user=current_user)  # Partial for AJAX
-    return render_template('add_secret.html', form=form, current_user=current_user, show_header=True)
+    return render_template('add_secret.html', form=form, current_user=current_user, show_header=True, show_footer=True)
 
 
 # Uploading file
@@ -392,7 +421,7 @@ def all_secrets():
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return render_template('partials/all_secrets_content.html', form=form, user_secrets=decrypted_secrets, current_user=current_user, share_form=share_form)
-    return render_template('all_secrets.html', user_secrets=decrypted_secrets, current_user=current_user, form=form, share_form=share_form, show_header=True)
+    return render_template('all_secrets.html', user_secrets=decrypted_secrets, current_user=current_user, form=form, share_form=share_form, show_header=True, show_footer=True)
 
 # Toggle pinned
 @main.route('/toggle_pin/<int:secret_id>', methods=['POST'])
@@ -415,39 +444,72 @@ def toggle_star(secret_id):
 @main.route('/share', methods=['POST'])
 def share():
     form = ShareForm()
+    form.sharing_type.data = request.form.get("sharing_type")
+    email = None
+    public = False
+    token = None
+    user_last_login = LoginHistory.query.filter_by(user_id=current_user.id).first()
+    last_login = user_last_login.login_time if user_last_login else None
+    time_period, date, time = None, None, None  # Initialize to handle unassigned values
     if form.validate_on_submit():
-        email = form.email.data
-        date = form.date.data if form.date.data else datetime.now().date()
-        time = form.time.data.time() if form.time.data else datetime.now().time()
-        confirm_deletion = form.confirm_deletion.data
+        sharing_type = form.sharing_type.data
         token = generate_token()
-
         try:
+            # Last Login Check
+            if sharing_type == "last_login":
+                email = form.email_login.data
+                public = form.public_login.data
+                date_period = form.date_period.data
+                token = None
+                if 'd' in date_period:
+                    days_to_add = int(date_period.split('d')[0])
+                    # Add the number of days to last login
+                    time_period = last_login + timedelta(days=days_to_add)
+                elif 'm' in date_period:
+                    months_to_add = int(date_period.split('m')[0])
+                    # Add the number of months to last login
+                    time_period = last_login + relativedelta(months=months_to_add)
+                elif 'y' in date_period:
+                    years_to_add = int(date_period.split('y')[0])
+                    # Add the number of months to last login
+                    time_period = last_login + relativedelta(years=years_to_add)
+                message = f"Your secret will be shared after the last login period."
+
+            # Scheduled Sharing
+            else:
+                date = form.date.data if form.date.data else datetime.now().date()
+                time = form.time.data.time() if form.time.data else datetime.now().time()
+                email = form.email_scheduled.data
+                public = form.public_scheduled.data
+                message = f"Your secret is scheduled to be sent on {date} at {time.strftime('%H:%M')}."
+                if email is None:
+                    token = None
             # Save the sharing details to the database
             new_shared_secret = SharedSecret(
                 user_id=current_user.id,
                 secret_id=request.args.get("secret_id"),
                 email=email,
+                public=public,
+                time_period=time_period,
                 token=token,
                 date_to_send=date,
                 time_to_send=time,
                 received=False,
-                delete_confirmed=confirm_deletion
+                delete_confirmed=form.confirm_deletion.data if sharing_type == "scheduled" else False
             )
             db.session.add(new_shared_secret)
             db.session.commit()
 
             # Return JSON response for AJAX success handling
-            message = f"Your secret is scheduled to be sent on {date} at {time.strftime('%H:%M')}."
             return jsonify({"success": True, "message": message}), 200
         except (SQLAlchemyError, SMTPException) as e:
             db.session.rollback()
-            # Return JSON error response for AJAX error handling
+            print(f"Error occurred: {e}")  # Log the error message for debugging
             message = f"An error occurred: {e}"
             return jsonify({"success": False, "message": message}), 500
-
-    # Return JSON error response if form validation fails
-    return jsonify({"success": False, "message": "Form validation failed."}), 400
+    else:
+        print(form.errors)  # Log form errors for debugging
+        return jsonify({"success": False, "message": "Form validation failed."}), 400
 
 
 # The link where that person will read the >>SHARED_SECRET<<
@@ -621,95 +683,74 @@ def pricing():
     session['from_pricing'] = True
     if current_user.is_authenticated and not current_user.is_confirmed:
         return redirect(url_for('main.confirmation_pending'))
-    plan = db.session.execute(db.select(Plan).order_by(Plan.id)).scalars().all()
+    plans = db.session.execute(db.select(Plan).order_by(Plan.id)).scalars().all()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/pricing_content.html')
-    return render_template('pricing.html', current_user=current_user, plans=plan, show_header=True)
+        return render_template('partials/pricing_content.html', plans=plans)
+    return render_template('pricing.html', current_user=current_user, plans=plans, show_header=True, show_footer=True)
 
 
 # Payment methods
 @main.route('/payment', methods=['GET', 'POST'])
+@login_required
 def payment():
-    # Retrieve user data from session
-    registration_data = session.get('registration_data')
-    if not registration_data:
-        flash("Missing registration data. Please try again.", "danger")
-        return redirect(url_for('main.pricing'))
-
-    plan_id = registration_data.get('plan_id')
+    form = CardDetailsForm()
+    plan_id = current_user.plan_id
     plan = db.get_or_404(Plan, plan_id)
-    
-    amount = 0.1
+    amount = plan.price
     currency = plan.currency
-    description = "Refund, saving card details"
-    email = registration_data.get('email')
-    phone_country_code = registration_data.get('country_code')
-    phone_number = registration_data.get('phone')
-    first_name = registration_data.get('username')
+    description = "new"
+    if form.validate_on_submit():
+        card = form.card_number.data
+        ex_month, ex_year = form.exp_date.data.split('/')
+        cvc = form.cvc.data
+        name = form.name.data
+        email = current_user.email
+        phone_country_code = current_user.country_code
+        phone_number = current_user.phone
+        first_name = name
 
-    try:
-        # Create charge and handle 3D Secure or redirect to Tap payment page
-        charge_response = create_charge(amount, currency, description, email, phone_country_code, phone_number, first_name, plan_id)
-        
-        if isinstance(charge_response, str):
-            # If it's a URL (3D Secure), redirect
-            return redirect(charge_response)
+        try:
+            token_id = tokenize_card(int(card), int(ex_month), int(ex_year), int(cvc), name)
+            # Create charge and handle 3D Secure or redirect to Tap payment page
+            print(token_id)
+            charge_response = create_charge(amount, currency, description, email, phone_country_code, phone_number, first_name, plan_id, token_id['id'])
+            
+            if isinstance(charge_response, str):
+                # If it's a URL (3D Secure), redirect
+                return redirect(charge_response)
 
-        if charge_response.get('status') == 'INITIATED':
-            payment_url = charge_response.get('transaction', {}).get('url')
-            if payment_url:
-                return redirect(payment_url)
+            if charge_response.get('status') == 'CAPTURED':
+                payment_url = charge_response.get('transaction', {}).get('url')
+                if payment_url:
+                    return redirect(payment_url)
 
-        flash("Failed to initiate payment. Please try again.", "danger")
-        return redirect(url_for('main.pricing'))
+            flash("Failed to initiate payment. Please try again.", "danger")
+            return redirect(url_for('main.payment'))
 
-    except Exception as e:
-        flash(str(e), "danger")
-        return redirect(url_for('main.pricing'))
+        except Exception as e:
+            flash(str(e), "danger")
+            return redirect(url_for('main.payment'))
+    return render_template("card_details.html", form=form, show_header=False, show_footer=False)
 
 
 # Payment completed
 @main.route('/payment_complete')
+@login_required
 def payment_complete():
     charge_id = request.args.get('tap_id')
-    planId = request.args.get('plan_id')
+    plan_id = request.args.get('plan_id')
     user_ip = get_ip()
     user_agent = get_user_agent()
-    plan = db.get_or_404(Plan, planId)
+    plan = db.get_or_404(Plan, plan_id)
 
     if charge_id:
         try:
-            # Fetch the charge details to verify payment status
             charge_details = get_charge_details(charge_id)
+            if charge_details.get('status') == 'CAPTURED':
+                user = current_user
 
-            if charge_details['status'] == 'CAPTURED':
-                registration_data = session.get('registration_data')
-                user = None  # Define the user variable to hold either new or existing user
-                
-                # Check and handle user registration
-                if registration_data:
-                    existing_user = db.session.execute(
-                        db.select(User).where(User.email == registration_data['email'])
-                    ).scalar()
-                    if existing_user:
-                        login_user(existing_user)
-                        user = existing_user  # Use existing user
-                    else:
-                        token = generate_token()
-                        new_user = User(
-                            email=registration_data['email'],
-                            username=registration_data['username'],
-                            password=registration_data['password'],
-                            country_code=registration_data['country_code'],
-                            phone=registration_data['phone'],
-                            email_token = token
-                        )
-                        db.session.add(new_user)
-                        db.session.commit()
-                        login_user(new_user)
-                        user = new_user  # Use new user
-                
-                if user:  # Ensure user (new or existing) is defined
+                # Check user validity before accessing user.id
+                if user:
                     # Save payment details to the database
                     new_payment = Payment(
                         amount=charge_details['amount'],
@@ -726,15 +767,15 @@ def payment_complete():
                         card_brand=charge_details['card']['brand'],
                         card_last_four=charge_details['card']['last_four'],
                         three_d_secure_status=charge_details['security']['threeDSecure']['status'],
-                        user_id=user.id,  # Use user.id (new or existing)
-                        plan_id=planId,
+                        user_id=user.id,
+                        plan_id=plan_id,
                         ip_address=user_ip,
                         user_agent=user_agent
                     )
 
                     history = HistoryPayment(
-                        user_id=user.id,  # Use user.id (new or existing)
-                        plan_id=planId,
+                        user_id=user.id,
+                        plan_id=plan_id,
                         amount=charge_details['amount'],
                         currency=charge_details['currency'],
                         payment_method=charge_details['source']['payment_type'],
@@ -745,30 +786,15 @@ def payment_complete():
                         authorization_id=charge_details['transaction']['authorization_id']
                     )
 
-                    if registration_data and not existing_user:
-                        refund_response = refund_method(charge_id=charge_details["id"], 
-                                                        amount=charge_details["amount"], 
-                                                        currency=charge_details["currency"])
-                        if refund_response and refund_response['status'] == 'REFUNDED':
-                            new_payment.payment_status = refund_response['status']
-                            new_payment.gateway_response_code = refund_response['gateway']['response']['code']
-                            new_payment.gateway_response_message = refund_response['gateway']['response']['message']
-                            new_payment.acquirer_response_code = refund_response['acquirer']['response']['code']
-                            new_payment.acquirer_response_message = refund_response['acquirer']['response']['message']
-
-                            history.payment_status = refund_response['status']
-
-                    user.plan_id = planId
-
-                    # Manage subscription details
-                    if not user.trial_end_date or user.trial_end_date.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
-                        user.trial_start_date = datetime.now(timezone.utc)
-                        user.trial_end_date = datetime.now(timezone.utc) + timedelta(days=14)
-                        user.subscription_start_date = user.trial_end_date + timedelta(days=1)
-                        user.subscription_end_date = user.subscription_start_date + timedelta(days=30)
-                    else:
-                        user.subscription_start_date = datetime.now(timezone.utc)
-                        user.subscription_end_date = user.subscription_start_date + timedelta(days=30)
+                    # Save subscription details
+                    # if not user.trial_end_date or user.trial_end_date.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+                    #     user.trial_start_date = datetime.now(timezone.utc)
+                    #     user.trial_end_date = datetime.now(timezone.utc) + timedelta(days=14)
+                    #     user.subscription_start_date = user.trial_end_date + timedelta(days=1)
+                    #     user.subscription_end_date = user.subscription_start_date + timedelta(days=30)
+                    # else:
+                    #     user.subscription_start_date = datetime.now(timezone.utc)
+                    #     user.subscription_end_date = user.subscription_start_date + timedelta(days=30)
 
                     user.subscription_status = "active"
                     user.customer_id = charge_details['customer']['id']
@@ -777,52 +803,31 @@ def payment_complete():
                     if 'payment_agreement' in charge_details:
                         user.payment_agreement_id = charge_details['payment_agreement']['id']
 
-                    # Add payment to the session
+                    # Add payment and history payment records to the session
                     db.session.add(new_payment)
-                    
-                    # Add history payment to the session
                     db.session.add(history)
-
-                    # Commit all changes at once
+                    db.session.flush()  # This prepares the session without committing
                     db.session.commit()
 
-                    # Send appropriate email and flash messages
-                    if registration_data and not existing_user and not user.verification_sent:
-                        # Send verification email after payment
-                        send_verification_email(user.email, user.username, user.email_token)
-                        user.verification_sent = True
-                        db.session.commit()
-                        # delete the session
-                        session.pop('registration_data', None)
-
-                        print(current_user.id)
-                        return redirect(url_for("main.confirmation_pending", user=user.id)) 
-                    else:
-                        description = charge_details.get("description", "renewal")
-                        
-                        # Add the flash messages only if the user is not new or already verified
-                        if description == "upgrade":
-                            send_payment_email(user.email, user.username, plan.plan, plan.price, user.subscription_start_date, "upgrade", charge_details['card']['brand'], charge_details['card']['last_four'])
-                            flash("Your plan has been successfully upgraded.", "success")
-                        elif description == "renewal":
-                            send_payment_email(user.email, user.username, plan.price, user.subscription_start_date, "renewal", charge_details['card']['brand'], charge_details['card']['last_four'])
-                            flash("Your subscription has been successfully renewed.", "success")
+                    description = charge_details.get("description", "renewal")
+                    if description == "new":
+                        send_payment_email(user.email, user.username, plan.plan, plan.price, user.subscription_start_date, "upgrade", charge_details['card']['brand'], charge_details['card']['last_four'])
+                        flash("Your plan has been successfully paid.", "success")
+                    elif description == "upgrade":
+                        send_payment_email(user.email, user.username, plan.plan, plan.price, user.subscription_start_date, "upgrade", charge_details['card']['brand'], charge_details['card']['last_four'])
+                        flash("Your plan has been successfully upgraded.", "success")
+                    elif description == "renewal":
+                        send_payment_email(user.email, user.username, plan.price, user.subscription_start_date, "renewal", charge_details['card']['brand'], charge_details['card']['last_four'])
+                        flash("Your subscription has been successfully renewed.", "success")
 
                     return redirect(url_for('main.home'))
-
             else:
                 flash(f"Payment failed: {charge_details.get('response', {}).get('message', 'Unknown error')}", "danger")
-                if current_user.is_authenticated:
-                    return redirect(url_for('main.billing'))
-                else:
-                    return redirect(url_for('main.pricing'))
+                return redirect(url_for('main.billing'))
 
         except Exception as e:
             flash(str(e), "danger")
-            if current_user.is_authenticated:
-                return redirect(url_for('main.billing'))
-            else:
-                return redirect(url_for('main.pricing'))
+            return redirect(url_for('main.billing'))
 
     return redirect(url_for('main.home'))
 
@@ -839,6 +844,15 @@ def confirm_email(token):
     else:
         user.is_confirmed = True
         user.email_token = None  # Remove the token after confirmation
+        # Save subscription details
+        if not user.trial_end_date or user.trial_end_date.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+            user.trial_start_date = datetime.now(timezone.utc)
+            user.trial_end_date = datetime.now(timezone.utc) + timedelta(days=14)
+            user.subscription_start_date = user.trial_end_date + timedelta(days=1)
+            user.subscription_end_date = user.subscription_start_date + timedelta(days=30)
+        # else:
+        #     user.subscription_start_date = datetime.now(timezone.utc)
+        #     user.subscription_end_date = user.subscription_start_date + timedelta(days=30)
         db.session.commit()
         flash('Your email has been verified, login now', 'success')
 
@@ -848,15 +862,20 @@ def confirm_email(token):
 # Notify registerer to check email for verification
 @main.route('/confirmation-pending')
 def confirmation_pending():
-    user = request.args.get('user')
-    return render_template('confirmation_pending.html', user=user)
+    user_id = request.args.get('user')
+    user = User.query.filter_by(id=user_id).first()
+    if user:
+        user.verification_sent = True
+        db.session.commit()
+    return render_template('confirmation_pending.html', user=user.id)
 
 
 # In case the user lost the time of the verification
 @main.route('/resend-verification')
 def resend_verification():
-    user = request.args.get('user')
-    is_user = db.get_or_404(User, user)
+    user_id = request.args.get('user')
+    print(user_id)
+    is_user = User.query.filter_by(id=user_id).first()
     # Logic to resend the verification email
     if is_user and not is_user.is_confirmed:
         token = generate_token()
@@ -866,7 +885,7 @@ def resend_verification():
         flash('A new verification email has been sent.', 'info')
     else:
         flash('Your account is already confirmed or you are not logged in.', 'warning')
-    return redirect(url_for('main.confirmation_pending'))
+    return redirect(url_for('main.confirmation_pending', user=is_user.id))
 
 
 # Billing page
@@ -885,7 +904,7 @@ def billing():
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return render_template('partials/billing_content.html', user=user, payments=history_payment, form=form, plan=plans)
-    return render_template('billing.html', user=user, payments=history_payment, form=form, plan=plans, show_header=True)
+    return render_template('billing.html', user=user, payments=history_payment, form=form, plan=plans, show_header=True, show_footer=True)
 
 # to pay the plan if still not paid
 @main.route('/pay_now', methods=['POST'])
@@ -900,10 +919,6 @@ def pay_now():
         amount = user_plan.price
         currency = user_plan.currency
         description = "renewal"
-        email = current_user.email
-        phone_country_code = current_user.country_code
-        phone_number = current_user.phone
-        first_name = current_user.username
 
         try:
             if payment_method == 'saved_card':
@@ -912,18 +927,27 @@ def pay_now():
                     current_user.customer_id, card_id, get_ip(), 
                     current_user.payment_agreement_id, amount, currency, description
                 )
+                history = HistoryPayment(
+                        user_id=current_user.id,
+                        plan_id=user_plan.id,
+                        amount=payment_response['amount'],
+                        currency=payment_response['currency'],
+                        payment_method=payment_response['source']['payment_type'],
+                        payment_status=payment_response['status'],
+                        transaction_id=payment_response['id'],
+                        card_brand=payment_response['card']['brand'],
+                        card_last_four=payment_response['card']['last_four'],
+                        authorization_id=payment_response['transaction']['authorization_id']
+                    )
             else:
-                # Redirect user to TAP hosted payment page for new card payment
-                payment_url = create_charge(
-                    amount, currency, description, email, phone_country_code, 
-                    phone_number, first_name, user_plan.id
-                )
-                return redirect(payment_url)  # Redirecting to the TAP payment page
+                # Redirect user to payment page for new card payment
+                return redirect(url_for('main.payment')) # Redirecting to the TAP payment page
 
             if payment_response['status'] == 'CAPTURED':
                 flash("Payment was successful!", "success")
                 current_user.subscription_end_date = current_date + timedelta(days=30) if user_plan.billing_cycle == 'monthly' else current_user.subscription_end_date
                 current_user.subscription_status = "active"
+                db.session.add(history)
                 db.session.commit()
                 send_payment_email(current_user.email, current_user.username, user_plan.plan, amount, date_email, 'renewal', payment_response['card']['brand'],payment_response['card']['last_four'])
             else:
@@ -949,17 +973,13 @@ def upgrade_plan():
         flash("Please select a valid plan to upgrade.", "danger")
         return redirect(url_for('main.billing'))
     
-
+    # Check if from datas exists
     if form.validate_on_submit():
         selected_plan_id = form.plan_id.data
         plan = db.get_or_404(Plan, selected_plan_id)
         amount = plan.price
         currency = plan.currency
         description = "upgrade"
-        email = current_user.email
-        # phone_country_code = current_user.country_code
-        # phone_number = current_user.phone
-        # first_name = current_user.username
 
         try:
             card_id = current_user.card_id
@@ -972,6 +992,19 @@ def upgrade_plan():
                 current_user.subscription_end_date = current_date + timedelta(days=30) if plan.billing_cycle == 'monthly' else current_user.subscription_end_date
                 current_user.subscription_status = "active"
                 current_user.plan_id = plan.id
+                history = HistoryPayment(
+                        user_id=current_user.id,
+                        plan_id=plan.id,
+                        amount=payment_response['amount'],
+                        currency=payment_response['currency'],
+                        payment_method=payment_response['source']['payment_type'],
+                        payment_status=payment_response['status'],
+                        transaction_id=payment_response['id'],
+                        card_brand=payment_response['card']['brand'],
+                        card_last_four=payment_response['card']['last_four'],
+                        authorization_id=payment_response['transaction']['authorization_id']
+                    )
+                db.session.add(history)
                 db.session.commit()
                 send_payment_email(current_user.email, current_user.username, plan.plan, amount, date_email, 'upgrade', payment_response['card']['brand'],payment_response['card']['last_four'])
             else:
@@ -1012,28 +1045,28 @@ def download_file(filename):
 
 @main.route('/terms-of-services')
 def terms():
-    return render_template('terms.html')
+    return render_template('terms.html', show_header=True, show_footer=True)
 
 
 @main.route('/about-us')
 def about():
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return render_template('partials/about_content.html')
-    return render_template('about.html', show_header=True)
+    return render_template('about.html', show_header=True, show_footer=True)
 
 
 @main.route('/contact-us')
 def contact():
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return render_template('partials/contact_content.html')
-    return render_template('contact.html', show_header=True)
+    return render_template('contact.html', show_header=True, show_footer=True)
 
 
 @main.route('/privacy-policy')
 def privacy():
-    return render_template('privacy.html')
+    return render_template('privacy.html', show_header=True, show_footer=True)
 
 
 @main.route('/cookie-policy')
 def cookie():
-    return render_template('cookie.html')
+    return render_template('cookie.html', show_header=True, show_footer=True)

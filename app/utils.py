@@ -74,6 +74,7 @@ def get_unique_title(title, user_id):
 
     return title
 
+# To go throw url 
 def is_safe_url(target):
     ref_url = urlparse(request.host_url)
     test_url = urlparse(urljoin(request.host_url, target))
@@ -147,11 +148,12 @@ def email_domain_validator(form, field):
 
 # Configures Tap payment
 # API_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
-API_KEY = os.environ.get("TAP_TEST_API_SECRET")
+# API_KEY = os.environ.get("TAP_TEST_API_SECRET")
+API_KEY = "sk_test_XKokBfNWv6FIYuTMg5sLPjhJ"
 API_URL = "https://api.tap.company/v2"
 
 # Creating a charge and redirecting to Tap's hosted payment page, handling 3D Secure if needed
-def create_charge(amount, currency, description, email, phone_country_code, phone_number, first_name, plan_id):
+def create_charge(amount, currency, description, email, phone_country_code, phone_number, first_name, plan_id, source_id):
     headers = {
         'Authorization': f'Bearer {API_KEY}',
         'Content-Type': 'application/json',
@@ -171,7 +173,7 @@ def create_charge(amount, currency, description, email, phone_country_code, phon
             'first_name': first_name
         },
         'source': {
-            'id': 'src_all', 
+            'id': source_id, 
         },
         'redirect': {
             'url': url_for('main.payment_complete', _external=True, plan_id=plan_id)
@@ -203,29 +205,6 @@ def create_charge(amount, currency, description, email, phone_country_code, phon
         description = error_details.get('response', {}).get('message', 'Unknown error occurred')
         raise Exception(f"Charge creation failed: {description}")
     
-# Creating a refund method
-def refund_method(charge_id, amount, currency):
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "Authorization": f'Bearer {API_KEY}'
-    }
-
-    payload = {
-        "charge_id": charge_id,
-        "amount": amount,
-        "currency": currency,
-        "reason": "Test Transaction",
-        "post": { "url": "https://www.securessecrets.com" }
-    }
-
-    url = f"{API_URL}/refunds"
-    response = requests.post(url, json=payload, headers=headers)
-    print(response.json())
-    if response.status_code == 200:
-        return response.json()
-    else:
-        raise Exception("Refund failed")
 
 # Getting Charge Details by charge_id
 def get_charge_details(charge_id):
@@ -241,7 +220,8 @@ def get_charge_details(charge_id):
     if response.status_code == 200:
         return response.json()
     else:
-        raise Exception("Failed to fetch charge details")
+        error_details = response.json()
+        raise Exception(f"Failed to fetch charge details {error_details}")
     
 
 #  Retrieving card details
@@ -259,18 +239,19 @@ def retrieve_cards_details(customer_id, card_id):
         raise Exception("Failed to fetch card details")
 
 # Savig card token before the end of the trial
-def tokenize_card(details):
+def tokenize_card(card, ex_month, ex_year, cvc, name):
     headers = {
         "Authorization": f'Bearer {API_KEY}',
         "Content-Type": "application/json"
     }
+    print(card, ex_month, ex_year, cvc, name)
     payload = {
         "card": {
-            "number": details["number"],
-            "exp_month": details["exp_month"],
-            "exp_year": details["exp_year"],
-            "cvc": details["cvc"],
-            "name": details["name"]
+            "number": card,
+            "exp_month": ex_month,
+            "exp_year": ex_year,
+            "cvc": cvc,
+            "name": name
         }
     }
     url = f"{API_URL}/tokens"
@@ -278,7 +259,11 @@ def tokenize_card(details):
     if response.status_code == 200:
             return response.json()
     else:
-        raise Exception("Failed to fetch saved card token")
+        error_details = response.json()  # Get detailed error message from the response
+        print("Error Status Code:", response.status_code)
+        print("Error Response:", error_details)
+        error_message = error_details.get('response', {}).get('message', 'Unknown error occurred')
+        raise Exception(f"Failed to fetch card token: {error_message}")
     
 
 # Creating a token (saved card)
@@ -534,7 +519,7 @@ def generate_token():
 
 
 # Sender details which SS email, and pswd
-EMAIL = "Support@securessecrets.com"
+EMAIL = "support@securessecrets.com"
 PSWD = os.environ.get("EMAIL_PSWD")
 SERVER = 'smtp.titan.email'
 PORT = 587
@@ -715,90 +700,72 @@ def reminder_to_pay_email(username, email, plan_name, days_left):
     except Exception as e:
         print(f"An unexpected error occurred while sending email to {email}: {str(e)}")
 
-
 # User payment email
 def send_payment_email(email, username, plan_name, payment_amount, payment_date, subscription_type, card_type, last_4_digit):
-    # Construct the email message
-    msg = MIMEMultipart("related")  # Use "related" for images
+    # Set up message
+    msg = MIMEMultipart("related")
     msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = email
 
-    # Determine subject and body based on subscription type
-    if subscription_type == "upgrade":
-        msg['Subject'] = Header('Your Plan Has Been Upgraded!', 'utf-8')
-        body = (
-            f"<html>"
-            f"<body>"
-            f"<p>Dear {username},</p>"
-            f"<p>Thank you for upgrading your subscription with SecuresSecrets.</p>"
-            f"<p>Your account has been charged the following amount:</p>"
-            f"<ul>"
-            f"<li>Plan Name: {plan_name}</li>"
-            f"<li>Amount Paid: ${payment_amount:.2f} USD</li>"
-            f"<li>Date of Payment: {payment_date.strftime('%B %d, %Y')}</li>"
-            f"</ul>"
-            f"<p>Breakdown:</p>"
-            f"<ul>"
-            f"<li>Subscription: ${payment_amount:.2f} USD</li>"
-            f"</ul>"
-            f"<p>Payment Method: {card_type} ending in {last_4_digit}</p>"
-            f"<p>Total Charged: -${payment_amount:.2f} USD</p>"
-            f"<p>Total Due: $0.00 USD</p>"
-            f"<p>Your plan has been successfully upgraded, and you now have access to additional features.</p>"
-            f"<p>Timeline:</p>"
-            f"<p>{payment_date.strftime('%B %d, %Y')} - Plan upgraded successful</p>"
-            f"<p>If you have any questions or need further assistance, feel free to contact our support team.</p>"
-            f"<p>Best regards,<br>The SecuresSecrets Team</p>"
-            f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
-            f"</body>"
-            f"</html>"
+    # Select subject and unique content per subscription type
+    if subscription_type == "new":
+        msg['Subject'] = Header(f'{plan_name} Plan SecuresSecrets!', 'utf-8')
+        unique_content = (
+            f"<p>Welcome to SecuresSecrets! We're thrilled to have you with us.</p>"
+            f"<p>Your new subscription has been successfully activated, and you're all set to enjoy your plan's features.</p>"
         )
-
+    elif subscription_type == "upgrade":
+        msg['Subject'] = Header('Your Plan Has Been Upgraded!', 'utf-8')
+        unique_content = (
+            f"<p>Thank you for upgrading your subscription with SecuresSecrets.</p>"
+            f"<p>Your plan has been successfully upgraded, and you now have access to additional features.</p>"
+        )
     elif subscription_type == "renewal":
         msg['Subject'] = Header('Your Subscription Has Been Renewed!', 'utf-8')
-        body = (
-            f"<html>"
-            f"<body>"
-            f"<p>Dear {username},</p>"
+        unique_content = (
             f"<p>Thank you for renewing your subscription with SecuresSecrets.</p>"
-            f"<p>Your account has been charged the following amount:</p>"
-            f"<ul>"
-            f"<li>Plan Name: {plan_name}</li>"
-            f"<li>Amount Paid: ${payment_amount:.2f} USD</li>"
-            f"<li>Date of Payment: {payment_date.strftime('%B %d, %Y')}</li>"
-            f"</ul>"
-            f"<p>Breakdown:</p>"
-            f"<ul>"
-            f"<li>Subscription: ${payment_amount:.2f} USD</li>"
-            f"</ul>"
-            f"<p>Payment Method: {card_type} ending in {last_4_digit}</p>"
-            f"<p>Total Charged: -${payment_amount:.2f} USD</p>"
-            f"<p>Total Due: $0.00 USD</p>"
             f"<p>Your subscription is now active, and you have full access to all the features included in your plan.</p>"
-            f"<p>Timeline:</p>"
-            f"<p>{payment_date.strftime('%B %d, %Y')} - Payment successful</p>"
-            f"<p>If you have any questions or need further assistance, feel free to contact our support team.</p>"
-            f"<p>Best regards,<br>The SecuresSecrets Team</p>"
-            f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
-            f"</body>"
-            f"</html>"
         )
+    
+    # Construct body
+    body = (
+        f"<html>"
+        f"<body style='font-family: Arial, sans-serif; color: #333;'>"
+        f"<p>Dear {username},</p>"
+        f"{unique_content}"
+        f"<h3>Plan Details</h3>"
+        f"<ul>"
+        f"<li><strong>Plan Name:</strong> {plan_name}</li>"
+        f"<li><strong>Amount Paid:</strong> ${payment_amount:.2f} USD</li>"
+        f"<li><strong>Date of Payment:</strong> {payment_date.strftime('%B %d, %Y')}</li>"
+        f"</ul>"
+        f"<p><strong>Payment Method:</strong> {card_type} ending in {last_4_digit}</p>"
+        f"<p><strong>Total Charged:</strong> -${payment_amount:.2f} USD</p>"
+        f"<p><strong>Total Due:</strong> $0.00 USD</p>"
+        f"<h3>Activation Timeline</h3>"
+        f"<p>{payment_date.strftime('%B %d, %Y')} - {subscription_type.capitalize()} successful</p>"
+        f"<p>If you have any questions or need assistance, please reach out to our support team. We're here to help!</p>"
+        f"<p>Best regards,<br>The SecuresSecrets Team</p>"
+        f"<img src='cid:logo_image' style='width:150px; height:auto; margin-top:10px;' alt='SecuresSecrets Logo'>"
+        f"</body>"
+        f"</html>"
+    )
 
     msg.attach(MIMEText(body, 'html'))
 
-    # Add the logo image to the email
+    # Add inline logo image
     logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.png')
     try:
         with open(logo_path, "rb") as img:
             img_data = img.read()
         image = MIMEImage(img_data, name=os.path.basename(logo_path))
-        image.add_header('Content-ID', '<logo_image>')  # Use this Content-ID in the HTML
+        image.add_header('Content-ID', '<logo_image>')
         msg.attach(image)
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         print(f"Logo image not found at path: {logo_path}")
 
+    # Send email
     try:
-        # Send the email via SMTP
         with smtplib.SMTP(SERVER, PORT) as connection:
             connection.starttls()
             connection.login(EMAIL, PSWD)
@@ -807,6 +774,7 @@ def send_payment_email(email, username, plan_name, payment_amount, payment_date,
         print(f"Failed to send email to {email}. SMTP error: {str(e)}")
     except Exception as e:
         print(f"An unexpected error occurred while sending email to {email}: {str(e)}")
+
 
 
 # If payment failed
@@ -876,7 +844,7 @@ def send_verification_email(user_email, username, token):
         f"<p>Please click the link below to verify your email:</p>"
         f"<p><a href='{verification_url}'>{verification_url}</a></p>"
         f"<p>Best regards,<br>The SecuresSecrets Team</p>"
-        f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='SecuresSecrets Logo'>"
+        f"<img src='cid:logo_image' style='width:150px; height:auto; margin-top:10px;' alt='SecuresSecrets Logo'>"
         f"</body>"
         f"</html>"
 
@@ -892,7 +860,7 @@ def send_verification_email(user_email, username, token):
         image = MIMEImage(img_data, name=os.path.basename(logo_path))
         image.add_header('Content-ID', '<logo_image>')
         msg.attach(image)
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         print(f"Logo image not found at path: {logo_path}")
     
     try:

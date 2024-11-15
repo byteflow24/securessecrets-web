@@ -16,8 +16,10 @@
 
             <!-- Current Plan Card -->
             <div class="card shadow-sm mb-4">
+                <div class="card-header text-white bg-primary text-center">
+                    <h5 class="mb-0">Current Plan</h5>
+                </div>
                 <div class="card-body text-center">
-                    <h4 class="card-title">Current Plan</h4>
                     <p class="lead"><strong>{{ user.plan.plan }}</strong></p>
                     <p>Status: <span class="badge {% if user.subscription_status == 'active' %}bg-success{% else %}bg-danger{% endif %} text-white">
                         {{ user.subscription_status|capitalize }}
@@ -117,7 +119,7 @@
 
             <!-- Upgrade Plan Card -->
             <div class="card shadow-sm">
-                <div class="card-header text-white bg-secondary">
+                <div class="card-header text-white bg-primary">
                     <h5 class="mb-0">Upgrade Plan</h5>
                 </div>
                 <div class="card-body mb-3">
@@ -161,7 +163,7 @@
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="button" id="confirm-upgrade" class="btn btn-primary">Proceed to Payment</button>
+                                <button type="submit" form="upgrade-form" id="confirm-upgrade" class="btn btn-primary">Proceed to Payment</button>
                             </div>
                         </div>
                     </div>

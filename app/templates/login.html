@@ -97,7 +97,7 @@
         }
 
         .form-container {
-            padding: 20px;
+            padding: 23px;
             background-color: #f9f9f9;
             border: 1px solid #ddd;
             border-radius: 10px;
@@ -105,37 +105,30 @@
         }
 
         .form-label {
-            font-size: 1rem;
-            font-weight: 500;
-            color: #333;
+            font-size: 0.85rem;
         }
 
         .form-control {
+            font-size: 0.875rem;
             border-radius: 8px;
             border: 1px solid #ccc;
-            padding: 10px;
+            padding: 8px;
             box-shadow: none;
         }
 
-        .btn-primary {
-            background-color: #2b52d3;
-            border-color: #2b52d3;
+        .btn-primary, .btn-secondary {
             padding: 0.5rem 1rem;
             border-radius: 8px;
             font-weight: 600;
-            font-size: 1rem;
-        }
-
-        .btn-link, .custom-link {
             font-size: 0.9rem;
-            color: #2b52d3 !important;
-            text-decoration: underline;
         }
-        
 
-        .btn-link:hover {
+        .btn-link {
+            font-size: 0.9rem;
+            text-decoration: underline;
             color: #2b52d3;
         }
+
 
         .mb-0 {
             font-size: medium;
@@ -146,10 +139,10 @@
         }
 
         .alert {
-            max-width: 400px; /* Limit the width of the alert */
+            max-width: 40%; /* Limit the width of the alert */
             margin: 0 auto 15px auto; /* Center align and add spacing below */
             padding: 10px 15px; /* Reduce padding for a smaller appearance */
-            font-size: 0.85rem; /* Smaller font size */
+            font-size: 1rem; /* Smaller font size */
             border-radius: 8px; /* Rounded corners for a softer look */
             box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1); /* Light shadow for subtle emphasis */
         }
@@ -175,32 +168,31 @@
         <div class="row h-100 justify-content-center align-items-center">
             <!-- Centered Title Section -->
             <div class="col-12 title-container pb-3">
-                <a href="{{ url_for('main.login') }}" class="d-inline-flex link-body-emphasis">
+                <a href="{{ url_for('main.login') }}" class="d-inline-flex link-body-emphasis mb-3">
                     <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" style="width: 250px;">
                 </a>
                 <p>Your secrets, your control. Store private messages or a last will, set a timer, and let us handle the rest—whether it's sharing with loved ones or publicly.</p>
-    
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        <div class="alert-container text-center">
-                            {% for category, message in messages %}
-                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                                    {{ message }}
-                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                                </div>
-                            {% endfor %}
-                        </div>
-                    {% endif %}
-                {% endwith %}
             </div>
 
             <div class="container-fluid" style="padding-bottom: 100px;">
               <div class="row centered-row h-100 align-items-center">
+                <div id="flash-messages">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} text-center mt-3 alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                </div>
                   <!-- Left Login Section -->
                   <div class="col-md-6 d login-section">
                       <h2 class="news-heading mb-4">Log In</h2>
                         <div class="form-container">
-                            <form method="POST" action="{{ url_for('main.login', next=request.args.get('next')) }}">
+                            <form method="POST" action="{{ url_for('main.login', next=request.args.get('next')) }}" novalidate>
                               <input type="hidden" name="csrf_token" id="login_csrf_token" value="{{ form.csrf_token._value() }}">
                                 <div class="mb-3">
                                     <label for="user" class="form-label">Email/ Username</label>
@@ -222,7 +214,7 @@
                                 </div>
                             </form>
                             <div class="d-flex justify-content-between align-items-center mt-3">
-                                <p class="mb-0">Don't have an account? <a href="{{ url_for('main.pricing') }}" class="custom-link">Check out our plans</a></p>
+                                <p class="mb-0">Don't have an account? <a href="{{ url_for('main.pricing') }}" class="btn-link">Check out our plans</a></p>
                             </div>
                         </div>
                     </div>         
@@ -230,15 +222,16 @@
                   <div class="col-md-6 news-section">
                       <div class="news-heading">Public Secrets</div>
                       <div class="news-container">
-                          <div class="news-content">
-                              <div class="d-flex justify-content-between" style="gap: 5px; align-items: center;">
-                                  <p style="margin-bottom: 0;"><strong>@user:</strong></p>
-                                  <p style="font-size: 0.75rem; margin-bottom: 0;">12:30</p>
-                              </div>
-                              <p style="margin-top: 2px;">Secret: Stay updated with security tips.</p>
-                              <hr>
-                              <!-- Repeat more content as necessary -->
-                          </div>
+                        {% for public in public_secrets %}
+                        <div class="news-content">
+                            <div class="d-flex justify-content-between" style="gap: 5px; align-items: center;">
+                                <p style="margin-bottom: 0;"><strong>{{ public.user.username }}:</strong></p>
+                                <p style="font-size: 0.75rem; margin-bottom: 0;">{{ public.time_period}}</p>
+                            </div>
+                            <p style="margin-top: 2px;">{{ public.secret.secret }}</p> <!-- Display decrypted content -->
+                            <hr>
+                        </div>
+                        {% endfor %}
                       </div>
                   </div>
               </div>

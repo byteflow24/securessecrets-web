@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField, PasswordField, FileField, TextAreaField, SelectField, EmailField, DateField, BooleanField, DateTimeField, HiddenField
+from wtforms import StringField, SubmitField, PasswordField, FileField, TextAreaField, SelectField, EmailField, DateField, BooleanField, DateTimeField, HiddenField, FieldList, TextAreaField
 from wtforms.validators import DataRequired, Optional, Length, Regexp, Email, AnyOf
 from .utils import email_domain_validator
 
@@ -137,33 +137,69 @@ class SearchForm(FlaskForm):
 
 # Sharing the secret to some one
 class ShareForm(FlaskForm):
-    email = EmailField(
-        "Email",
-        validators=[DataRequired(), Email()],
-        render_kw={"placeholder": "Email", "class": "form-control"}
+    sharing_type = HiddenField()
+    email_login = TextAreaField(
+        "Email:",
+        validators=[Optional(), Email(), email_domain_validator],
+        render_kw={"placeholder": "Enter recipient's email/s", "class": "email-login"}
     )
-    date = DateField(
-        "When should the secret be sent?",
+    email_scheduled = TextAreaField(
+        "Email:",
+        validators=[Optional(), Email(), email_domain_validator],
+        render_kw={"placeholder": "Enter recipient's email/s", "class": "email-scheduled"}
+    )
+    date = DateField("Date: ",
         validators=[Optional()],
-        render_kw={"class": "form-control", "style": "display:none;"}  # Initially hidden
+        render_kw={"class": "form-control", "style": "border-radius: 10px;"}
     )
-    time = DateTimeField("",format='%H:%M', validators=[Optional()], render_kw={"class": "form-control", "type": "time", "style": "display:none;"})
+    time = DateTimeField("Time: ", format='%H:%M', validators=[Optional()], render_kw={"class": "form-control", "type": "time", "style": "border-radius: 10px;"})
     
     confirm_deletion = BooleanField(
         "I want the link to be deleted 1 hour after it is opened.", validators=[Optional()]
     )
-    public_sharing = BooleanField(
-        "Share Publicly",
-        validators=[Optional()],
+    public_login = BooleanField(
+        "Share to Public" ,validators=[Optional()],
         render_kw={"class": "form-check-input"}
     )
-
-    deadline_date = DateField(
-        "Deadline for sharing",
-        validators=[Optional()],
-        render_kw={"class": "form-control"})
+    public_scheduled = BooleanField(
+        "Share to Public" ,validators=[Optional()],
+        render_kw={"class": "form-check-input"}
+    )
+    date_period = StringField(
+        "Share the secret after last login by:",
+        validators=[Optional(), Length(min=2, max=4, message="Period must be number/s and one character from this list [d, m, y].")],
+        render_kw={"class": "form-control", "style": "width: 150px; border-radius: 10px;"})
     
     submit = SubmitField("Send", render_kw={"class": "btn btn-primary w-50"})
+
+    # Check the date_period, date, and time to be required when sharing_type is selected
+    def validate(self):
+        # Run the standard validation first
+        if not super(ShareForm, self).validate():
+            return False
+
+        # Apply conditional validation based on `sharing_type`
+        sharing_type = self.sharing_type.data
+
+        # Check `date_period` if "last_login" is selected
+        if sharing_type == "last_login" and not self.date_period.data:
+            self.date_period.errors.append("This field is required for Last Login Check.")
+            return False
+
+        # Check `date` and `time` if "scheduled" is selected
+        if sharing_type == "scheduled":
+            if not self.date.data:
+                self.date.errors.append("Date is required for Scheduled Sharing.")
+                return False
+            if not self.time.data:
+                self.time.errors.append("Time is required for Scheduled Sharing.")
+                return False
+
+        return True
+    
+    def validate_on_submit(self):
+        """Custom validate_on_submit to avoid the extra_validators argument."""
+        return self.is_submitted() and super().validate()
 
 # Deleting account
 class DeleteAccountForm(FlaskForm):

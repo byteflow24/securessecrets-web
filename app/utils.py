@@ -99,6 +99,15 @@ def decrypt_secret(encrypted_secret):
     decrypted_secret = cipher_suite.decrypt(encrypted_bytes)
     return decrypted_secret.decode('utf-8')
 
+# Checks if a string is encrypted by attempting decryption
+def is_encrypted(data):
+    try:
+        # Attempt decryption
+        cipher_suite.decrypt(data.encode())
+        return True
+    except Exception:
+        return False
+
 
 # Helper function to the billing page and upgrading plan
 def populate_plan_choices(form, user):

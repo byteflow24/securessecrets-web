@@ -1,15 +1,15 @@
-from flask import Blueprint, render_template, redirect, url_for, send_from_directory, flash, request, session, jsonify, current_app, abort
+from flask import Blueprint, render_template, redirect, url_for, send_from_directory, flash, request, session, jsonify, current_app, abort, get_flashed_messages
 from flask_login import login_user, logout_user, login_required, current_user
 from . import db
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, CardDetailsForm
-from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, HistoryPayment
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, generate_token, send_verification_email, is_safe_url, tokenize_card, create_charge, populate_plan_choices, get_charge_details, get_ip, get_user_agent, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email
+from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, HistoryPayment, PublicSecrets
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, generate_token, send_verification_email, is_safe_url, tokenize_card, create_charge, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy import desc
 from datetime import date, datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
-from sqlalchemy.exc import SQLAlchemyError
 from smtplib import SMTPException
 import os
 import traceback
@@ -24,7 +24,7 @@ def set_language(lang):
     # Set the selected language in the session
     session['lang'] = lang
     # print(f"Language set to: {session['lang']}")
-    return redirect(request.referrer or url_for('main.home'))
+    return redirect(request.referrer or url_for('main.dashboard'))
 
 
 # Registeration server @sign-up
@@ -32,7 +32,7 @@ def set_language(lang):
 @require_pricing_session()
 def register():
     if current_user.is_authenticated:
-        return redirect(url_for('main.home'))
+        return redirect(url_for('main.dashboard'))
     form = RegisterForm()
     plan_id = request.args.get('plan_id')
     
@@ -95,28 +95,16 @@ def register():
 
     return render_template('register.html', form=form, current_user=current_user, show_header=False, show_footer=True)
 
-
 # Log in server
 @main.route('/', methods=['GET', 'POST'])
 def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('main.home'))
-    form = LoginForm()
-    # Fetch the public shared secrets and eager-load user and secret relationships
-    shared_secret = db.session.execute(
-        db.select(SharedSecret)
-        .where(SharedSecret.public == True)
-        .options(db.joinedload(SharedSecret.user), db.joinedload(SharedSecret.secret))
-    ).scalars().all()
-    
-    # Decrypt each SharedSecret content
-    for secret in shared_secret:
-        decrypted_secret_content = decrypt_secret(secret.secret.secret)  # Assuming `secret.secret.secret` holds the encrypted content
-        secret.secret.secret = decrypted_secret_content  # Set decrypted content
 
-       
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
     
-    next_page = request.args.get('next') or request.form.get('next')  # Get next from both GET and POST
+    form = LoginForm()
+    # Get next from both GET and POST
+    next_page = request.args.get('next') or request.form.get('next')  
 
     if form.validate_on_submit():
         password = form.password.data
@@ -148,14 +136,168 @@ def login():
             if next_page and is_safe_url(next_page):
                 return redirect(next_page)
             
-            # Check if user don't have secret to be redirected to add secrets
-            secrets = Secret.query.filter_by(user_id=user.id).all()
-            if not secrets:
-                return redirect(url_for('main.home'))
-            else:
-                return redirect(url_for('main.all_secrets'))
+            return redirect(url_for('main.dashboard'))
+            
+    # Fetch the public shared secrets and eager-load user and secret relationships
+    shared_secret = db.session.execute(
+        db.select(SharedSecret)
+        .where(SharedSecret.public == True, (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None))
+        .options(db.joinedload(SharedSecret.user), db.joinedload(SharedSecret.secret))
+    ).scalars().all()
+
+    # Check if the user logged in recently and update the time period or scheduled date
+    for secret in shared_secret:
+        # Get the most recent login date for the user
+        latest_login = db.session.execute(
+            db.select(LoginHistory.login_time)
+            .where(LoginHistory.user_id == secret.user_id)
+            .order_by(desc(LoginHistory.login_time))
+            .limit(1)
+        ).scalar_one_or_none()
+
+        # If a recent login exists and it's more recent than the current last_login
+        if latest_login and (not secret.last_login or latest_login > secret.last_login):
+            # Update the last_login to the latest login date
+            secret.last_login = latest_login
+
+            # Ensure secret.period is not None
+            if secret.period:
+                # Calculate the new time period based on the period type (days, months, years)
+                if 'd' in secret.period:
+                    time_period = latest_login + timedelta(days=int(secret.period.strip('d')))
+                elif 'm' in secret.period:
+                    time_period = latest_login + relativedelta(months=int(secret.period.strip('m')))
+                elif 'y' in secret.period:
+                    time_period = latest_login + relativedelta(years=int(secret.period.strip('y')))
+                else:
+                    raise ValueError(f"Invalid time period format: {secret.period}")
+                
+                # Update the secret's time period
+                secret.time_period = time_period
+
+            # Update the associated PublicSecrets share_date
+            public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
+            if public_secret:
+                # If time_period is still valid, update share_date
+                if secret.time_period:
+                    public_secret.share_date = secret.time_period
+        else:
+            # Handle cases where period is None (e.g., skip or log)
+            print(f"Skipping secret {secret.id} as 'period' is None.")
+            continue
+
+    # Commit changes to the database
+    db.session.commit()
+
     
-    return render_template('login.html', form=form, current_user=current_user, show_header=False, show_footer=True, public_secrets=shared_secret, time=datetime.now().strftime("%H:%M"))
+    # Decrypt each SharedSecret content
+    decrypted_secrets = []
+    # Fetch all public shared secrets with eligible share_date
+    public_secrets = PublicSecrets.query.filter(PublicSecrets.share_date <= datetime.now()).all()
+
+    # Decrypt and prepare public secrets for display
+    decrypted_secrets = []
+    for public_secret in public_secrets:
+        public_secret.display_time = ''
+        
+        # Format the share_date if it matches today's date
+        if public_secret.share_date and public_secret.share_date.date() == datetime.now().date():
+            public_secret.display_time = public_secret.share_date.strftime('%H:%M')
+
+        # Decrypt the secret if it's encrypted
+        if is_encrypted(public_secret.secret):
+            public_secret.secret = decrypt_secret(public_secret.secret)
+
+        # Append the public secret to the list
+        decrypted_secrets.append(public_secret)
+    
+    return render_template('login.html', form=form, current_user=current_user, show_header=False, show_footer=True, public_secrets=decrypted_secrets)
+
+# Log in server
+@main.route('/dashboard', methods=['GET', 'POST'])
+@login_required
+def dashboard():
+    # counting secrets for each user
+    secrets = Secret.query.filter_by(user_id=current_user.id).count()
+    last_login = current_user.login_history[-1] if current_user.login_history else None
+
+    # Fetch the public shared secrets and eager-load user and secret relationships
+    shared_secret = db.session.execute(
+        db.select(SharedSecret)
+        .where(SharedSecret.public == True, (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None))
+        .options(db.joinedload(SharedSecret.user), db.joinedload(SharedSecret.secret))
+    ).scalars().all()
+
+    # Check if the user logged in recently and update the time period or scheduled date
+    for secret in shared_secret:
+        # Get the most recent login date for the user
+        latest_login = db.session.execute(
+            db.select(LoginHistory.login_time)
+            .where(LoginHistory.user_id == secret.user_id)
+            .order_by(desc(LoginHistory.login_time))
+            .limit(1)
+        ).scalar_one_or_none()
+
+        # If a recent login exists and it's more recent than the current last_login
+        if latest_login and (not secret.last_login or latest_login > secret.last_login):
+            # Update the last_login to the latest login date
+            secret.last_login = latest_login
+
+            # Ensure secret.period is not None
+            if secret.period:
+                # Calculate the new time period based on the period type (days, months, years)
+                if 'd' in secret.period:
+                    time_period = latest_login + timedelta(days=int(secret.period.strip('d')))
+                elif 'm' in secret.period:
+                    time_period = latest_login + relativedelta(months=int(secret.period.strip('m')))
+                elif 'y' in secret.period:
+                    time_period = latest_login + relativedelta(years=int(secret.period.strip('y')))
+                else:
+                    raise ValueError(f"Invalid time period format: {secret.period}")
+                
+                # Update the secret's time period
+                secret.time_period = time_period
+
+            # Update the associated PublicSecrets share_date
+            public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
+            if public_secret:
+                # If time_period is still valid, update share_date
+                if secret.time_period:
+                    public_secret.share_date = secret.time_period
+        else:
+            # Handle cases where period is None (e.g., skip or log)
+            print(f"Skipping secret {secret.id} as 'period' is None.")
+            continue
+
+    # Commit changes to the database
+    db.session.commit()
+
+    
+    # Decrypt each SharedSecret content
+    decrypted_secrets = []
+    # Fetch all public shared secrets with eligible share_date
+    public_secrets = PublicSecrets.query.filter(PublicSecrets.share_date <= datetime.now()).all()
+
+    # Decrypt and prepare public secrets for display
+    decrypted_secrets = []
+    for public_secret in public_secrets:
+        public_secret.display_time = ''
+        
+        # Format the share_date if it matches today's date
+        if public_secret.share_date and public_secret.share_date.date() == datetime.now().date():
+            public_secret.display_time = public_secret.share_date.strftime('%H:%M')
+
+        # Decrypt the secret if it's encrypted
+        if is_encrypted(public_secret.secret):
+            public_secret.secret = decrypt_secret(public_secret.secret)
+
+        # Append the public secret to the list
+        decrypted_secrets.append(public_secret)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('partials/dashboard_content.html', current_user=current_user, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login)
+
+    
+    return render_template('dashboard.html', current_user=current_user, show_header=True, show_footer=True, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login)
 
 
 # Log out server
@@ -274,73 +416,79 @@ def change_password():
         return render_template('partials/profile_content.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login)
     return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login, show_header=True, show_footer=True)
 
-
-# Home page
-@main.route('/add-secret', methods=['GET', 'POST'])
-def home():
-
-    if current_user.is_authenticated and not current_user.is_confirmed:
-        return redirect(url_for('main.confirmation_pending'))
-
+# New secret popup
+@main.route('/add-secret', methods=['POST'])
+def add_secret():
     form = SecretForm()
+    
+    # Validate the form
     if form.validate_on_submit():
-        if not current_user.is_authenticated:
-            session['form_data'] = {
-                'title': form.title.data,
-                'secret': form.secret.data,
-            }
-            flash("You need to log in to save your secret!", "warning")
-            return redirect(url_for('main.login', next=request.url))
+        print("Form validated successfully:", form.data)
 
-        # Retrieve the storage limit based on the user's plan
+        # Fetch the user's storage limit
         storage_limit = current_user.plan.storage_limit  
 
-        # Initialize total size with the encrypted secret size
+        # Generate a unique title
         unique_title = get_unique_title(form.title.data, current_user.id)
+
+        # Encrypt the secret
         encrypted_secret = encrypt_secret(form.secret.data)
+
+        # Calculate the size of the encrypted secret
         secret_size = len(encrypted_secret.encode('utf-8'))
 
-        # Check if adding this secret will exceed the user's storage limit
+        # Check storage limit
         if current_user.storage_used + secret_size > storage_limit:
-            flash(f"Adding this secret will exceed your {current_user.plan.plan} plan's storage limit.", "warning")
-            return redirect(url_for('main.all_secrets'))
+            return jsonify({
+                'success': False,
+                'error': f"Adding this secret will exceed your {current_user.plan.plan} plan's storage limit."
+            }), 403
 
-        # Update the user's storage used with the size of the secret
+        # Update storage usage
         current_user.storage_used += secret_size
-        db.session.commit()
 
-        # Retrieve the filename from the hidden field
+        # Retrieve filename if provided
         filename = request.form.get('uploadedFileName')
+        if not filename:
+            return jsonify({'success': False, 'error': 'No uploaded file found'}), 400
 
-        # Create a new Secret instance without a file and save to the database
+        print("Uploaded filename received:", filename)
+
+        # Create and save the new secret
         new_secret = Secret(
             title=unique_title,
             secret=encrypted_secret,
-            file=filename,  # No file associated
+            file=filename,
             date=date.today().strftime("%B %d, %Y"),
             user_id=current_user.id
         )
+        print("New secret with file:", new_secret.file)
 
         try:
             db.session.add(new_secret)
             db.session.commit()
         except IntegrityError:
             db.session.rollback()
-            flash("An error occurred while saving your secret.", "warning")
-            return redirect(request.url)
+            return jsonify({
+                'success': False,
+                'error': "An error occurred while saving your secret."
+            }), 500
 
-        # Clear session form data
-        session.pop('form_data', None)
-        return redirect(url_for('main.all_secrets'))
+        # Return the new secret details as a JSON response
+        return jsonify({
+            'success': True,
+            'id': new_secret.id,
+            'title': unique_title,
+            'date': new_secret.date.strftime("%Y-%m-%d")
+        }), 200
 
-    # Populate form with saved session data if available
-    if 'form_data' in session:
-        form.title.data = session['form_data'].get('title', '')
-        form.secret.data = session['form_data'].get('secret', '')
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/add_secret_content.html', form=form, current_user=current_user)  # Partial for AJAX
-    return render_template('add_secret.html', form=form, current_user=current_user, show_header=True, show_footer=True)
+    # If form validation fails, return the errors
+    errors = {field: error[0] for field, error in form.errors.items()}  # Assuming error[0] to get the first error message
+    return jsonify({
+        'success': False,
+        'error': "Form validation failed",
+        'errors': errors
+    }), 400
 
 
 # Uploading file
@@ -378,6 +526,7 @@ def upload_file():
         # Update storage usage
         current_user.storage_used += file_size
         db.session.commit()
+        print("filename:",filename)
         return jsonify({'message': 'File successfully uploaded', 'filename': filename}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -389,12 +538,18 @@ def upload_file():
 def all_secrets():
     form = SearchForm()
     share_form = ShareForm()
+    secret_form = SecretForm()
     query = db.select(Secret).where(Secret.user_id == current_user.id)
 
     if current_user.is_authenticated and not current_user.is_confirmed:
         return redirect(url_for('main.confirmation_pending'))
+    
+    # # Debug flash messages
+    # existing_flashes = get_flashed_messages(with_categories=True)
+    # print(f"Existing flash messages on page load: {existing_flashes}")
 
     if form.validate_on_submit():
+        print("Form validated successfully:", form.data)
         search_term = f"{form.search.data}" if form.search.data else None
         date_filter = form.date_filter.data
         alpha_filter = form.alpha_filter.data
@@ -415,101 +570,134 @@ def all_secrets():
     user_secrets = db.session.execute(query).scalars().all()
     decrypted_secrets = []
     for secret in user_secrets:
+        if not is_encrypted(secret.secret):
+            secret.secret = encrypt_secret(secret.secret)
         decrypted_secret_content = decrypt_secret(secret.secret)
         secret.secret = decrypted_secret_content
         decrypted_secrets.append(secret)
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/all_secrets_content.html', form=form, user_secrets=decrypted_secrets, current_user=current_user, share_form=share_form)
-    return render_template('all_secrets.html', user_secrets=decrypted_secrets, current_user=current_user, form=form, share_form=share_form, show_header=True, show_footer=True)
-
-# Toggle pinned
-@main.route('/toggle_pin/<int:secret_id>', methods=['POST'])
-def toggle_pin(secret_id):
-    secret = db.get_or_404(Secret, secret_id)
-    secret.pinned = not secret.pinned
-    db.session.commit()
-    return jsonify(success=True)
-
-# Toggle starred
-@main.route('/toggle_star/<int:secret_id>', methods=['POST'])
-def toggle_star(secret_id):
-    secret = db.get_or_404(Secret, secret_id)
-    secret.starred = not secret.starred
-    db.session.commit()
-    return jsonify(success=True)
+        return render_template('partials/all_secrets_content.html', user_secrets=decrypted_secrets, current_user=current_user, share_form=share_form, form=form, secret_form=secret_form)
+    return render_template('all_secrets.html', user_secrets=decrypted_secrets, current_user=current_user, form=form, share_form=share_form, secret_form=secret_form, show_header=True, show_footer=True)
 
 
-# Sharing button
+# # Toggle pinned
+# @main.route('/toggle_pin/<int:secret_id>', methods=['POST'])
+# def toggle_pin(secret_id):
+#     secret = db.get_or_404(Secret, secret_id)
+#     secret.pinned = not secret.pinned
+#     db.session.commit()
+#     return jsonify(success=True)
+
+# # Toggle starred
+# @main.route('/toggle_star/<int:secret_id>', methods=['POST'])
+# def toggle_star(secret_id):
+#     secret = db.get_or_404(Secret, secret_id)
+#     secret.starred = not secret.starred
+#     db.session.commit()
+#     return jsonify(success=True)
+
+
+# Sharing secret server
 @main.route('/share', methods=['POST'])
 def share():
     form = ShareForm()
-    form.sharing_type.data = request.form.get("sharing_type")
-    email = None
-    public = False
-    token = None
-    user_last_login = LoginHistory.query.filter_by(user_id=current_user.id).first()
-    last_login = user_last_login.login_time if user_last_login else None
-    time_period, date, time = None, None, None  # Initialize to handle unassigned values
-    if form.validate_on_submit():
-        sharing_type = form.sharing_type.data
-        token = generate_token()
-        try:
-            # Last Login Check
-            if sharing_type == "last_login":
-                email = form.email_login.data
-                public = form.public_login.data
-                date_period = form.date_period.data
-                token = None
-                if 'd' in date_period:
-                    days_to_add = int(date_period.split('d')[0])
-                    # Add the number of days to last login
-                    time_period = last_login + timedelta(days=days_to_add)
-                elif 'm' in date_period:
-                    months_to_add = int(date_period.split('m')[0])
-                    # Add the number of months to last login
-                    time_period = last_login + relativedelta(months=months_to_add)
-                elif 'y' in date_period:
-                    years_to_add = int(date_period.split('y')[0])
-                    # Add the number of months to last login
-                    time_period = last_login + relativedelta(years=years_to_add)
-                message = f"Your secret will be shared after the last login period."
+    print(request.form)
 
-            # Scheduled Sharing
-            else:
-                date = form.date.data if form.date.data else datetime.now().date()
-                time = form.time.data.time() if form.time.data else datetime.now().time()
-                email = form.email_scheduled.data
-                public = form.public_scheduled.data
-                message = f"Your secret is scheduled to be sent on {date} at {time.strftime('%H:%M')}."
-                if email is None:
-                    token = None
-            # Save the sharing details to the database
+    # Default variable initialization
+    sharing_type = None
+    email, public, token, time_period, date, time, last_login = None, False, None, None, None, None, None
+
+    if form.validate_on_submit():
+        # Determine sharing type
+        if form.date_period.data:
+            sharing_type = "last_login"
+            if not form.email_login.data and not form.public_login.data:
+                return jsonify({"success": False, "message": "Email or Public must be selected for Last Login Check."}), 400
+
+            email = form.email_login.data
+            public = form.public_login.data
+            date_period = form.date_period.data
+
+            # Get the last login time
+            user_last_login = LoginHistory.query.filter_by(user_id=current_user.id).first()
+            last_login = user_last_login.login_time if user_last_login else None
+
+            if not last_login:
+                return jsonify({"success": False, "message": "Last login time not found."}), 400
+
+            # Calculate the time period
+            if 'd' in date_period:
+                time_period = last_login + timedelta(days=int(date_period.strip('d')))
+                message = f"Your secret will be shared after {date_period.replace('d', ' day/s')} from the last login."
+            elif 'm' in date_period:
+                time_period = last_login + relativedelta(months=int(date_period.strip('m')))
+                message = f"Your secret will be shared after {date_period.replace('m', ' month/s')} from the last login."
+            elif 'y' in date_period:
+                time_period = last_login + relativedelta(years=int(date_period.strip('y')))
+                message = f"Your secret will be shared after {date_period.replace('y', ' year/s')} from the last login."
+        elif form.date.data and form.time.data:
+            sharing_type = "scheduled"
+            if not form.email_scheduled.data and not form.public_scheduled.data:
+                return jsonify({"success": False, "message": "Email or Public must be selected for Scheduled Sharing."}), 400
+
+            date = form.date.data
+            time = form.time.data
+            email = form.email_scheduled.data
+            public = form.public_scheduled.data
+            message = f"Your secret is scheduled for {date} at {time.strftime('%H:%M')}."
+        else:
+            return jsonify({"success": False, "message": "Invalid sharing type or missing fields!"}), 400
+
+        # Create and save the shared secret
+        try:
+            token = generate_token()
+            secret = Secret.query.filter_by(id=request.args.get("secret_id")).first()
+
+            # Add the new shared secret first
             new_shared_secret = SharedSecret(
                 user_id=current_user.id,
                 secret_id=request.args.get("secret_id"),
                 email=email,
                 public=public,
-                time_period=time_period,
+                last_login=last_login if sharing_type == "last_login" else None,
+                period=date_period if sharing_type == "last_login" else None,
+                time_period=time_period if sharing_type == "last_login" else None,
                 token=token,
-                date_to_send=date,
-                time_to_send=time,
+                date_to_send=date if sharing_type == "scheduled" else None,
+                time_to_send=time if sharing_type == "scheduled" else None,
                 received=False,
-                delete_confirmed=form.confirm_deletion.data if sharing_type == "scheduled" else False
+                delete_confirmed=form.confirm_deletion.data if sharing_type == "scheduled" else False,
             )
             db.session.add(new_shared_secret)
+            db.session.commit()  # Commit to generate ID
+
+            # Add the public secret
+            public_secrets = PublicSecrets(
+                shared_secret_id=new_shared_secret.id,
+                username=current_user.username,
+                secret=secret.secret,
+                file=secret.file,
+                share_date=(
+                    time_period if sharing_type == "last_login"
+                    else datetime.combine(date, time.time()) if sharing_type == "scheduled"
+                    else None
+                )
+            )
+            db.session.add(public_secrets)
             db.session.commit()
 
-            # Return JSON response for AJAX success handling
             return jsonify({"success": True, "message": message}), 200
-        except (SQLAlchemyError, SMTPException) as e:
+
+        except Exception as e:
             db.session.rollback()
-            print(f"Error occurred: {e}")  # Log the error message for debugging
-            message = f"An error occurred: {e}"
-            return jsonify({"success": False, "message": message}), 500
-    else:
-        print(form.errors)  # Log form errors for debugging
-        return jsonify({"success": False, "message": "Form validation failed."}), 400
+            error_message = str(e)
+            print(f"Error occurred: {error_message}")  # Log the error for debugging
+            return jsonify({"success": False, "message": "An error occurred while sharing the secret.", "error": error_message}), 500
+
+    # Log validation errors
+    print("Validation errors:", form.errors)
+    return jsonify({"success": False, "errors": form.errors}), 400
 
 
 # The link where that person will read the >>SHARED_SECRET<<
@@ -596,7 +784,7 @@ def delete_account(user_id):
     db.session.delete(user)
     db.session.commit()
     flash("Your account has been deleted. We're sad to see you go.", "success")
-    return redirect(url_for('main.home'))
+    return redirect(url_for('main.dashboard'))
 
 
 # Editing secret
@@ -679,7 +867,7 @@ def update_secret(secret_id):
 @main.route('/pricing')
 def pricing():
     if current_user.is_authenticated:
-        return redirect(url_for('main.home'))
+        return redirect(url_for('main.dashboard'))
     session['from_pricing'] = True
     if current_user.is_authenticated and not current_user.is_confirmed:
         return redirect(url_for('main.confirmation_pending'))
@@ -820,7 +1008,7 @@ def payment_complete():
                         send_payment_email(user.email, user.username, plan.price, user.subscription_start_date, "renewal", charge_details['card']['brand'], charge_details['card']['last_four'])
                         flash("Your subscription has been successfully renewed.", "success")
 
-                    return redirect(url_for('main.home'))
+                    return redirect(url_for('main.dashboard'))
             else:
                 flash(f"Payment failed: {charge_details.get('response', {}).get('message', 'Unknown error')}", "danger")
                 return redirect(url_for('main.billing'))
@@ -829,7 +1017,7 @@ def payment_complete():
             flash(str(e), "danger")
             return redirect(url_for('main.billing'))
 
-    return redirect(url_for('main.home'))
+    return redirect(url_for('main.dashboard'))
 
 
 
@@ -854,6 +1042,7 @@ def confirm_email(token):
         #     user.subscription_start_date = datetime.now(timezone.utc)
         #     user.subscription_end_date = user.subscription_start_date + timedelta(days=30)
         db.session.commit()
+        logout_user()
         flash('Your email has been verified, login now', 'success')
 
     return redirect(url_for('main.login'))

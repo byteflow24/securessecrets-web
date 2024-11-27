@@ -21,23 +21,21 @@
             <div class="collapse navbar-collapse justify-content-between" id="navbarResponsive">
                 <ul class="navbar-nav mx-auto">
                     {% if not current_user.is_authenticated %}
-                        <li class="nav-item">
-                            <a class="nav-link text-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.pricing') }}">Pricing</a>
+                        <li class="nav-item" style="margin-right:5px;">
+                            <a class="btn btn-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.pricing') }}">Pricing</a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.about') }}">About Us</a>
+                        <li class="nav-item" style="margin-right:5px;">
+                            <a class="btn btn-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.about') }}">About Us</a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a>
+                        <li class="nav-item" style="margin-right:5px;">
+                            <a class="btn btn-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a>
                         </li>
                     {% else %}
-                        <li class="nav-item">
-                            <a class="nav-link text-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.home') }}">
-                                <i class="bi bi-plus-circle-dotted"></i> Add Secret
-                            </a>
+                        <li class="nav-item" style="margin-right:5px;">
+                            <a class="btn btn-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.dashboard') }}">Dashboard</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.all_secrets') }}">My Secrets</a>
+                            <a class="btn btn-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.all_secrets') }}">My Secrets</a>
                         </li>
                     {% endif %}
                 </ul>

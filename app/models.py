@@ -10,7 +10,7 @@ class User(UserMixin, db.Model):
     plan_id = db.Column(Integer, ForeignKey('plans.id'), nullable=True)
     email = db.Column(String(255), unique=True, nullable=False)
     password = db.Column(String(255), nullable=False)
-    username = db.Column(String(255), unique=True, nullable=False)
+    username = db.Column(String(50), unique=True, nullable=False)
     country_code = db.Column(String(4), nullable=True)
     phone = db.Column(String(20), nullable=True)
     storage_used = db.Column(Integer, default=0, nullable=False)
@@ -136,7 +136,7 @@ class Plan(db.Model):
     payments = db.relationship('Payment', back_populates='plan')
     history_payments = db.relationship('HistoryPayment', back_populates='plan')
 
-
+# Shared Secrets Table
 class SharedSecret(db.Model):
     __tablename__ = 'shared_secrets'
     
@@ -145,7 +145,9 @@ class SharedSecret(db.Model):
     secret_id = db.Column(db.Integer, db.ForeignKey('secrets.id', ondelete='CASCADE'), nullable=False)
     email = db.Column(db.String(255), nullable=True)
     public = db.Column(db.Boolean, nullable=True, default=False)
-    time_period = db.Column(db.String(50), nullable=True) #the deadline time that user set if he didn't login
+    last_login = db.Column(TIMESTAMP, nullable=True)
+    period = db.Column(db.String(5), nullable=True)
+    time_period = db.Column(TIMESTAMP, nullable=True)
     token = db.Column(db.String(255), unique=True, nullable=True)
     date_to_send = db.Column(db.DateTime, nullable=True)
     time_to_send = db.Column(db.Time, nullable=True)
@@ -156,3 +158,18 @@ class SharedSecret(db.Model):
 
     user = db.relationship('User', back_populates='shared_secrets')
     secret = db.relationship('Secret', back_populates='shared_secrets')
+    public_secret = db.relationship('PublicSecrets', back_populates='shared_secret', uselist=False)
+
+
+class PublicSecrets(db.Model):
+    __tablename__ = 'public_secrets'
+
+    id = db.Column(db.Integer, primary_key=True)
+    shared_secret_id = db.Column(db.Integer, db.ForeignKey('shared_secrets.id'), nullable=True)
+    username = db.Column(String(50), unique=True, nullable=True)
+    secret = db.Column(String, nullable=True)
+    file = db.Column(String(255), nullable=True)
+    share_date = db.Column(TIMESTAMP, nullable=True)
+
+    # Optional back-reference
+    shared_secret = db.relationship('SharedSecret', back_populates='public_secret', uselist=False)

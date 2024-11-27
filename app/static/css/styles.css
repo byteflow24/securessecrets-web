@@ -142,6 +142,14 @@
   border: 1px solid #f2b3b3;
 }
 
+.is-invalid {
+  border-color: #dc3545;
+}
+.validation-error {
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -1253,7 +1261,7 @@ textarea.form-control {
   --bs-dropdown-link-hover-color: #1e2125;
   --bs-dropdown-link-hover-bg: #e9ecef;
   --bs-dropdown-link-active-color: #fff;
-  --bs-dropdown-link-active-bg: #2b52d3;
+  --bs-dropdown-link-active-bg: #6c757d;
   --bs-dropdown-link-disabled-color: #adb5bd;
   --bs-dropdown-item-padding-x: 1rem;
   --bs-dropdown-item-padding-y: 0.25rem;

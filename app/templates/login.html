@@ -220,20 +220,28 @@
                     </div>         
                   <!-- Right Public Section -->
                   <div class="col-md-6 news-section">
-                      <div class="news-heading">Public Secrets</div>
-                      <div class="news-container">
+                    <div class="news-heading">Public Secrets</div>
+                    <div class="news-container">
                         {% for public in public_secrets %}
                         <div class="news-content">
                             <div class="d-flex justify-content-between" style="gap: 5px; align-items: center;">
-                                <p style="margin-bottom: 0;"><strong>{{ public.user.username }}:</strong></p>
-                                <p style="font-size: 0.75rem; margin-bottom: 0;">{{ public.time_period}}</p>
+                                <p style="margin-bottom: 0;"><strong>{{ public.username or 'Anonymous' }}:</strong></p>
+                                <p style="font-size: 0.75rem; margin-bottom: 0;">{{ public.display_time }}</p>
                             </div>
-                            <p style="margin-top: 2px;">{{ public.secret.secret }}</p> <!-- Display decrypted content -->
+                            <p style="margin-top: 2px;">{{ public.secret|safe }}</p>
+                            {% if public.file %}
+                            <p style="margin-top: 2px;">
+                                <strong>Attached File:</strong>
+                                <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
+                                    <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
+                                </a>
+                            </p>
+                            {% endif %}
                             <hr>
                         </div>
                         {% endfor %}
-                      </div>
-                  </div>
+                    </div>
+                </div>
               </div>
           </div>          
         </div>

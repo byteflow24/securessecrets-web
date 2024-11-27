@@ -140,66 +140,61 @@ class ShareForm(FlaskForm):
     sharing_type = HiddenField()
     email_login = TextAreaField(
         "Email:",
-        validators=[Optional(), Email(), email_domain_validator],
-        render_kw={"placeholder": "Enter recipient's email/s", "class": "email-login"}
+        validators=[Optional(), Email(), email_domain_validator]
     )
     email_scheduled = TextAreaField(
         "Email:",
-        validators=[Optional(), Email(), email_domain_validator],
-        render_kw={"placeholder": "Enter recipient's email/s", "class": "email-scheduled"}
+        validators=[Optional(), Email(), email_domain_validator]
     )
     date = DateField("Date: ",
-        validators=[Optional()],
+        validators=[Optional()],  # Don't need any validator here for optional
         render_kw={"class": "form-control", "style": "border-radius: 10px;"}
     )
-    time = DateTimeField("Time: ", format='%H:%M', validators=[Optional()], render_kw={"class": "form-control", "type": "time", "style": "border-radius: 10px;"})
+    time = DateTimeField("Time: ", format='%H:%M', validators=[Optional()],
+        render_kw={"class": "form-control", "type": "time", "style": "border-radius: 10px;"})
     
     confirm_deletion = BooleanField(
         "I want the link to be deleted 1 hour after it is opened.", validators=[Optional()]
     )
     public_login = BooleanField(
-        "Share to Public" ,validators=[Optional()],
+        "Share to Public", validators=[Optional()],
         render_kw={"class": "form-check-input"}
     )
     public_scheduled = BooleanField(
-        "Share to Public" ,validators=[Optional()],
+        "Share to Public", validators=[Optional()],
         render_kw={"class": "form-check-input"}
     )
     date_period = StringField(
         "Share the secret after last login by:",
         validators=[Optional(), Length(min=2, max=4, message="Period must be number/s and one character from this list [d, m, y].")],
-        render_kw={"class": "form-control", "style": "width: 150px; border-radius: 10px;"})
+        render_kw={"class": "form-control", "style": "width: 150px; border-radius: 10px;"}
+    )
     
     submit = SubmitField("Send", render_kw={"class": "btn btn-primary w-50"})
 
-    # Check the date_period, date, and time to be required when sharing_type is selected
+    # Custom validate method to handle field validation
     def validate(self):
-        # Run the standard validation first
-        if not super(ShareForm, self).validate():
-            return False
-
-        # Apply conditional validation based on `sharing_type`
+        is_valid = super().validate()
         sharing_type = self.sharing_type.data
 
-        # Check `date_period` if "last_login" is selected
-        if sharing_type == "last_login" and not self.date_period.data:
-            self.date_period.errors.append("This field is required for Last Login Check.")
-            return False
-
-        # Check `date` and `time` if "scheduled" is selected
-        if sharing_type == "scheduled":
+        if sharing_type == "last_login":
+            if not self.date_period.data:
+                self.date_period.errors.append("Please provide a period (e.g., 1d, 1m, or 1y).")
+                is_valid = False
+        elif sharing_type == "scheduled":
             if not self.date.data:
-                self.date.errors.append("Date is required for Scheduled Sharing.")
-                return False
+                self.date.errors.append("Specify a date for scheduled public sharing.")
+                is_valid = False
             if not self.time.data:
-                self.time.errors.append("Time is required for Scheduled Sharing.")
-                return False
+                self.time.errors.append("Specify a time for scheduled public sharing.")
+                is_valid = False
 
-        return True
-    
+        return is_valid
+
     def validate_on_submit(self):
         """Custom validate_on_submit to avoid the extra_validators argument."""
         return self.is_submitted() and super().validate()
+
 
 # Deleting account
 class DeleteAccountForm(FlaskForm):

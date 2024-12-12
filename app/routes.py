@@ -1,9 +1,10 @@
 from flask import Blueprint, render_template, redirect, url_for, send_from_directory, flash, request, session, jsonify, current_app, abort, get_flashed_messages
 from flask_login import login_user, logout_user, login_required, current_user
+from flask_wtf.csrf import CSRFError
 from . import db
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, CardDetailsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, HistoryPayment, PublicSecrets
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, generate_token, send_verification_email, is_safe_url, tokenize_card, create_charge, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, generate_token, send_verification_email, is_safe_url, decrypt_secrets, tokenize_card, create_charge, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -17,6 +18,31 @@ import traceback
 
 main = Blueprint('main', __name__)
 
+@main.before_request
+def make_session_permanent():
+    session.permanent = True
+    session.modified = True  # Updates the session's last access time
+
+    # Check for session expiration based on inactivity
+    if 'last_activity' in session:
+        now = datetime.now()
+        last_activity = session['last_activity']
+
+        # Convert last_activity to naive datetime
+        if hasattr(last_activity, 'tzinfo') and last_activity.tzinfo is not None:
+            last_activity = last_activity.replace(tzinfo=None)
+
+        if (now - last_activity).total_seconds() > 900:  # 15 minutes
+            session.clear()  # Clear session
+            flash('Your session has ended due to inactivity. Please log in again.')
+            return redirect(url_for('main.login'))  # Redirect to login page
+
+    # Update last activity timestamp
+    session['last_activity'] = datetime.now()
+
+@main.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    return redirect(url_for('main.login'))
 
 # allows users to change the language
 @main.route('/set_language/<lang>')
@@ -25,6 +51,12 @@ def set_language(lang):
     session['lang'] = lang
     # print(f"Language set to: {session['lang']}")
     return redirect(request.referrer or url_for('main.dashboard'))
+
+# flask middleware to ensure flashes are cleared
+@main.after_request
+def clear_flashes(response):
+    session.pop('_flashes', None)  # Clear flash messages after they've been used
+    return response
 
 
 # Registeration server @sign-up
@@ -93,12 +125,14 @@ def register():
         form.code.data = session['form_data'].get('code')
         form.phone.data = session['form_data'].get('phone')
 
+    # No need for the Session timeout in this page
+    session.permanent = False
+
     return render_template('register.html', form=form, current_user=current_user, show_header=False, show_footer=True)
 
 # Log in server
 @main.route('/', methods=['GET', 'POST'])
 def login():
-
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
     
@@ -112,11 +146,11 @@ def login():
         
         if not user:
             flash("That email/ username does not exist, please try again.", "danger")
-            return redirect(url_for('main.login', next=next_page))
+            return redirect(url_for('main.login'))
         
         elif not check_password_hash(user.password, password):
             flash('Password incorrect, please try again.', "danger")
-            return redirect(url_for('main.login', next=next_page))
+            return redirect(url_for('main.login'))
         
         else:
             if not user.is_confirmed:
@@ -131,8 +165,8 @@ def login():
             login_history = LoginHistory(user_id=user.id, login_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ip_address=ip_address)
             db.session.add(login_history)
             db.session.commit()
-            # Session timeout, after 15 mins user will be logged out
-            session.permanent = True
+            # No need for the Session timeout in this page
+            session.permanent = False
             if next_page and is_safe_url(next_page):
                 return redirect(next_page)
             
@@ -183,7 +217,7 @@ def login():
                     public_secret.share_date = secret.time_period
         else:
             # Handle cases where period is None (e.g., skip or log)
-            print(f"Skipping secret {secret.id} as 'period' is None.")
+            # print(f"Skipping secret {secret.id} as 'period' is None.")
             continue
 
     # Commit changes to the database
@@ -213,97 +247,11 @@ def login():
     
     return render_template('login.html', form=form, current_user=current_user, show_header=False, show_footer=True, public_secrets=decrypted_secrets)
 
-# Log in server
-@main.route('/dashboard', methods=['GET', 'POST'])
-@login_required
-def dashboard():
-    # counting secrets for each user
-    secrets = Secret.query.filter_by(user_id=current_user.id).count()
-    last_login = current_user.login_history[-1] if current_user.login_history else None
-
-    # Fetch the public shared secrets and eager-load user and secret relationships
-    shared_secret = db.session.execute(
-        db.select(SharedSecret)
-        .where(SharedSecret.public == True, (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None))
-        .options(db.joinedload(SharedSecret.user), db.joinedload(SharedSecret.secret))
-    ).scalars().all()
-
-    # Check if the user logged in recently and update the time period or scheduled date
-    for secret in shared_secret:
-        # Get the most recent login date for the user
-        latest_login = db.session.execute(
-            db.select(LoginHistory.login_time)
-            .where(LoginHistory.user_id == secret.user_id)
-            .order_by(desc(LoginHistory.login_time))
-            .limit(1)
-        ).scalar_one_or_none()
-
-        # If a recent login exists and it's more recent than the current last_login
-        if latest_login and (not secret.last_login or latest_login > secret.last_login):
-            # Update the last_login to the latest login date
-            secret.last_login = latest_login
-
-            # Ensure secret.period is not None
-            if secret.period:
-                # Calculate the new time period based on the period type (days, months, years)
-                if 'd' in secret.period:
-                    time_period = latest_login + timedelta(days=int(secret.period.strip('d')))
-                elif 'm' in secret.period:
-                    time_period = latest_login + relativedelta(months=int(secret.period.strip('m')))
-                elif 'y' in secret.period:
-                    time_period = latest_login + relativedelta(years=int(secret.period.strip('y')))
-                else:
-                    raise ValueError(f"Invalid time period format: {secret.period}")
-                
-                # Update the secret's time period
-                secret.time_period = time_period
-
-            # Update the associated PublicSecrets share_date
-            public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
-            if public_secret:
-                # If time_period is still valid, update share_date
-                if secret.time_period:
-                    public_secret.share_date = secret.time_period
-        else:
-            # Handle cases where period is None (e.g., skip or log)
-            print(f"Skipping secret {secret.id} as 'period' is None.")
-            continue
-
-    # Commit changes to the database
-    db.session.commit()
-
-    
-    # Decrypt each SharedSecret content
-    decrypted_secrets = []
-    # Fetch all public shared secrets with eligible share_date
-    public_secrets = PublicSecrets.query.filter(PublicSecrets.share_date <= datetime.now()).all()
-
-    # Decrypt and prepare public secrets for display
-    decrypted_secrets = []
-    for public_secret in public_secrets:
-        public_secret.display_time = ''
-        
-        # Format the share_date if it matches today's date
-        if public_secret.share_date and public_secret.share_date.date() == datetime.now().date():
-            public_secret.display_time = public_secret.share_date.strftime('%H:%M')
-
-        # Decrypt the secret if it's encrypted
-        if is_encrypted(public_secret.secret):
-            public_secret.secret = decrypt_secret(public_secret.secret)
-
-        # Append the public secret to the list
-        decrypted_secrets.append(public_secret)
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/dashboard_content.html', current_user=current_user, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login)
-
-    
-    return render_template('dashboard.html', current_user=current_user, show_header=True, show_footer=True, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login)
-
-
 # Log out server
 @main.route('/logout')
 def logout():
     logout_user()
+    session.clear()
     return redirect(url_for('main.login'))
 
 # confirmation email to change user password when he press forgot password
@@ -367,6 +315,10 @@ def reset_password():
 @main.route('/profile', methods=['GET', 'POST'])
 @login_required
 def update_profile():
+    # If the user is not authenticated (session expired), return 401
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
+    
     pr_form = ProfileForm(obj=current_user)
     login = LoginHistory.query.filter_by(user_id=current_user.id).all()
     last_login = LoginHistory.query.filter_by(user_id=current_user.id).order_by(LoginHistory.login_time.desc()).first()
@@ -388,6 +340,10 @@ def update_profile():
 @main.route('/change-password', methods=['POST'])
 @login_required
 def change_password():
+    # If the user is not authenticated (session expired), return 401
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
+    
     pr_form = ProfileForm(obj=current_user)
     ps_form = ChangePasswordForm(request.form)
     login = LoginHistory.query.filter_by(user_id=current_user.id).all()
@@ -416,103 +372,222 @@ def change_password():
         return render_template('partials/profile_content.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login)
     return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login, show_header=True, show_footer=True)
 
+# dashboard server
+@main.route('/dashboard', methods=['GET', 'POST'])
+@login_required
+def dashboard():
+    # If the user is not authenticated (session expired), return 401
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
+    
+    # counting secrets for each user
+    secrets = Secret.query.filter_by(user_id=current_user.id).count()
+    last_login = current_user.login_history[-1] if current_user.login_history else None
+
+    # Fetch the public shared secrets and eager-load user and secret relationships
+    shared_secret = db.session.execute(
+        db.select(SharedSecret)
+        .where(SharedSecret.public == True, (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None))
+        .options(db.joinedload(SharedSecret.user), db.joinedload(SharedSecret.secret))
+    ).scalars().all()
+
+    # Check if the user logged in recently and update the time period or scheduled date
+    for secret in shared_secret:
+        # Get the most recent login date for the user
+        latest_login = db.session.execute(
+            db.select(LoginHistory.login_time)
+            .where(LoginHistory.user_id == secret.user_id)
+            .order_by(desc(LoginHistory.login_time))
+            .limit(1)
+        ).scalar_one_or_none()
+
+        # If a recent login exists and it's more recent than the current last_login
+        if latest_login and (not secret.last_login or latest_login > secret.last_login):
+            # Update the last_login to the latest login date
+            secret.last_login = latest_login
+
+            # Ensure secret.period is not None
+            if secret.period:
+                # Calculate the new time period based on the period type (days, months, years)
+                if 'd' in secret.period:
+                    time_period = latest_login + timedelta(days=int(secret.period.strip('d')))
+                elif 'm' in secret.period:
+                    time_period = latest_login + relativedelta(months=int(secret.period.strip('m')))
+                elif 'y' in secret.period:
+                    time_period = latest_login + relativedelta(years=int(secret.period.strip('y')))
+                else:
+                    raise ValueError(f"Invalid time period format: {secret.period}")
+                
+                # Update the secret's time period
+                secret.time_period = time_period
+
+            # Update the associated PublicSecrets share_date
+            public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
+            if public_secret:
+                # If time_period is still valid, update share_date
+                if secret.time_period:
+                    public_secret.share_date = secret.time_period
+        else:
+            # Handle cases where period is None (e.g., skip or log)
+            # print(f"Skipping secret {secret.id} as 'period' is None.")
+            continue
+
+    # Commit changes to the database
+    db.session.commit()
+
+    
+    # Decrypt each SharedSecret content
+    decrypted_secrets = []
+    # Fetch all public shared secrets with eligible share_date
+    public_secrets = PublicSecrets.query.filter(PublicSecrets.share_date <= datetime.now()).all()
+
+    # Decrypt and prepare public secrets for display
+    decrypted_secrets = []
+    for public_secret in public_secrets:
+        public_secret.display_time = ''
+        
+        # Format the share_date if it matches today's date
+        if public_secret.share_date and public_secret.share_date.date() == datetime.now().date():
+            public_secret.display_time = public_secret.share_date.strftime('%H:%M')
+
+        # Decrypt the secret if it's encrypted
+        if is_encrypted(public_secret.secret):
+            public_secret.secret = decrypt_secret(public_secret.secret)
+
+        # Append the public secret to the list
+        decrypted_secrets.append(public_secret)
+
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('partials/dashboard_content.html', current_user=current_user, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login)
+    
+    return render_template('dashboard.html', current_user=current_user, show_header=True, show_footer=True, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login)
+
+# List of all secerts for the user 
+@main.route('/all-secrets', methods=['GET', 'POST'])
+@login_required
+def all_secrets():
+    if not current_user.is_authenticated:
+        return jsonify(error = "Unauthorized"), 401
+
+    form = SearchForm()
+    share_form = ShareForm()
+    secret_form = SecretForm()
+
+    if current_user.is_authenticated and not current_user.is_confirmed:
+        return redirect(url_for('main.confirmation_pending'))
+
+    # Fetch all secrets for the user
+    query = db.select(Secret).where(Secret.user_id == current_user.id)
+    user_secrets = db.session.execute(query).scalars().all()
+
+    # Decrypt secrets
+    decrypted_secrets = decrypt_secrets(user_secrets)
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('partials/all_secrets_content.html', user_secrets=decrypted_secrets, current_user=current_user, share_form=share_form, form=form, secret_form=secret_form)
+    return render_template('all_secrets.html', user_secrets=decrypted_secrets, current_user=current_user, form=form, share_form=share_form, secret_form=secret_form, show_header=True, show_footer=True)
+
+# Search and Filter
+@main.route('/search-secrets', methods=['POST'])
+@login_required
+def search_secrets():
+    form = SearchForm()
+
+    if form.validate_on_submit():
+        search_term = f"%{form.search.data}%" if form.search.data else None
+        query = db.select(Secret).where(Secret.user_id == current_user.id)
+
+        if search_term:
+            query = query.where(Secret.title.ilike(search_term))
+
+        if form.date_filter.data:
+            query = query.order_by(Secret.date.desc() if form.date_filter.data == "latest" else Secret.date.asc())
+        if form.alpha_filter.data:
+            query = query.order_by(Secret.title.asc() if form.alpha_filter.data == "A-Z" else Secret.title.desc())
+
+        user_secrets = db.session.execute(query).scalars().all()
+        decrypted_secrets = decrypt_secrets(user_secrets)
+
+        # Render only the secrets list as HTML
+        rendered_secrets = render_template(
+            'partials/secrets_list.html',  # A partial for the secrets list only
+            user_secrets=decrypted_secrets
+        )
+        return jsonify({"html": rendered_secrets}), 200
+
+    # Handle invalid form submission
+    return jsonify({"error": "Invalid form submission"}), 400
+
 # New secret popup
 @main.route('/add-secret', methods=['POST'])
 def add_secret():
     form = SecretForm()
-    
-    # Validate the form
+
     if form.validate_on_submit():
-        print("Form validated successfully:", form.data)
-
-        # Fetch the user's storage limit
-        storage_limit = current_user.plan.storage_limit  
-
-        # Generate a unique title
-        unique_title = get_unique_title(form.title.data, current_user.id)
-
-        # Encrypt the secret
-        encrypted_secret = encrypt_secret(form.secret.data)
-
-        # Calculate the size of the encrypted secret
-        secret_size = len(encrypted_secret.encode('utf-8'))
-
-        # Check storage limit
-        if current_user.storage_used + secret_size > storage_limit:
-            return jsonify({
-                'success': False,
-                'error': f"Adding this secret will exceed your {current_user.plan.plan} plan's storage limit."
-            }), 403
-
-        # Update storage usage
-        current_user.storage_used += secret_size
-
-        # Retrieve filename if provided
-        filename = request.form.get('uploadedFileName')
-        if not filename:
-            return jsonify({'success': False, 'error': 'No uploaded file found'}), 400
-
-        print("Uploaded filename received:", filename)
-
-        # Create and save the new secret
-        new_secret = Secret(
-            title=unique_title,
-            secret=encrypted_secret,
-            file=filename,
-            date=date.today().strftime("%B %d, %Y"),
-            user_id=current_user.id
-        )
-        print("New secret with file:", new_secret.file)
-
         try:
+            # Check if both secret and file are missing
+            if not form.secret.data.strip() and not request.form.get("uploadedFileName"):
+                return jsonify(success=False, error="Please provide a secret or upload a file."), 400
+
+            # Handle storage and file limits
+            storage_limit = current_user.plan.storage_limit
+            encrypted_secret = encrypt_secret(form.secret.data)
+            secret_size = len(encrypted_secret.encode('utf-8'))
+
+            if current_user.storage_used + secret_size > storage_limit:
+                return jsonify(success=False, error=f"Adding this secret will exceed your {current_user.plan.plan} plan's storage limit."), 403
+
+            # Generate a unique title
+            unique_title = get_unique_title(form.title.data.strip(), current_user.id)
+            
+            # If a file was uploaded, validate and save it
+            filename = request.form.get("uploadedFileName")
+            current_user.storage_used += secret_size
+
+            # Create and save the new secret
+            new_secret = Secret(
+                title=unique_title,
+                secret=encrypted_secret,
+                file=filename,
+                date=date.today().strftime("%Y-%m-%d"),
+                user_id=current_user.id,
+            )
             db.session.add(new_secret)
             db.session.commit()
+            return jsonify(
+                success=True, title=new_secret.title,
+                date=new_secret.date.today().strftime("%Y-%m-%d"),
+                flash_message="New secret has been added successfully."), 200
+        
         except IntegrityError:
             db.session.rollback()
-            return jsonify({
-                'success': False,
-                'error': "An error occurred while saving your secret."
-            }), 500
-
-        # Return the new secret details as a JSON response
-        return jsonify({
-            'success': True,
-            'id': new_secret.id,
-            'title': unique_title,
-            'date': new_secret.date.strftime("%Y-%m-%d")
-        }), 200
-
-    # If form validation fails, return the errors
-    errors = {field: error[0] for field, error in form.errors.items()}  # Assuming error[0] to get the first error message
-    return jsonify({
-        'success': False,
-        'error': "Form validation failed",
-        'errors': errors
-    }), 400
-
+            return jsonify(success=False, error="An error occurred while saving your secret. Please try again."), 500
+    else:
+        return jsonify(success=False, error="Form validation failed."), 400
 
 # Uploading file
 @main.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
-        return jsonify({'error': 'No file part in the request'}), 400
+        return jsonify(error = 'No file part in the request'), 400
 
     file = request.files['file']
     if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+        return jsonify(error = 'No selected file'), 400
 
     # Check if user is authenticated and retrieve their storage limit
     if not current_user.is_authenticated:
-        return jsonify({'error': 'User not authenticated'}), 401
+        return jsonify(error = 'User not authenticated'), 401
 
     # Check file size
     try:
         file_size = len(file.read())
         file.seek(0)  # Reset file pointer
         if current_user.storage_used + file_size > current_user.plan.storage_limit:
-            return jsonify({'error': 'Exceeds storage limit'}), 403
+            return jsonify(error = 'Exceeds storage limit'), 403
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify(error = str(e)), 500
 
     # Save the file
     filename = secure_filename(file.filename)
@@ -527,76 +602,9 @@ def upload_file():
         current_user.storage_used += file_size
         db.session.commit()
         print("filename:",filename)
-        return jsonify({'message': 'File successfully uploaded', 'filename': filename}), 200
+        return jsonify(message = 'File successfully uploaded', filename = filename), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-# List of all secerts for the user 
-@main.route('/all-secrets', methods=['GET', 'POST'])
-@login_required
-def all_secrets():
-    form = SearchForm()
-    share_form = ShareForm()
-    secret_form = SecretForm()
-    query = db.select(Secret).where(Secret.user_id == current_user.id)
-
-    if current_user.is_authenticated and not current_user.is_confirmed:
-        return redirect(url_for('main.confirmation_pending'))
-    
-    # # Debug flash messages
-    # existing_flashes = get_flashed_messages(with_categories=True)
-    # print(f"Existing flash messages on page load: {existing_flashes}")
-
-    if form.validate_on_submit():
-        print("Form validated successfully:", form.data)
-        search_term = f"{form.search.data}" if form.search.data else None
-        date_filter = form.date_filter.data
-        alpha_filter = form.alpha_filter.data
-
-        if search_term:
-            query = query.where(Secret.title.ilike(search_term))
-        if date_filter:
-            if date_filter == "latest":
-                query = query.order_by(Secret.date.desc())
-            else:
-                query = query.order_by(Secret.date.asc())
-        if alpha_filter:
-            if alpha_filter == "A-Z":
-                query = query.order_by(Secret.title.asc())
-            else:
-                query = query.order_by(Secret.title.desc())
-
-    user_secrets = db.session.execute(query).scalars().all()
-    decrypted_secrets = []
-    for secret in user_secrets:
-        if not is_encrypted(secret.secret):
-            secret.secret = encrypt_secret(secret.secret)
-        decrypted_secret_content = decrypt_secret(secret.secret)
-        secret.secret = decrypted_secret_content
-        decrypted_secrets.append(secret)
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/all_secrets_content.html', user_secrets=decrypted_secrets, current_user=current_user, share_form=share_form, form=form, secret_form=secret_form)
-    return render_template('all_secrets.html', user_secrets=decrypted_secrets, current_user=current_user, form=form, share_form=share_form, secret_form=secret_form, show_header=True, show_footer=True)
-
-
-# # Toggle pinned
-# @main.route('/toggle_pin/<int:secret_id>', methods=['POST'])
-# def toggle_pin(secret_id):
-#     secret = db.get_or_404(Secret, secret_id)
-#     secret.pinned = not secret.pinned
-#     db.session.commit()
-#     return jsonify(success=True)
-
-# # Toggle starred
-# @main.route('/toggle_star/<int:secret_id>', methods=['POST'])
-# def toggle_star(secret_id):
-#     secret = db.get_or_404(Secret, secret_id)
-#     secret.starred = not secret.starred
-#     db.session.commit()
-#     return jsonify(success=True)
-
+        return jsonify(error = str(e)), 500
 
 # Sharing secret server
 @main.route('/share', methods=['POST'])
@@ -686,18 +694,20 @@ def share():
             )
             db.session.add(public_secrets)
             db.session.commit()
-
-            return jsonify({"success": True, "message": message}), 200
+            flash(message, "success")
+            return jsonify(success=True, message=message), 200
 
         except Exception as e:
             db.session.rollback()
             error_message = str(e)
             print(f"Error occurred: {error_message}")  # Log the error for debugging
-            return jsonify({"success": False, "message": "An error occurred while sharing the secret.", "error": error_message}), 500
+            flash(f"Error occurred: {error_message}")
+            return jsonify(success= False, message= "An error occurred while sharing the secret.", error= error_message), 500
 
     # Log validation errors
     print("Validation errors:", form.errors)
-    return jsonify({"success": False, "errors": form.errors}), 400
+    flash("Please fix the errors in the form.", "danger")
+    return jsonify(success=False, errors=form.errors), 400
 
 
 # The link where that person will read the >>SHARED_SECRET<<
@@ -727,12 +737,31 @@ def only_for_you(token):
         return render_template('display_secret.html', decrypted_secret=decrypted_secret_content, secret=secret)
     else:
         return "Invalid or expired link", 404
-    
-    
+
+# # Toggle pinned
+# @main.route('/toggle_pin/<int:secret_id>', methods=['POST'])
+# def toggle_pin(secret_id):
+#     secret = db.get_or_404(Secret, secret_id)
+#     secret.pinned = not secret.pinned
+#     db.session.commit()
+#     return jsonify(success=True)
+
+# # Toggle starred
+# @main.route('/toggle_star/<int:secret_id>', methods=['POST'])
+# def toggle_star(secret_id):
+#     secret = db.get_or_404(Secret, secret_id)
+#     secret.starred = not secret.starred
+#     db.session.commit()
+#     return jsonify(success=True)    
+
 # Deleteing secret
 @main.route('/delete/<int:sec_id>', methods=['GET', 'POST'])
 @login_required
 def delete_secret(sec_id):
+    # If the user is not authenticated (session expired), return 401
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
+    
     try:
         secret = db.get_or_404(Secret, sec_id)
 
@@ -773,6 +802,10 @@ def delete_secret(sec_id):
 @main.route('/delete-account/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def delete_account(user_id):
+    # If the user is not authenticated (session expired), return 401
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
+    
     user = User.query.get(user_id)
 
     if user is None or user.id != current_user.id:
@@ -791,77 +824,83 @@ def delete_account(user_id):
 @main.route('/update-secret/<int:secret_id>', methods=['POST'])
 @login_required
 def update_secret(secret_id):
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Unauthorized"}), 401
+
     form = SecretForm()
     secret = db.get_or_404(Secret, secret_id)
-    
+
     if form.validate_on_submit():
-        # Encrypting the secret
-        encrypted_secret = encrypt_secret(form.secret.data)
+        try:
+            # Encrypt secret data and calculate its size
+            encrypted_secret = encrypt_secret(form.secret.data.strip())
+            new_text_size = len(encrypted_secret.encode('utf-8'))
+            old_text_size = len(secret.secret.encode('utf-8'))
 
-        # Calculate the size of the new text field (secret)
-        new_text_size = len(encrypted_secret.encode('utf-8'))
-        old_text_size = len(secret.secret.encode('utf-8'))
+            # Track file size changes
+            new_file_size = 0
+            old_file_size = 0
+            file_changed = False
 
-        # Check if any fields have changed
-        title_changed = form.title.data != secret.title
-        secret_changed = encrypted_secret != secret.secret
-        file_changed = form.file.data and form.file.data.filename != secret.file
-
-        # Initialize variables to track file size changes
-        new_file_size = 0
-        old_file_size = 0
-
-        if file_changed:
-            # Handle file upload and check storage
-            file = form.file.data
-            if file:
+            if form.file.data:
+                file = form.file.data
                 filename = secure_filename(file.filename)
-                new_file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
 
-                # Get the size of the new file
-                new_file_size = len(file.read())
-                file.seek(0)  # Reset file pointer after reading it
+                if filename != secret.file:
+                    file_changed = True
+                    upload_folder = current_app.config['UPLOAD_FOLDER']
+                    new_file_path = os.path.join(upload_folder, filename)
+                    
+                    # Calculate file size and reset pointer
+                    file_size = file.seek(0, os.SEEK_END)  # Move pointer to end
+                    new_file_size = file_size
+                    file.seek(0)  # Reset pointer to start
 
-                # Get the size of the old file (if it exists)
-                if secret.file:
-                    old_file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], secret.file)
-                    if os.path.exists(old_file_path):
-                        old_file_size = os.path.getsize(old_file_path)
+                    # Handle old file
+                    if secret.file:
+                        old_file_path = os.path.join(upload_folder, secret.file)
+                        old_file_size = os.path.getsize(old_file_path) if os.path.exists(old_file_path) else 0
 
-                # Save the new file
-                file.save(new_file_path)
-                secret.file = filename
+                    # Calculate storage
+                    new_storage_used = current_user.storage_used - old_text_size - old_file_size + new_text_size + new_file_size
+                    if new_storage_used > current_user.plan.storage_limit:
+                        return jsonify(success=False, error="Exceeds storage limit."), 403
 
-                # Optionally delete the old file
-                if old_file_size > 0 and os.path.exists(old_file_path):
-                    os.remove(old_file_path)
+                    # Save the new file if file has changed
+                    if file_changed:
+                        file.save(new_file_path)
 
-        # Calculate the new storage used, accounting for both text and file changes
-        storage_used = current_user.storage_used - old_text_size - old_file_size + new_text_size + new_file_size
+                        # Delete old file if it exists
+                        if os.path.exists(old_file_path):
+                            os.remove(old_file_path)
+                    
+                    secret.file = filename
+                else:
+                    new_file_size = old_file_size
 
-        # Check if the new storage exceeds the user's plan limit
-        if storage_used > current_user.plan.storage_limit:
-            flash("You have exceeded your storage limit. Please delete some files or secrets.", "danger")
-            return redirect(url_for('main.all_secrets'))
+            # Check if storage limit will be exceeded
+            total_new_storage = current_user.storage_used - old_text_size - old_file_size + new_text_size + new_file_size
+            if total_new_storage > current_user.plan.storage_limit:
+                return jsonify(success=False, error="Exceeds storage limit."), 403
 
-        # Update the user's storage used
-        current_user.storage_used = storage_used
+            # Update secret fields if changed
+            if form.title.data.strip() != secret.title:
+                secret.title = form.title.data.strip()
+            if encrypted_secret != secret.secret:
+                secret.secret = encrypted_secret
 
-        # Update the secret fields if they have changed
-        if title_changed:
-            secret.title = form.title.data
-        if secret_changed:
-            secret.secret = encrypted_secret
-
-        # Commit changes only if something has changed
-        if title_changed or secret_changed or file_changed:
-            secret.date = date.today().strftime("%B %d, %Y")
+            # Update storage and commit changes
+            current_user.storage_used = total_new_storage
+            secret.date = date.today().strftime("%Y-%m-%d")
             db.session.commit()
 
-        return redirect(url_for('main.all_secrets'))
+            return jsonify(success=True, message="Secret updated successfully."), 200
 
-    return render_template('edit_secret.html', form=form)
+        except Exception as e:
+            db.session.rollback()
+            return jsonify(success=False, error=str(e)), 500
 
+    return jsonify(success=False, error="Form validation failed."), 400
 
 # Pricing page
 @main.route('/pricing')
@@ -881,6 +920,10 @@ def pricing():
 @main.route('/payment', methods=['GET', 'POST'])
 @login_required
 def payment():
+    # If the user is not authenticated (session expired), return 401
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
+    
     form = CardDetailsForm()
     plan_id = current_user.plan_id
     plan = db.get_or_404(Plan, plan_id)
@@ -1019,8 +1062,6 @@ def payment_complete():
 
     return redirect(url_for('main.dashboard'))
 
-
-
 # Confirm email
 @main.route('/confirm/<token>')
 def confirm_email(token):
@@ -1081,6 +1122,10 @@ def resend_verification():
 @main.route('/billing', methods=['GET'])
 @login_required
 def billing():
+    # If the user is not authenticated (session expired), return 401
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
+    
     form = PlanUpgradeForm()
     if current_user.is_authenticated and not current_user.is_confirmed:
         return redirect(url_for('main.confirmation_pending'))

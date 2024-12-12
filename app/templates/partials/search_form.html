@@ -1,0 +1,24 @@
+<form id="searchForm" method="POST" action="{{ url_for('main.search_secrets') }}" class="row justify-content-center align-items-center">
+    {{ form.hidden_tag() }}
+    <div class="col-md-3 mb-3">
+        <div class="input-group">
+            <span class="input-group-text bg-primary text-white">
+                <i class="bi bi-search"></i>
+            </span>
+            {{ form.search }}
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="input-group">
+            <span class="input-group-text bg-primary text-white">
+                <i class="bi bi-calendar"></i>
+            </span>
+            {{ form.date_filter }}
+        </div>
+    </div>
+    <div class="col-md-2 mb-3 text-center">
+        <button type="submit" name="filter_submit" class="btn btn-primary w-100">
+            <i class="bi bi-funnel"></i> Filter
+        </button>
+    </div>
+</form>

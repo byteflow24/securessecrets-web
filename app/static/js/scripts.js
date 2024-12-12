@@ -1,4 +1,9 @@
 window.addEventListener('DOMContentLoaded', () => {
+    initializeSearchForm();
+    initializeSecretLinks();
+    initializeNewSecretForm();
+    initializeShareButtons();
+    initializeUpdateSecretForm();
     // Scroll handling for the main navigation
     let scrollPos = 0;
     const mainNav = document.getElementById('mainNav');
@@ -30,10 +35,16 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // CSRF token for AJAX requests
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    initializeSecretLinks();
-    initializePinStarButtons();
-    // initializeShareButtons();
-    initializeNavbar();
+    function reinitializeAllComponents() {
+        initializeSecretLinks();
+        initializePinStarButtons();
+        initializeShareButtons();
+        initializeNavbar();
+        initializeNewSecretForm();
+        initializeSearchForm();
+        initializeUpdateSecretForm();
+        clearFlashMessages();
+    }
     
     // Function to load content via AJAX
     function loadContent(url) {
@@ -44,16 +55,28 @@ window.addEventListener('DOMContentLoaded', () => {
                 'X-CSRFToken': csrfToken,  // Include CSRF token if required
             }
         })
-        .then(response => response.text())
+        .then(response => {
+            // Check if the user is unauthorized (session expired)
+            if (response.status === 401) {
+                window.location.href = '/';  // Redirect to login page
+                return;  // Stop further processing
+            }
+    
+            return response.text();
+        })
         .then(html => {
             document.getElementById('content-container').innerHTML = html; // Load the response into the content container
             history.pushState(null, '', url);  // Update URL without page reload
             
-            // Reinitialize after loading new content
-            initializeSecretLinks();
-            initializePinStarButtons();
-            initializeShareButtons();
-            initializeNavbar();
+            reinitializeAllComponents(); // Reinitialize everything
+
+            // Add event listener for dynamically created dynamic links
+            document.getElementById('content-container').addEventListener('click', function(event) {
+                if (event.target.matches('.dynamic-link')) {
+                    event.preventDefault();
+                    loadContent(event.target.getAttribute('data-url'));
+                }
+            });
     
             // Reset focus and scroll position
             document.getElementById('content-container').focus();
@@ -83,54 +106,33 @@ window.addEventListener('DOMContentLoaded', () => {
     });
     
     // Handle back/forward browser buttons
-    window.addEventListener('popstate', function() {
+    window.addEventListener('popstate', function () {
         fetch(location.href, {
             method: 'GET',
             headers: {
                 'X-Requested-With': 'XMLHttpRequest'
             }
         })
-        .then(response => response.text())
-        .then(html => {
-            document.getElementById('content-container').innerHTML = html;
-            // Reinitialize after loading new content
-            initializeSecretLinks();
-            initializePinStarButtons();
-            initializeShareButtons();
-            initializeNavbar();
-        })
-        .catch(error => console.error('Error loading page:', error));
-    });
-
-    // Initialize secret links
-    function initializeSecretLinks() {
-        const secretLinks = document.querySelectorAll('.secret-link');
-        const secretDetails = document.querySelectorAll('.secret-details');
-
-        // Function to hide all secret details
-        function hideAllSecrets() {
-            secretDetails.forEach(function (detail) {
-                detail.style.display = 'none';
-            });
-        }
-
-        // Attach click event listener to each secret link
-        secretLinks.forEach(function (link) {
-            link.addEventListener('click', function (e) {
-                e.preventDefault();  // Prevent the default anchor behavior
-                const targetId = link.getAttribute('data-target');
-                const targetElement = document.querySelector(targetId);
-                
-                // Hide all secrets first
-                hideAllSecrets();
-
-                // Show the selected secret details
-                if (targetElement) {
-                    targetElement.style.display = 'block';
+            .then(response => {
+                if (!response.ok) {
+                    console.error(`Failed to load: ${response.status}`);
+                    return;
                 }
-            });
-        });
-    }
+                return response.text();
+            })
+            .then(html => {
+                if (html) {
+                    const contentContainer = document.getElementById('content-container');
+                    if (contentContainer) {
+                        contentContainer.innerHTML = html;
+    
+                        // Reinitialize scripts to ensure everything works
+                        reinitializeAllComponents();
+                    }
+                }
+            })
+            .catch(error => console.error('Error handling popstate:', error));
+    });
 
     // Initializes the tab bar
     function initializeNavbar() {
@@ -142,6 +144,119 @@ window.addEventListener('DOMContentLoaded', () => {
             });
         });
     }
+
+    // Initialize secret links
+    function initializeSecretLinks() {
+        const secretLinks = document.querySelectorAll(".secret-link");
+        const secretDetails = document.querySelectorAll(".secret-details");
+        const noSecretAlert = document.getElementById("noSecretAlert");
+        const secretsList = document.getElementById("accordionSecretsList");
+
+        // Function to hide all secret details
+        function hideAllSecrets() {
+            secretDetails.forEach(secret => {
+                secret.style.display = "none";
+            });
+        }
+
+        // Function to check if any secret is visible and toggle the alert
+        function checkSelection() {
+            const anyVisible = Array.from(secretDetails).some(secret => secret.style.display === "block");
+
+            // if (!secretsList) {
+            //     console.error("Secrets list container not found.");
+            //     return;
+            // }
+
+            if (noSecretAlert) {
+                noSecretAlert.style.display = anyVisible ? "none" : "block";
+            }
+        }
+
+        // Attach click event listener to each secret link
+        secretLinks.forEach(link => {
+            link.addEventListener("click", e => {
+                e.preventDefault(); // Prevent default anchor behavior
+                const targetId = link.getAttribute("data-target");
+                const targetElement = document.querySelector(targetId);
+
+                if (!targetElement) {
+                    console.error(`No element found with selector: ${targetId}`);
+                    return;
+                }
+
+                hideAllSecrets(); // Hide all secrets
+                targetElement.style.display = "block"; // Show selected secret
+
+                // Check if any secret is visible after the update
+                checkSelection();
+            });
+        });
+
+        // Initial check to ensure the alert is accurate on page load
+        checkSelection();
+    }
+    
+    // Search area
+    function initializeSearchForm() {
+        const searchForm = document.getElementById('searchForm');
+        const secretsList = document.getElementById('accordionSecretsList');
+    
+        if (searchForm) {
+            searchForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+                console.log("Search form submitted");
+                const formData = new FormData(searchForm);
+                const url = searchForm.action;
+    
+                // Show a loading spinner
+                secretsList.innerHTML = `
+                    <div class="text-center py-4">
+                        <span class="spinner-border text-primary" role="status"></span> Loading...
+                    </div>
+                `;
+    
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value,
+                    },
+                    body: formData,
+                })
+                    .then(response => {
+                        console.log("Response received", response);
+                        if (!response.ok) {
+                            throw new Error(`HTTP Error: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log("Response data:", data);
+                        if (data.html) {
+                            secretsList.innerHTML = data.html;
+                            console.log("Secrets updated successfully");
+    
+                            // Update URL parameters for state
+                            const url = new URL(window.location);
+                            url.searchParams.set('search', formData.get('search') || '');
+                            url.searchParams.set('date_filter', formData.get('date_filter') || '');
+                            url.searchParams.set('alpha_filter', formData.get('alpha_filter') || '');
+                            history.pushState(null, '', url);
+    
+                            // Reinitialize dynamic components
+                            reinitializeAllComponents();
+                        } else if (data.error) {
+                            secretsList.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                        }
+                    })
+                    .catch(error => {
+                        console.error("Error during AJAX request:", error);
+                        secretsList.innerHTML = `<div class="alert alert-danger">An error occurred: ${error.message}</div>`;
+                    });
+            });
+        }
+    }    
 
     // Initialize Pin and Star buttons
     function initializePinStarButtons() {
@@ -204,253 +319,476 @@ window.addEventListener('DOMContentLoaded', () => {
         flashContainer.appendChild(flashMessage);
     
         // Automatically remove after 5 seconds
-        setTimeout(() => flashMessage.remove(), 5000);
+        setTimeout(() => {
+            if (flashMessage.parentNode) {
+                flashMessage.parentNode.removeChild(flashMessage);
+            }
+        }, 5000);
     }
 
-    // New secret
-    const fileInput = document.getElementById('fileInput');
-    const fileNameDisplay = document.getElementById('fileName');
-    const previewContainer = document.getElementById('filePreview');
-    const previewImage = document.getElementById('previewImage');
-    const errorFlash = document.getElementById('errorFlash');
-    const uploadProgressContainer = document.getElementById('uploadProgressContainer');
-    const uploadProgress = document.getElementById('uploadProgress');
-    const saveButton = document.querySelector('button[type="submit"]');
-
-    // Constants for file size limits
-    const MAX_FILE_SIZE_MB = 500;
-    const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-
-    // Handle file selection
-    if (fileInput) {
-        fileInput.addEventListener('change', function () {
-            const file = this.files[0];
-            const fileName = file ? file.name : '';
-            fileNameDisplay.textContent = fileName;
-
-            // Reset error and progress
-            if (errorFlash) errorFlash.style.display = 'none';
-            if (uploadProgressContainer) uploadProgressContainer.style.display = 'none';
-            if (uploadProgress) {
-                uploadProgress.style.width = '0%';
-                uploadProgress.textContent = '0%';
-            }
-
-            // Validate file size
-            if (file && file.size > MAX_FILE_SIZE_BYTES) {
-                errorFlash.textContent = `Error: The file size exceeds ${MAX_FILE_SIZE_MB} MB. Please select a smaller file.`;
-                errorFlash.style.display = 'block';
-                fileInput.value = '';
-                fileNameDisplay.textContent = '';
-                previewContainer.style.display = 'none';
-                return;
-            }
-
-            // Preview image files
-            if (file && file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = function (e) {
-                    previewImage.src = e.target.result;
-                    previewContainer.style.display = 'block';
-                };
-                reader.readAsDataURL(file);
-            } else {
-                previewContainer.style.display = 'none';
-            }
-        });
+    // clears only the currently displayed flash messages when transitioning between pages
+    function clearFlashMessages() {
+        const flashContainer = document.getElementById('flash-messages');
+        if (flashContainer) {
+            flashContainer.innerHTML = ''; // Clear the container content
+        }
     }
 
-    // Upload file with progress
-    function uploadFileWithProgress(file) {
-        return new Promise((resolve, reject) => {
-            const formData = new FormData();
-            formData.append('file', file);
+    // Function for "New Secret" modal
+    function initializeNewSecretForm() {
+        // New secret
+        const fileInput = document.getElementById('fileInput');
+        const fileNameDisplay = document.getElementById('fileName');
+        const previewContainer = document.getElementById('filePreview');
+        const previewImage = document.getElementById('previewImage');
+        const errorFlash = document.getElementById('errorFlash');
+        const uploadProgressContainer = document.getElementById('uploadProgressContainer');
+        const uploadProgress = document.getElementById('uploadProgress');
+        const saveButton = document.querySelector('button[type="submit"]');
 
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/upload', true);
+        // Constants for file size limits
+        const MAX_FILE_SIZE_MB = 500;
+        const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
-            // Set CSRF token
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-            xhr.setRequestHeader('X-CSRF-Token', csrfToken);
+        // Handle file selection
+        if (fileInput) {
+            fileInput.addEventListener('change', function () {
+                const file = this.files[0];
+                const fileName = file ? file.name : '';
+                fileNameDisplay.textContent = fileName;
 
-            uploadProgressContainer.style.display = 'block';
-
-            xhr.upload.addEventListener('progress', function (e) {
-                if (e.lengthComputable) {
-                    const percentComplete = Math.round((e.loaded / e.total) * 100);
-                    uploadProgress.style.width = `${percentComplete}%`;
-                    uploadProgress.textContent = `${percentComplete}%`;
+                // Reset error and progress
+                if (errorFlash) errorFlash.style.display = 'none';
+                if (uploadProgressContainer) uploadProgressContainer.style.display = 'none';
+                if (uploadProgress) {
+                    uploadProgress.style.width = '0%';
+                    uploadProgress.textContent = '0%';
                 }
-            });
 
-            xhr.addEventListener('load', function () {
-                if (xhr.status === 200) {
-                    const response = JSON.parse(xhr.responseText);
-                    if (response.filename) {
-                        document.getElementById('uploadedFileName').value = response.filename; // Set hidden input
-                        resolve(response.filename);
-                    } else {
-                        reject('Filename missing from upload response');
-                    }
+                // Validate file size
+                if (file && file.size > MAX_FILE_SIZE_BYTES) {
+                    errorFlash.textContent = `Error: The file size exceeds ${MAX_FILE_SIZE_MB} MB. Please select a smaller file.`;
+                    errorFlash.style.display = 'block';
+                    fileInput.value = '';
+                    fileNameDisplay.textContent = '';
+                    previewContainer.style.display = 'none';
+                    return;
+                }
+
+                // Preview image files
+                if (file && file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function (e) {
+                        previewImage.src = e.target.result;
+                        previewContainer.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
                 } else {
-                    reject('Upload failed');
+                    previewContainer.style.display = 'none';
                 }
             });
+        }
 
-            xhr.addEventListener('error', function () {
-                reject('Upload error');
+        // Upload file with progress
+        function uploadFileWithProgress(file) {
+            return new Promise((resolve, reject) => {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/upload', true);
+
+                // Set CSRF token
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+                xhr.setRequestHeader('X-CSRF-Token', csrfToken);
+
+                uploadProgressContainer.style.display = 'block';
+
+                xhr.upload.addEventListener('progress', function (e) {
+                    if (e.lengthComputable) {
+                        const percentComplete = Math.round((e.loaded / e.total) * 100);
+                        uploadProgress.style.width = `${percentComplete}%`;
+                        uploadProgress.textContent = `${percentComplete}%`;
+                    }
+                });
+
+                xhr.addEventListener('load', function () {
+                    if (xhr.status === 200) {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.filename) {
+                            document.getElementById('uploadedFileName').value = response.filename; // Set hidden input
+                            if (response.storageInfo) {
+                                // Update storage info from the upload response if available
+                                updateStorageInfo(response.storageInfo.used, response.storageInfo.total);
+                            } else {
+                                // Fetch storage info if not included in the response
+                                fetch('/get-storage-info', {
+                                    method: 'GET',
+                                    headers: {
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                    },
+                                })
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.used !== undefined && data.total !== undefined) {
+                                            updateStorageInfo(data.used, data.total);
+                                        }
+                                    })
+                                    .catch(error => console.error('Error fetching storage info:', error));
+                            }
+                            resolve(response.filename);
+                        } else {
+                            reject('Filename missing from upload response');
+                        }
+                    } else {
+                        reject('Upload failed');
+                    }
+                });
+                
+
+                xhr.addEventListener('error', function () {
+                    reject('Upload error');
+                });
+
+                xhr.send(formData);
             });
+        }
 
-            xhr.send(formData);
-        });
-    }
-
-    // Form submission handler
-    document.querySelector("#newSecretModal form").addEventListener("submit", function (event) {
-        event.preventDefault();
-
-        const form = event.target;
-        const formData = new FormData(form);
-        const file = fileInput.files[0];
-
-        if (file) {
-            // Ensure file is uploaded before submission
-            uploadFileWithProgress(file)
-                .then((filename) => {
-                    document.getElementById('uploadedFileName').value = filename; // Confirm filename is set
-
-                    // Append updated form data
-                    formData.set('uploadedFileName', filename);
-
-                    // Submit the form
-                    return fetch("/add-secret", {
+        
+        const newSecretForm = document.querySelector("#newSecretModal form");
+        if (newSecretForm) {
+            newSecretForm.addEventListener("submit", function (event) {
+                event.preventDefault();
+            
+                const form = event.target;
+                const secretField = form.querySelector('[name="secret"]');
+                const hiddenFileName = document.getElementById('uploadedFileName')?.value;
+                const file = fileInput?.files[0]; // Use optional chaining for file input
+            
+                // Error display element inside the modal
+                const formError = document.getElementById("formError");
+                formError.style.display = "none"; // Reset error display
+            
+                // Validate input: either a secret or a file must be provided
+                if (!secretField.value.trim() && !hiddenFileName && !file) {
+                    formError.style.display = "block";
+                    formError.textContent = "Please provide a secret or upload a file.";
+                    return;
+                }
+            
+                const formData = new FormData(form);
+            
+                if (file) {
+                    // If a file is present, upload it before submitting the form
+                    uploadFileWithProgress(file)
+                        .then((filename) => {
+                            document.getElementById('uploadedFileName').value = filename; // Confirm filename is set
+                            formData.set('uploadedFileName', filename); // Update formData
+            
+                            // Submit the form after file upload
+                            return fetch("/add-secret", {
+                                method: "POST",
+                                body: formData,
+                                headers: {
+                                    "X-Requested-With": "XMLHttpRequest",
+                                },
+                            });
+                        })
+                        .then(response => response.json())
+                        .then(data => handleFormResponse(data, form))
+                        .catch(error => {
+                            console.error("Error:", error);
+                            formError.style.display = "block";
+                            formError.textContent = "An error occurred while adding the secret.";
+                        });
+                } else {
+                    // If no file is present, submit the form directly
+                    fetch("/add-secret", {
                         method: "POST",
                         body: formData,
                         headers: {
                             "X-Requested-With": "XMLHttpRequest",
                         },
-                    });
-                })
-                .then(response => response.json())
-                .then(data => handleFormResponse(data, form))
-                .catch(error => {
-                    console.error("Error:", error);
-                    alert("An error occurred while adding the secret.");
-                });
-        } else {
-            // Ensure the hidden input has a value
-            const hiddenFileName = document.getElementById('uploadedFileName').value;
-            if (!hiddenFileName) {
-                alert("File upload incomplete. Please wait until the file is fully uploaded.");
-                return;
-            }
-
-            // Submit the form directly
-            fetch("/add-secret", {
-                method: "POST",
-                body: formData,
-                headers: {
-                    "X-Requested-With": "XMLHttpRequest",
-                },
-            })
-            .then(response => response.json())
-            .then(data => handleFormResponse(data, form))
-            .catch(error => {
-                console.error("Error:", error);
-                alert("An error occurred while adding the secret.");
-                closeModal(document.querySelector("#newSecretModal form")); // Clean up on error
+                    })
+                        .then(response => response.json())
+                        .then(data => handleFormResponse(data, form))
+                        .catch(error => {
+                            console.error("Error:", error);
+                            formError.style.display = "block";
+                            formError.textContent = "An error occurred while adding the secret.";
+                        });
+                }
             });
         }
-    });
-
-    function closeModal(form) {
-        const modalElement = form.closest('.modal'); // Find the closest modal container
-        if (modalElement) {
-            const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
-            modalInstance.hide(); // Properly close the modal
+        
+        // Handle form response after submitting
+        function handleFormResponse(data, form) {
+            const formError = document.getElementById("formError");
+            if (data.success) {
+                // Handle success: update the UI and close modal
+                const newSecretHTML = `
+                    <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center secret-link">
+                        <span>${data.title}</span>
+                        <small>${data.date}</small>
+                    </a>`;
+                const secretsList = document.querySelector("#accordionSecretsList");
+                // Show the flash message
+                if (data.flash_message) {
+                    showFlashMessage(data.flash_message, "success");
+                }
+                // Remove "No secrets found" message if it exists
+                const noSecretsAlert = secretsList.querySelector(".alert-info");
+                if (noSecretsAlert) {
+                    noSecretsAlert.remove();
+                }
+                // Update storage info if provided
+                if (data.storageInfo) {
+                    updateStorageInfo(data.storageInfo.used, data.storageInfo.total);
+                } else {
+                    // Fetch storage info if not included in the response
+                    fetch('/get-storage-info', {
+                        method: 'GET',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.used !== undefined && data.total !== undefined) {
+                                updateStorageInfo(data.used, data.total);
+                            }
+                        })
+                        .catch(error => console.error('Error fetching storage info:', error));
+                }
+        
+                // Add the new secret to the list
+                secretsList.insertAdjacentHTML("afterbegin", newSecretHTML);
+        
+                // Reset the form and close the modal
+                form.reset();
+                closeModal(form);
+        
+                // Reset file input and preview
+                resetFileInput();
+            } else {
+                // Display the error in the modal
+                formError.style.display = "block";
+                formError.textContent = data.error || "An error occurred.";
+            }
         }
-    
-        // Ensure the body styles are reset
-        document.body.style.overflow = ''; 
-        document.body.style.paddingRight = ''; // Reset padding if a scrollbar was present
-    
-        // Ensure leftover backdrops are removed
-        const backdrops = document.querySelectorAll('.modal-backdrop');
-        backdrops.forEach(backdrop => backdrop.remove());
 
-        // Reset file input and associated elements
-        fileInput.value = ''; // Reset file input
-        fileNameDisplay.textContent = ''; // Reset file name display
-        previewContainer.style.display = 'none'; // Hide file preview
-        previewImage.src = ''; // Reset preview image
-        if (errorFlash) errorFlash.style.display = 'none'; // Hide error flash
-    }
+        function updateStorageInfo(used, total) {
+            const progressBar = document.querySelector('.progress-bar');
+            const percentage = Math.round((used / total) * 100);
+        
+            progressBar.style.width = `${percentage}%`;
+            progressBar.setAttribute('aria-valuenow', percentage);
+            progressBar.textContent = `${percentage}%`;
+        
+            const storageText = document.querySelector('.text-muted');
+            storageText.textContent = `${(used / (1024 * 1024)).toFixed(2)} MB used out of ${(total / (1024 * 1024)).toFixed(2)} MB`;
+        }
 
-    document.querySelector("#newSecretModal").addEventListener("hidden.bs.modal", () => {
-        // Remove any remaining backdrop elements
-        const backdrops = document.querySelectorAll('.modal-backdrop');
-        backdrops.forEach(backdrop => backdrop.remove());
-    
-        // Reset body styles
-        document.body.style.overflow = ''; 
-        document.body.style.paddingRight = '';
-    });
+        // Reset the file input and related elements
+        function resetFileInput() {
+            const fileInput = document.querySelector('#fileInput');
+            const fileNameDisplay = document.querySelector('#fileName');
+            const previewContainer = document.querySelector('#filePreview');
+            const previewImage = document.querySelector('#previewImage');
+            const errorFlash = document.querySelector('#errorFlash');
 
-    const modalElement = document.querySelector("#newSecretModal");
-    if (modalElement) {
-        new bootstrap.Modal(modalElement); // Initialize modal if not already initialized
-    }
-
-    function handleFormResponse(data, form) {
-        if (data.success) {
-            const newSecretHTML = `
-                <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center secret-link">
-                    <span>${data.title}</span>
-                    <small>${data.date}</small>
-                </a>
-            `;
-            document.querySelector("#accordionSecretsList").insertAdjacentHTML("afterbegin", newSecretHTML);
-
-             // Reset the form and close the modal with cleanup
-            form.reset();
-            closeModal(form); // Use the new closeModal function
-
-            // Reset file input and preview after successful form submission
             fileInput.value = ''; // Reset file input
             fileNameDisplay.textContent = ''; // Reset file name display
             previewContainer.style.display = 'none'; // Hide file preview
             previewImage.src = ''; // Reset preview image
             if (errorFlash) errorFlash.style.display = 'none'; // Hide error flash
-        } else {
-            alert(data.error || "An error occurred.");
         }
+
+        // Close the modal
+        function closeModal(form) {
+            const modalElement = form.closest('.modal'); // Find the closest modal container
+            if (modalElement) {
+                const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                modalInstance.hide(); // Properly close the modal
+            }
+
+            // Ensure the body styles are reset
+            document.body.style.overflow = ''; 
+            document.body.style.paddingRight = ''; // Reset padding if a scrollbar was present
+
+            // Ensure leftover backdrops are removed
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(backdrop => backdrop.remove());
+        }
+    }
+
+    // Function for "Update Secret" modal
+    function initializeUpdateSecretForm() {
+        const updateForms = document.querySelectorAll('.updateSecretForm'); // Supports multiple forms
+        updateForms.forEach((form) => {
+            const index = form.dataset.index; // Assume the index is added as a `data-index` attribute
+            const fileInput = document.getElementById(`file-${index}`);
+            const fileNameDisplay = document.getElementById(`fileName-${index}`);
+            const uploadProgressContainer = document.getElementById(`uploadProgressContainer-${index}`);
+            const uploadProgress = document.getElementById(`uploadProgress-${index}`);
+            const filePreview = document.getElementById(`filePreview-${index}`);
+            const previewImage = document.getElementById(`previewImage-${index}`);
+            const formError = document.getElementById(`errorFlash-${index}`);
+            const submitButton = document.getElementById(`updateSecretSubmit-${index}`);
+
+            const MAX_FILE_SIZE_MB = 500;
+            const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+            // Handle file selection
+            if (fileInput) {
+                fileInput.addEventListener('change', function () {
+                    const file = this.files[0];
+                    if (file) {
+                        fileNameDisplay.textContent = file.name;
+                
+                        if (file.size > MAX_FILE_SIZE_BYTES) {
+                            formError.textContent = `Error: The file size exceeds ${MAX_FILE_SIZE_MB} MB. Please select a smaller file.`;
+                            formError.style.display = 'block';
+                            resetFileInput();
+                            return;
+                        }
+                
+                        if (file.type.startsWith('image/')) {
+                            const reader = new FileReader();
+                            reader.onload = function (e) {
+                                previewImage.src = e.target.result;
+                                filePreview.style.display = 'block';
+                            };
+                            reader.readAsDataURL(file);
+                        } else {
+                            filePreview.style.display = 'none';
+                        }
+                
+                        formError.style.display = 'none';
+                        uploadProgressContainer.style.display = 'none';
+                        uploadProgress.style.width = '0%';
+                        uploadProgress.textContent = '0%';
+                    }
+                });
+            }
+
+            // Handle AJAX form submission
+            if (submitButton) {
+                submitButton.addEventListener('click', function (event) {
+                    event.preventDefault(); // Prevent default form submission
+                    
+                    const formData = new FormData(form);
+                    const file = fileInput?.files[0];
+
+                    // Simulate progress if file is selected
+                    if (file) {
+                        const simulatedProgress = () => {
+                            let progress = 0;
+                            const interval = setInterval(() => {
+                                progress += 10; // Increment by 10%
+                                uploadProgress.style.width = `${progress}%`;
+                                uploadProgress.textContent = `${progress}%`;
+                                if (progress >= 100) {
+                                    clearInterval(interval);
+                                    uploadForm(); // Proceed with form submission
+                                }
+                            }, 100); // Update every 100ms
+                        };
+
+                        uploadProgressContainer.style.display = 'block';
+                        simulatedProgress(); // Start simulating progress
+                    } else {
+                        uploadForm(); // No file, just submit the form
+                    }
+
+                    function uploadForm() {
+                        fetch(form.action, {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        })
+                            .then((response) => response.json())
+                            .then((data) => {
+                                const formError = document.getElementById(`errorFlash-${form.dataset.index}`);
+                                if (data.success) {
+                                    // Show the success message
+                                    const flashMessage = document.createElement('div');
+                                    flashMessage.className = 'alert alert-success';
+                                    flashMessage.textContent = data.message;
+                                    document.body.prepend(flashMessage);  // Add flash message to the top of the page
+
+                                    setTimeout(() => {
+                                        flashMessage.remove();  // Remove the flash message after 3 seconds
+                                    }, 3000);
+
+                                    form.reset();  // Reset form fields
+                                    resetFileInput();
+                                } else {
+                                    formError.textContent = data.error || 'Failed to update secret.';
+                                    formError.style.display = 'block';
+                                }
+                            })
+                            .catch((error) => {
+                                console.error('Error:', error);
+                                formError.textContent = 'An unexpected error occurred.';
+                                formError.style.display = 'block';
+                            });
+                    }
+                });
+            }
+
+
+            // Reset the file input
+            function resetFileInput() {
+                fileInput.value = '';
+                fileNameDisplay.textContent = '';
+                filePreview.style.display = 'none';
+                previewImage.src = '';
+                uploadProgressContainer.style.display = 'none';
+                uploadProgress.style.width = '0%';
+                uploadProgress.textContent = '0%';
+                formError.style.display = 'none';
+            }
+        });
     }
 
     // Initialize share forms
     function initializeShareButtons() {
         // Add event listener for the share form submission
         document.querySelectorAll('[id^="shareForm-"]').forEach(form => {
-            form.removeEventListener('submit', handleSubmit); // Remove previous listener
-            form.addEventListener('submit', handleSubmit); 
-            form.addEventListener('submit', function(event) {
+            form.addEventListener('submit', function (event) {
                 event.preventDefault();
-    
+        
                 // Clear previous errors
                 this.querySelectorAll('.validation-error').forEach(el => el.remove());
                 this.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-    
+        
                 const sharingType = this.querySelector('input[name="sharing_type"]').value;
                 const datePeriodInput = this.querySelector('input[name="date_period"]');
                 const dateInput = this.querySelector('input[name="date"]');
                 const timeInput = this.querySelector('input[name="time"]');
-    
+        
                 let isValid = true;
-    
+        
+                // Helper function to add validation error
+                function addValidationError(input, message) {
+                    if (input) {
+                        input.classList.add('is-invalid');
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'validation-error text-danger small';
+                        errorDiv.textContent = message;
+                        input.parentNode.appendChild(errorDiv);
+                    }
+                }
+        
+                // Validate inputs based on sharing type
                 if (sharingType === "last_login" && (!datePeriodInput || !datePeriodInput.value.trim())) {
                     isValid = false;
                     addValidationError(datePeriodInput, "Please set the period for Last Login Check.");
                 }
-    
+        
                 if (sharingType === "scheduled") {
                     if (!dateInput || !dateInput.value.trim()) {
                         isValid = false;
@@ -461,48 +799,50 @@ window.addEventListener('DOMContentLoaded', () => {
                         addValidationError(timeInput, "Please specify a time.");
                     }
                 }
-    
+        
                 if (!isValid) return; // Stop submission if validation fails
-    
+        
+                // Proceed with submission if valid
                 const url = this.action;
                 const formData = new FormData(this);
-    
+        
                 fetch(url, {
                     method: 'POST',
                     body: formData,
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRFToken': csrfToken 
-                    }
+                        'X-CSRFToken': csrfToken, // Ensure csrfToken is defined globally or passed correctly
+                    },
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Show success flash message
-                        showFlashMessage(data.message, 'success');
-                
-                        // Close the modal
-                        closeModal(this);
-                
-                        // Optional: Clear form fields
-                        clearModalFields(this);
-                    } else if (data.errors) {
-                        // Show validation errors
-                        Object.entries(data.errors).forEach(([field, messages]) => {
-                            const inputElement = this.querySelector(`[name="${field}"]`);
-                            if (inputElement) {
-                                addValidationError(inputElement, messages.join(', '));
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Show success flash message
+                            showFlashMessage(data.message, 'success');
+        
+                            // Close the modal
+                            closeModal(this);
+        
+                            // Optional: Clear form fields
+                            clearModalFields(this);
+                        } else {
+                            // Show validation or error messages
+                            if (data.errors) {
+                                Object.entries(data.errors).forEach(([field, messages]) => {
+                                    const inputElement = this.querySelector(`[name="${field}"]`);
+                                    if (inputElement) {
+                                        addValidationError(inputElement, messages.join(', '));
+                                    }
+                                });
+                            } else {
+                                showFlashMessage(data.message || 'An error occurred.', 'danger');
                             }
-                        });
-                    } else {
-                        // General error handling
-                        showFlashMessage(data.message || 'An error occurred.', 'danger');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error submitting form:', error);
-                    showFlashMessage('An unexpected error occurred.', 'danger');
-                });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error submitting form:', error);
+                        showFlashMessage('An unexpected error occurred.', 'danger');
+                    });
             });
         });
 
@@ -597,10 +937,10 @@ window.addEventListener('DOMContentLoaded', () => {
             const emailInput = document.getElementById(inputId);
             const emailInputContainer = document.getElementById(containerId);
             
-            if (!emailInputContainer) {
-                console.warn(`Email input container with ID '${containerId}' not found. Skipping initialization.`);
-                return;
-            }
+            // if (!emailInputContainer) {
+            //     console.warn(`Email input container with ID '${containerId}' not found. Skipping initialization.`);
+            //     return;
+            // }
         
             // Hidden field to store email addresses
             const hiddenEmailField = document.createElement('input');

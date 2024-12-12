@@ -8,7 +8,7 @@ from .utils import email_domain_validator
 # WTForm for creating a secret
 class SecretForm(FlaskForm):
     title = StringField("Title", validators=[DataRequired()], render_kw={"placeholder": "Write a title..."})
-    secret = TextAreaField("Keep Your Secret Here", validators=[DataRequired()], render_kw={"placeholder": "Write your secret here!", "rows": 3})
+    secret = TextAreaField("Keep Your Secret Here", validators=[Optional()], render_kw={"placeholder": "Write your secret here!", "rows": 3})
     file = FileField("Upload File e.g. pdf, png, xls (Optional)", validators=[Optional()], render_kw={"class": "form-control", "style": "width: 400px;"})
     submit = SubmitField("Save")
 

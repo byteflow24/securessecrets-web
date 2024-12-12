@@ -57,6 +57,17 @@ def require_pricing_session():
         return decorated_function
     return decorator
 
+# Mention this step at all_secrets server
+def decrypt_secrets(user_secrets):
+    """Decrypt secrets for a given list of secrets."""
+    decrypted_secrets = []
+    for secret in user_secrets:
+        if not is_encrypted(secret.secret):
+            secret.secret = encrypt_secret(secret.secret)
+        secret.secret = decrypt_secret(secret.secret)
+        decrypted_secrets.append(secret)
+    return decrypted_secrets
+
 def get_unique_title(title, user_id):
     # Check if a secret with the exact title already exists
     existing_secret = db.session.execute(db.select(Secret).filter_by(title=title, user_id=user_id)).first()
@@ -70,7 +81,7 @@ def get_unique_title(title, user_id):
 
         # Determine the next numeric suffix to use
         new_suffix = max(suffixes, default=0) + 1
-        title = f"{title}{new_suffix}"
+        title = f"{title}_{new_suffix}"
 
     return title
 

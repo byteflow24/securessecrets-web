@@ -150,6 +150,12 @@
   margin-top: 0.25rem;
 }
 
+.custom-card {
+  width: 80%;  /* Set a smaller width to reduce space on the left and right */
+  margin-left: auto;  /* Center the card */
+  margin-right: auto; /* Center the card */
+}
+
 body {
   margin: 0;
   padding: 0;

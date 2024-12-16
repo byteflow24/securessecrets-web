@@ -228,38 +228,34 @@
                                 <p><strong>{{ public.username or 'Anonymous' }}:</strong></p>
                                 <p style="font-size: 0.75rem;">{{ public.display_time }}</p>
                             </div>
-                            <p>{{ public.secret|safe }}</p>
-                            {% if public.file %}
-                                <p><strong>Attached File:</strong>
-                                    <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
-                                        <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
-                                    </a>
-                                </p>
-
-                                {% if public.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
-                                    <!-- Image preview -->
-                                    <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="File Preview" style="max-width: 40%; height: auto;">
-                                
-                                {% elif public.file.endswith('.pdf') %}
-                                    <!-- PDF preview -->
-                                    <iframe src="{{ url_for('main.download_file', filename=public.file) }}" 
-                                            style="max-width: 50%; height: auto; border: none;" frameborder="0"></iframe>
-                                
-                                {% elif public.file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) %}
-                                    <!-- Office file preview (using Google Docs Viewer or similar) -->
-                                    <iframe src="https://docs.google.com/viewer?url={{ url_for('main.download_file', filename=public.file, _external=True) }}&embedded=true" 
-                                            style="width: 50%; height: auto; border: none;" frameborder="0"></iframe>
-
-                                {% else %}
-                                    <p style="font-size: small;">No preview available for this file type.</p>
+                            <div class="secret-wrapper" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;">
+                                <p class="secret-text">{{ public.secret|safe }}</p>
+                                {% if public.file %}
+                                    {% if public.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
+                                        <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="File Preview" style="max-width: 40%; height: auto;">
+                                    {% elif public.file.endswith('.pdf') %}
+                                        <iframe src="{{ url_for('main.download_file', filename=public.file) }}" 
+                                                style="max-width: 50%; height: auto; border: none;" frameborder="0"></iframe>
+                                    {% elif public.file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) %}
+                                        <iframe src="https://docs.google.com/viewer?url={{ url_for('main.download_file', filename=public.file, _external=True) }}&embedded=true" 
+                                                style="width: 50%; height: auto; border: none;" frameborder="0"></iframe>
+                                    {% else %}
+                                        <p style="font-size: small;">No preview available for this file type.</p>
+                                    {% endif %}
+                                    <!-- Download link -->
+                                    <p><strong>Download Attachment:</strong>
+                                        <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
+                                            <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
+                                        </a>
+                                    </p>
                                 {% endif %}
-                            {% endif %}
+                            </div>
+                            <a href="javascript:void(0);" class="show-more" style="display: none; font-size: 0.7rem; color: blue;">Read More</a>
                             <hr>
                         </div>
                         {% endfor %}
                     </div>
                 </div>
-
             </div>
         </div>
     </div>

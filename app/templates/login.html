@@ -188,61 +188,75 @@
                         {% endif %}
                     {% endwith %}
                 </div>
-                  <!-- Left Login Section -->
-                  <div class="col-md-6 d login-section">
-                      <h2 class="news-heading mb-4">Log In</h2>
-                        <div class="form-container">
-                            <form method="POST" action="{{ url_for('main.login', next=request.args.get('next')) }}" novalidate>
-                              <input type="hidden" name="csrf_token" id="login_csrf_token" value="{{ form.csrf_token._value() }}">
-                                <div class="mb-3">
-                                    <label for="user" class="form-label">Email/ Username</label>
-                                    {{ form.user(class="form-control", id="user", placeholder="Email or username") }}
-                                    {% for error in form.user.errors %}
-                                        <div class="text-danger">{{ error }}</div>
-                                    {% endfor %}
-                                </div>
-                                <div class="mb-3">
-                                    <label for="password" class="form-label">Password</label>
-                                    {{ form.password(class="form-control", id="password", placeholder="Password") }}
-                                    {% for error in form.password.errors %}
-                                        <div class="text-danger">{{ error }}</div>
-                                    {% endfor %}
-                                </div>
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <button type="submit" class="btn btn-primary" id="submit">{{ form.submit.label }}</button>
-                                    <a class="btn btn-link" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal">Forgot my password?</a>
-                                </div>
-                            </form>
-                            <div class="d-flex justify-content-between align-items-center mt-3">
-                                <p class="mb-0">Don't have an account? <a href="{{ url_for('main.pricing') }}" class="btn-link">Check out our plans</a></p>
+                <!-- Left Login Section -->
+                <div class="col-md-6 d login-section">
+                    <h2 class="news-heading mb-4">Log In</h2>
+                    <div class="form-container">
+                        <form method="POST" action="{{ url_for('main.login', next=request.args.get('next')) }}" novalidate>
+                            <input type="hidden" name="csrf_token" id="login_csrf_token" value="{{ form.csrf_token._value() }}">
+                            <div class="mb-3">
+                                <label for="user" class="form-label">Email/ Username</label>
+                                {{ form.user(class="form-control", id="user", placeholder="Email or username") }}
+                                {% for error in form.user.errors %}
+                                    <div class="text-danger">{{ error }}</div>
+                                {% endfor %}
                             </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Password</label>
+                                {{ form.password(class="form-control", id="password", placeholder="Password") }}
+                                {% for error in form.password.errors %}
+                                    <div class="text-danger">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <button type="submit" class="btn btn-primary" id="submit">{{ form.submit.label }}</button>
+                                <a class="btn btn-link" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal">Forgot my password?</a>
+                            </div>
+                        </form>
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <p class="mb-0">Don't have an account? <a href="{{ url_for('main.pricing') }}" class="btn-link">Check out our plans</a></p>
                         </div>
-                    </div>         
-                  <!-- Right Public Section -->
-                  <div class="col-md-6 news-section">
+                    </div>
+                </div>         
+                <!-- Right Public Section -->
+                <div class="col-md-6 news-section">
                     <div class="news-heading">Public Secrets</div>
                     <div class="news-container">
                         {% for public in public_secrets %}
                         <div class="news-content">
-                            <div class="d-flex justify-content-between" style="gap: 5px; align-items: center;">
-                                <p style="margin-bottom: 0;"><strong>{{ public.username or 'Anonymous' }}:</strong></p>
-                                <p style="font-size: 0.75rem; margin-bottom: 0;">{{ public.display_time }}</p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <p><strong>{{ public.username or 'Anonymous' }}:</strong></p>
+                                <p style="font-size: 0.75rem;">{{ public.display_time }}</p>
                             </div>
-                            <p style="margin-top: 2px;">{{ public.secret|safe }}</p>
-                            {% if public.file %}
-                            <p style="margin-top: 2px;">
-                                <strong>Attached File:</strong>
-                                <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
-                                    <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
-                                </a>
-                            </p>
-                            {% endif %}
+                            <div class="secret-wrapper" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;">
+                                <p class="secret-text">{{ public.secret|safe }}</p>
+                                {% if public.file %}
+                                    {% if public.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
+                                        <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="File Preview" style="max-width: 40%; height: auto;">
+                                    {% elif public.file.endswith('.pdf') %}
+                                        <iframe src="{{ url_for('main.download_file', filename=public.file) }}" 
+                                                style="max-width: 50%; height: auto; border: none;" frameborder="0"></iframe>
+                                    {% elif public.file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) %}
+                                        <iframe src="https://docs.google.com/viewer?url={{ url_for('main.download_file', filename=public.file, _external=True) }}&embedded=true" 
+                                                style="width: 50%; height: auto; border: none;" frameborder="0"></iframe>
+                                    {% else %}
+                                        <p style="font-size: small;">No preview available for this file type.</p>
+                                    {% endif %}
+                                    <!-- Download link -->
+                                    <p><strong>Download Attachment:</strong>
+                                        <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
+                                            <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
+                                        </a>
+                                    </p>
+                                {% endif %}
+                            </div>
+                            <a href="javascript:void(0);" class="show-more" style="display: none; font-size: 0.7rem; color: blue;">Read More</a>
                             <hr>
                         </div>
                         {% endfor %}
                     </div>
                 </div>
-              </div>
+            </div>
           </div>          
         </div>
     </div>

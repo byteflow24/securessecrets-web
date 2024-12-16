@@ -334,6 +334,41 @@ def update_profile():
         return render_template('partials/profile_content.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login)
     return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login, show_header=True, show_footer=True)
 
+# Pagination for the login history
+@main.route('/api/login-history', methods=['GET'])
+@login_required
+def api_login_history():
+    # Get the page number from the request, default to 1
+    page = request.args.get('page', 1, type=int)
+    per_page = 5  # Number of records per page
+
+    # Query the login history from the database, paginated
+    login_history = LoginHistory.query.filter_by(user_id=current_user.id) \
+        .order_by(LoginHistory.login_time.desc()) \
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    # Create a list of pages to display (max 5 pages)
+    max_display_pages = 5
+    total_pages = login_history.pages
+    start_page = max(1, page - 2)  # show the previous 2 pages if possible
+    end_page = min(total_pages, page + 2)  # show the next 2 pages if possible
+    page_range = list(range(start_page, end_page + 1))
+
+    # Serialize the login history data
+    history_data = [{
+        'login_time': login.login_time,
+        'ip_address': login.ip_address
+    } for login in login_history.items]
+
+    return jsonify({
+        'data': history_data,
+        'total': login_history.total,
+        'page': page,
+        'pages': total_pages,
+        'page_range': page_range  # Include the page range in the response
+    })
+
+
 # Update password
 @main.route('/change-password', methods=['POST'])
 @login_required

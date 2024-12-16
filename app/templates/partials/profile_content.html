@@ -36,19 +36,19 @@
                                 <th scope="col">IP Address</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {% for login in login_history %}
-                            <tr>
-                                <td>{{ login.login_time }}</td>
-                                <td>{{ login.ip_address }}</td>
-                            </tr>
-                            {% endfor %}
+                        <tbody id="loginHistoryTableBody">
+                            <!-- Rows will be added dynamically here -->
                         </tbody>
                     </table>
+                    <!-- Pagination -->
+                    <nav>
+                        <ul class="pagination justify-content-center" id="paginationControls"></ul>
+                    </nav>
                 </div>
             </div>
         </div>
     </div>
+
 
     <div class="row">
         <!-- Profile Info Section -->

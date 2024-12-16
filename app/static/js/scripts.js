@@ -11,6 +11,9 @@ window.addEventListener('DOMContentLoaded', () => {
     initializeNewSecretForm();
     initializeShareButtons();
     initializeUpdateSecretForm();
+
+    initializeReadSecret();
+    initializeLastLoginHistory()
     // Scroll handling for the main navigation
     let scrollPos = 0;
     const mainNav = document.getElementById('mainNav');
@@ -40,6 +43,30 @@ window.addEventListener('DOMContentLoaded', () => {
         scrollPos = currentTop;
     });
 
+    
+    // Toggles "Read More/Less" for overflowing secrets, expanding or collapsing content visibility. "Public Secrets Section"
+    function initializeReadSecret() {
+        const secrets = document.querySelectorAll('.secret-wrapper');
+
+        secrets.forEach((wrapper) => {
+            const showMoreLink = wrapper.nextElementSibling; // Get the "Read More" link
+
+            // Check if the combined content overflows
+            if (wrapper.scrollHeight > wrapper.offsetHeight) {
+                showMoreLink.style.display = 'inline'; // Show "More" link
+            }
+
+            // Toggle expanded view
+            showMoreLink.addEventListener('click', function () {
+                const isExpanded = wrapper.style['-webkit-line-clamp'] === 'unset';
+                wrapper.style['-webkit-line-clamp'] = isExpanded ? '1' : 'unset';
+                wrapper.style['overflow'] = isExpanded ? 'hidden' : 'visible';
+                wrapper.style['display'] = isExpanded ? '-webkit-box' : 'block';
+                this.textContent = isExpanded ? 'Read More' : 'Read Less';
+            });
+        });
+    }
+
     // CSRF token for AJAX requests
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     function reinitializeAllComponents() {
@@ -51,6 +78,9 @@ window.addEventListener('DOMContentLoaded', () => {
         initializeSearchForm();
         initializeUpdateSecretForm();
         clearFlashMessages();
+
+        initializeReadSecret();
+        initializeLastLoginHistory()
     }
     
     // Function to load content via AJAX
@@ -1058,7 +1088,6 @@ window.addEventListener('DOMContentLoaded', () => {
         });                
     
     }
-    
 
     // Upgrade plan event listener
     var confirmUpgradeButton = document.getElementById('confirm-upgrade');
@@ -1094,26 +1123,104 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     // Last login
-    const loginHistoryModal = document.getElementById('loginHistoryModal');
-    if (loginHistoryModal) {
-        loginHistoryModal.addEventListener('show.bs.modal', function() {
-            fetch('/api/login-history')
-                .then(response => response.json())
-                .then(data => {
-                    const loginHistoryList = document.getElementById('loginHistoryList');
-                    loginHistoryList.innerHTML = '';
-                    data.forEach(login => {
-                        const listItem = document.createElement('li');
-                        listItem.className = 'list-group-item';
-                        listItem.textContent = `Login Time: ${login.login_time}, IP Address: ${login.ip_address}`;
-                        loginHistoryList.appendChild(listItem);
-                    });
-                })
-                .catch(error => {
-                    console.error('Error fetching login history:', error);
-                });
-        });
+    function initializeLastLoginHistory() {
+        const loginHistoryModal = document.getElementById('loginHistoryModal');
+        if (loginHistoryModal) {
+            loginHistoryModal.addEventListener('show.bs.modal', function () {
+                // Initialize variables
+                let currentPage = 1;
+    
+                const tableBody = document.getElementById('loginHistoryTableBody');
+                const paginationControls = document.getElementById('paginationControls');
+    
+                // Function to render a page of login history
+                function renderPage(page) {
+                    fetch(`/api/login-history?page=${page}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            const loginHistory = data.data;  // Get login history data from the response
+                            const totalPages = data.pages;   // Get the total number of pages
+    
+                            // Clear the table body
+                            tableBody.innerHTML = '';
+    
+                            // Add the rows for the current page
+                            loginHistory.forEach(login => {
+                                const row = document.createElement('tr');
+                                const loginTimeCell = document.createElement('td');
+                                const ipAddressCell = document.createElement('td');
+    
+                                loginTimeCell.textContent = login.login_time;
+                                ipAddressCell.textContent = login.ip_address;
+    
+                                row.appendChild(loginTimeCell);
+                                row.appendChild(ipAddressCell);
+                                tableBody.appendChild(row);
+                            });
+    
+                            // Render pagination controls
+                            renderPaginationControls(page, totalPages);
+                        })
+                        .catch(error => {
+                            console.error('Error fetching login history:', error);
+                        });
+                }
+    
+                // Function to render pagination controls
+                function renderPaginationControls(page, totalPages) {
+                    paginationControls.innerHTML = ''; // Clear previous pagination controls
+    
+                    // Number of pages to show (5 pages at a time)
+                    const maxPagesToShow = 5;
+    
+                    // Calculate the range of pages to display
+                    let startPage = Math.max(1, page - 2); // Start from 2 pages before the current page
+                    let endPage = Math.min(totalPages, page + 2); // End at 2 pages after the current page
+    
+                    // Adjust the start page if there are fewer than maxPagesToShow pages
+                    if (endPage - startPage < maxPagesToShow) {
+                        startPage = Math.max(1, endPage - maxPagesToShow);
+                    }
+    
+                    // Generate pagination items (previous, page numbers, next)
+                    const createPageItem = (pageNum, text) => {
+                        const pageItem = document.createElement('li');
+                        pageItem.className = `page-item ${pageNum === page ? 'active' : ''}`;
+                        const pageLink = document.createElement('a');
+                        pageLink.className = 'page-link';
+                        pageLink.href = '#';
+                        pageLink.textContent = text;
+                        pageLink.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            renderPage(pageNum);
+                        });
+                        pageItem.appendChild(pageLink);
+                        return pageItem;
+                    };
+    
+                    // Add "Previous" button
+                    if (page > 1) {
+                        paginationControls.appendChild(createPageItem(page - 1, 'Previous'));
+                    }
+    
+                    // Add page numbers
+                    for (let i = startPage; i <= endPage; i++) {
+                        paginationControls.appendChild(createPageItem(i, i));
+                    }
+    
+                    // Add "Next" button
+                    if (page < totalPages) {
+                        paginationControls.appendChild(createPageItem(page + 1, 'Next'));
+                    }
+                }
+    
+                // Render the first page initially
+                renderPage(currentPage);
+            });
+        }
     }
+    
+
 
 
     // Close popup function

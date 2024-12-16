@@ -223,20 +223,18 @@ def login():
     # Commit changes to the database
     db.session.commit()
 
-    
-    # Decrypt each SharedSecret content
-    decrypted_secrets = []
-    # Fetch all public shared secrets with eligible share_date
-    public_secrets = PublicSecrets.query.filter(PublicSecrets.share_date <= datetime.now()).all()
+    # Fetch all public shared secrets with eligible share_date, sorted by share_date (newest first)
+    public_secrets = PublicSecrets.query.filter(
+        PublicSecrets.share_date <= datetime.now()
+    ).order_by(PublicSecrets.share_date.desc()).all()
 
     # Decrypt and prepare public secrets for display
     decrypted_secrets = []
     for public_secret in public_secrets:
         public_secret.display_time = ''
         
-        # Format the share_date if it matches today's date
-        if public_secret.share_date and public_secret.share_date.date() == datetime.now().date():
-            public_secret.display_time = public_secret.share_date.strftime('%H:%M')
+         # Always format the share_date time
+        public_secret.display_time = public_secret.share_date.strftime('%H:%M') if public_secret.share_date else ''
 
         # Decrypt the secret if it's encrypted
         if is_encrypted(public_secret.secret):
@@ -435,20 +433,32 @@ def dashboard():
     # Commit changes to the database
     db.session.commit()
 
-    
-    # Decrypt each SharedSecret content
-    decrypted_secrets = []
-    # Fetch all public shared secrets with eligible share_date
-    public_secrets = PublicSecrets.query.filter(PublicSecrets.share_date <= datetime.now()).all()
+    # Fetch all public shared secrets with eligible share_date, sorted by share_date (newest first)
+    public_secrets = PublicSecrets.query.filter(
+        PublicSecrets.share_date <= datetime.now()
+    ).order_by(PublicSecrets.share_date.desc()).all()
+
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+
+    # Check if files exist; delete secrets with missing files
+    for public_secret in public_secrets[:]:
+        if public_secret.file:  # If there's a file associated
+            file_path = os.path.join(upload_folder, public_secret.file)
+            if not os.path.exists(file_path):  # File is missing
+                # Delete the secret from PublicSecrets
+                db.session.delete(public_secret)
+                public_secrets.remove(public_secret)
+
+    # Commit changes after deletion
+    db.session.commit()
 
     # Decrypt and prepare public secrets for display
     decrypted_secrets = []
     for public_secret in public_secrets:
         public_secret.display_time = ''
         
-        # Format the share_date if it matches today's date
-        if public_secret.share_date and public_secret.share_date.date() == datetime.now().date():
-            public_secret.display_time = public_secret.share_date.strftime('%H:%M')
+        # Always format the share_date time
+        public_secret.display_time = public_secret.share_date.strftime('%H:%M') if public_secret.share_date else ''
 
         # Decrypt the secret if it's encrypted
         if is_encrypted(public_secret.secret):
@@ -480,6 +490,10 @@ def all_secrets():
     # Fetch all secrets for the user
     query = db.select(Secret).where(Secret.user_id == current_user.id)
     user_secrets = db.session.execute(query).scalars().all()
+
+    if not user_secrets:
+        current_user.storage_used = 0
+    db.session.commit()
 
     # Decrypt secrets
     decrypted_secrets = decrypt_secrets(user_secrets)
@@ -628,7 +642,12 @@ def share():
             date_period = form.date_period.data
 
             # Get the last login time
-            user_last_login = LoginHistory.query.filter_by(user_id=current_user.id).first()
+            user_last_login = (
+                LoginHistory.query
+                .filter_by(user_id=current_user.id)
+                .order_by(LoginHistory.login_time.desc())
+                .first()
+            )
             last_login = user_last_login.login_time if user_last_login else None
 
             if not last_login:
@@ -754,7 +773,7 @@ def only_for_you(token):
 #     db.session.commit()
 #     return jsonify(success=True)    
 
-# Deleteing secret
+# Deleting a secret
 @main.route('/delete/<int:sec_id>', methods=['GET', 'POST'])
 @login_required
 def delete_secret(sec_id):
@@ -772,7 +791,10 @@ def delete_secret(sec_id):
         file_size = 0
         if secret.file:
             file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], secret.file)
-            if os.path.exists(file_path):
+
+            # Check if the file is still referenced in PublicSecrets
+            is_shared_publicly = PublicSecrets.query.filter_by(file=secret.file).first()
+            if os.path.exists(file_path) and not is_shared_publicly:
                 file_size = os.path.getsize(file_path)
 
                 # Remove the file from the server
@@ -795,7 +817,6 @@ def delete_secret(sec_id):
         db.session.rollback()
         # Handle error (e.g., notify the user, log the error, etc.)
         return "An error occurred while deleting the secret.", 500
-
     
 
 # User to delete his account
@@ -856,6 +877,10 @@ def update_secret(secret_id):
                     new_file_size = file_size
                     file.seek(0)  # Reset pointer to start
 
+                    # Initialize old_file_path and old_file_size
+                    old_file_path = None
+                    old_file_size = 0
+
                     # Handle old file
                     if secret.file:
                         old_file_path = os.path.join(upload_folder, secret.file)
@@ -871,7 +896,7 @@ def update_secret(secret_id):
                         file.save(new_file_path)
 
                         # Delete old file if it exists
-                        if os.path.exists(old_file_path):
+                        if old_file_path and os.path.exists(old_file_path):
                             os.remove(old_file_path)
                     
                     secret.file = filename
@@ -894,7 +919,20 @@ def update_secret(secret_id):
             secret.date = date.today().strftime("%Y-%m-%d")
             db.session.commit()
 
-            return jsonify(success=True, message="Secret updated successfully."), 200
+            # Decrypt the secret for display
+            decrypted_secret = decrypt_secret(secret.secret)
+
+            return jsonify(
+                success=True,
+                flash_message="Secret updated successfully!",
+                secret={
+                    "id": secret.id,
+                    "secret": decrypted_secret,
+                    "file": secret.file,
+                    "date": secret.date.strftime("%Y-%m-%d %H:%M:%S"),
+                    "file_preview": secret.file.endswith(('.png', '.jpg', '.jpeg', '.gif')),
+                }
+            ), 200
 
         except Exception as e:
             db.session.rollback()
@@ -1263,6 +1301,32 @@ def download_file(filename):
         if not os.path.exists(abs_path):
             flash("File not found.", "danger")
             return abort(404)
+        
+        # For PDF and Office files, serve them inline (no download)
+        if filename.endswith('.pdf'):
+            return send_from_directory(
+                os.path.dirname(abs_path), 
+                os.path.basename(abs_path), 
+                as_attachment=False,  # This prevents the file from being downloaded
+                mimetype='application/pdf'  # Explicitly set the MIME type to PDF
+            )
+        
+        # Check for Word, Excel, and PowerPoint files and serve inline
+        elif filename.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')):
+            # We can set the MIME type based on file extensions
+            if filename.endswith(('.doc', '.docx')):
+                mimetype = 'application/msword'
+            elif filename.endswith(('.xls', '.xlsx')):
+                mimetype = 'application/vnd.ms-excel'
+            elif filename.endswith(('.ppt', '.pptx')):
+                mimetype = 'application/vnd.ms-powerpoint'
+            
+            return send_from_directory(
+                os.path.dirname(abs_path), 
+                os.path.basename(abs_path), 
+                as_attachment=False,  # Prevent download, show inline
+                mimetype=mimetype  # Set the correct MIME type for each file type
+            )
         
         # Send the file from the directory
         return send_from_directory(os.path.dirname(abs_path), os.path.basename(abs_path), as_attachment=True)

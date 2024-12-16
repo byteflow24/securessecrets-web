@@ -1,9 +1,10 @@
+// Google Analystic - Sessions Traker
 window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
 
         gtag('config', 'G-VV6NCJ0407');
-        
+
 window.addEventListener('DOMContentLoaded', () => {
     initializeSearchForm();
     initializeSecretLinks();
@@ -630,35 +631,33 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Function for "Update Secret" modal
     function initializeUpdateSecretForm() {
-        const updateForms = document.querySelectorAll('.updateSecretForm'); // Supports multiple forms
+        const updateForms = document.querySelectorAll('.updateSecretForm');
         updateForms.forEach((form) => {
-            const index = form.dataset.index; // Assume the index is added as a `data-index` attribute
+            const index = form.dataset.index;
             const fileInput = document.getElementById(`file-${index}`);
             const fileNameDisplay = document.getElementById(`fileName-${index}`);
-            const uploadProgressContainer = document.getElementById(`uploadProgressContainer-${index}`);
-            const uploadProgress = document.getElementById(`uploadProgress-${index}`);
             const filePreview = document.getElementById(`filePreview-${index}`);
             const previewImage = document.getElementById(`previewImage-${index}`);
             const formError = document.getElementById(`errorFlash-${index}`);
             const submitButton = document.getElementById(`updateSecretSubmit-${index}`);
-
+            const secretCardBody = document.querySelector(`.card-body[data-index="${index}"]`);
+    
             const MAX_FILE_SIZE_MB = 500;
             const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-
-            // Handle file selection
+    
             if (fileInput) {
                 fileInput.addEventListener('change', function () {
                     const file = this.files[0];
                     if (file) {
                         fileNameDisplay.textContent = file.name;
-                
+    
                         if (file.size > MAX_FILE_SIZE_BYTES) {
-                            formError.textContent = `Error: The file size exceeds ${MAX_FILE_SIZE_MB} MB. Please select a smaller file.`;
+                            formError.textContent = `Error: File size exceeds ${MAX_FILE_SIZE_MB} MB.`;
                             formError.style.display = 'block';
                             resetFileInput();
                             return;
                         }
-                
+    
                         if (file.type.startsWith('image/')) {
                             const reader = new FileReader();
                             reader.onload = function (e) {
@@ -669,96 +668,103 @@ window.addEventListener('DOMContentLoaded', () => {
                         } else {
                             filePreview.style.display = 'none';
                         }
-                
+    
                         formError.style.display = 'none';
-                        uploadProgressContainer.style.display = 'none';
-                        uploadProgress.style.width = '0%';
-                        uploadProgress.textContent = '0%';
                     }
                 });
             }
-
-            // Handle AJAX form submission
+    
             if (submitButton) {
                 submitButton.addEventListener('click', function (event) {
-                    event.preventDefault(); // Prevent default form submission
-                    
+                    event.preventDefault();
+    
                     const formData = new FormData(form);
-                    const file = fileInput?.files[0];
-
-                    // Simulate progress if file is selected
-                    if (file) {
-                        const simulatedProgress = () => {
-                            let progress = 0;
-                            const interval = setInterval(() => {
-                                progress += 10; // Increment by 10%
-                                uploadProgress.style.width = `${progress}%`;
-                                uploadProgress.textContent = `${progress}%`;
-                                if (progress >= 100) {
-                                    clearInterval(interval);
-                                    uploadForm(); // Proceed with form submission
-                                }
-                            }, 100); // Update every 100ms
-                        };
-
-                        uploadProgressContainer.style.display = 'block';
-                        simulatedProgress(); // Start simulating progress
-                    } else {
-                        uploadForm(); // No file, just submit the form
+                    if (fileInput && fileInput.files[0]) {
+                        formData.append('file', fileInput.files[0]);
                     }
+    
+                    fetch(form.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                        }
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                // Update secret details dynamically
+                                if (data.secret) {
+                                    const secretCardBody = document.querySelector(`#secretCardBody-${index}`);
+                                    if (secretCardBody) {
+                                        secretCardBody.innerHTML = `
+                                            <p class="card-text m-0"><strong>Secret:</strong> ${data.secret.secret}</p>
+                                            ${data.secret.file ? `
+                                                <p class="card-text">
+                                                    <strong>Attached File:</strong>
+                                                    <a href="/downloads/${data.secret.file}" class="link-primary" download>
+                                                        <i class="bi bi-file-earmark-arrow-down"></i> ${data.secret.file}
+                                                    </a>
+                                                </p>
+                                                ${data.secret.file_preview ? `
+                                                    <p><strong>Preview:</strong></p>
+                                                    <img src="/downloads/${data.secret.file}" alt="File Preview" style="max-width: 20%; height: auto;">
+                                                ` : `
+                                                    <p style="font-size: small;">No preview available for this file type.</p>
+                                                `}
+                                            ` : ''}
+                                        `;
+                                    } else {
+                                        console.error(`Element #secretCardBody-${index} not found.`);
+                                    }
 
-                    function uploadForm() {
-                        fetch(form.action, {
-                            method: 'POST',
-                            body: formData,
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                        })
-                            .then((response) => response.json())
-                            .then((data) => {
-                                const formError = document.getElementById(`errorFlash-${form.dataset.index}`);
-                                if (data.success) {
-                                    // Show the success message
-                                    const flashMessage = document.createElement('div');
-                                    flashMessage.className = 'alert alert-success';
-                                    flashMessage.textContent = data.message;
-                                    document.body.prepend(flashMessage);  // Add flash message to the top of the page
-
-                                    setTimeout(() => {
-                                        flashMessage.remove();  // Remove the flash message after 3 seconds
-                                    }, 3000);
-
-                                    form.reset();  // Reset form fields
-                                    resetFileInput();
-                                } else {
-                                    formError.textContent = data.error || 'Failed to update secret.';
-                                    formError.style.display = 'block';
                                 }
-                            })
-                            .catch((error) => {
-                                console.error('Error:', error);
-                                formError.textContent = 'An unexpected error occurred.';
+    
+                                // Reset form and close modal
+                                form.reset();
+                                resetFileInput();
+                                closeModal(form);
+    
+                                // Show flash message
+                                showFlashMessage(data.flash_message, "success");
+                            } else {
+                                formError.textContent = data.error || 'Failed to update secret.';
                                 formError.style.display = 'block';
-                            });
-                    }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            formError.textContent = 'An unexpected error occurred.';
+                            formError.style.display = 'block';
+                        });
                 });
             }
-
-
-            // Reset the file input
+    
             function resetFileInput() {
                 fileInput.value = '';
                 fileNameDisplay.textContent = '';
                 filePreview.style.display = 'none';
                 previewImage.src = '';
-                uploadProgressContainer.style.display = 'none';
-                uploadProgress.style.width = '0%';
-                uploadProgress.textContent = '0%';
                 formError.style.display = 'none';
+            }
+    
+            function closeModal(form) {
+                const modalElement = form.closest('.modal');
+                if (modalElement) {
+                    const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                    modalInstance.hide();
+                }
+    
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                backdrops.forEach(backdrop => backdrop.remove());
             }
         });
     }
+    
+    
 
     // Initialize share forms
     function initializeShareButtons() {
@@ -942,11 +948,12 @@ window.addEventListener('DOMContentLoaded', () => {
         function initializeEmailInput(inputId, containerId, hiddenFieldName) {
             const emailInput = document.getElementById(inputId);
             const emailInputContainer = document.getElementById(containerId);
-            
-            // if (!emailInputContainer) {
-            //     console.warn(`Email input container with ID '${containerId}' not found. Skipping initialization.`);
-            //     return;
-            // }
+        
+            // Check if the container exists
+            if (!emailInputContainer) {
+                console.warn(`Email input container with ID '${containerId}' not found. Skipping initialization.`);
+                return; // Skip the rest of the function
+            }
         
             // Hidden field to store email addresses
             const hiddenEmailField = document.createElement('input');
@@ -983,7 +990,7 @@ window.addEventListener('DOMContentLoaded', () => {
                         emails.push(email);
                         updateEmails();
                         createEmailTag(email);
-                        
+        
                         // Remove placeholder after the first email is added
                         emailInput.placeholder = '';
                     } else {
@@ -1005,7 +1012,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     emails = emails.filter(e => e !== emailToRemove);
                     updateEmails();
                     tag.remove();
-                    
+        
                     // Restore placeholder if all emails are removed
                     if (emails.length === 0) {
                         emailInput.placeholder = "Enter recipient's email/s";

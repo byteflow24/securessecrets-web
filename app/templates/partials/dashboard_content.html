@@ -230,18 +230,36 @@
                             </div>
                             <p>{{ public.secret|safe }}</p>
                             {% if public.file %}
-                            <p>
-                                <strong>Attached File:</strong>
-                                <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
-                                    <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
-                                </a>
-                            </p>
+                                <p><strong>Attached File:</strong>
+                                    <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
+                                        <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
+                                    </a>
+                                </p>
+
+                                {% if public.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
+                                    <!-- Image preview -->
+                                    <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="File Preview" style="max-width: 40%; height: auto;">
+                                
+                                {% elif public.file.endswith('.pdf') %}
+                                    <!-- PDF preview -->
+                                    <iframe src="{{ url_for('main.download_file', filename=public.file) }}" 
+                                            style="max-width: 50%; height: auto; border: none;" frameborder="0"></iframe>
+                                
+                                {% elif public.file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) %}
+                                    <!-- Office file preview (using Google Docs Viewer or similar) -->
+                                    <iframe src="https://docs.google.com/viewer?url={{ url_for('main.download_file', filename=public.file, _external=True) }}&embedded=true" 
+                                            style="width: 50%; height: auto; border: none;" frameborder="0"></iframe>
+
+                                {% else %}
+                                    <p style="font-size: small;">No preview available for this file type.</p>
+                                {% endif %}
                             {% endif %}
                             <hr>
                         </div>
                         {% endfor %}
                     </div>
                 </div>
+
             </div>
         </div>
     </div>

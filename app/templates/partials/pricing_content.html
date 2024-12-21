@@ -2,17 +2,19 @@
     <div class="row justify-content-center">
         <div class="col-lg-8 text-center">
             <!-- Flash Messages -->
-            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% with messages = get_flashed_messages(with_categories=True) %}
                 {% if messages %}
+                    <div id="flash-messages">
                     {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} text-center mt-3 alert-dismissible fade show" role="alert">
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
+                        </div>
                     {% endfor %}
+                    </div>
                 {% endif %}
             {% endwith %}
-
+            
             <div class="site-heading">
                 <h1 class="display-4 text-primary mb-4">Choose Your Plan</h1>
                 <p class="lead text-muted">Pick the best plan that fits your needs. Whether you're just getting started or scaling your business, we have options for you.</p>

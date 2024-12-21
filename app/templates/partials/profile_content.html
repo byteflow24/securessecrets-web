@@ -1,23 +1,37 @@
+{% block styles %}
+    <style>
+        .card-body {
+            font-size: 0.91rem; /* Adjust the value as needed */
+            line-height: 1.2;   /* Optional: Adjust line height for better readability */
+        }
+        .form-control {
+            font-size: 0.91rem;
+        }
+    </style>
+{% endblock %}
 <div class="container my-5">
     <div class="text-center mb-5">
         <h2 class="mt-3 text-primary">Manage Your Profile</h2>
         <p class="text-muted">Update your personal information and change your password.</p>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
+                <div id="flash-messages">
                 {% for category, message in messages %}
-                <div class="alert alert-{{ category }} text-center mt-3 alert-dismissible fade show" role="alert">
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
                     {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
+                    </div>
                 {% endfor %}
+                </div>
             {% endif %}
         {% endwith %}
     </div>
-
+    <!-- Adding new secret modal -->
+    {% include "partials/new_secret_modal.html" %}
     <!-- Last Login Info -->
     <div class="text-center">
         <p class="text-muted" style="margin-bottom: 0;">Last Login: {{ last_login.login_time }}</p>
-        <a href="#" data-bs-toggle="modal" data-bs-target="#loginHistoryModal" class="btn link-primary">View all account accesses</a>
+        <a href="#" data-bs-toggle="modal" data-bs-target="#loginHistoryModal" class="btn link-primary">View login history</a>
     </div>
 
     <!-- Modal -->
@@ -51,82 +65,105 @@
 
 
     <div class="row">
-        <!-- Profile Info Section -->
-        <div class="col-md-8">
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-title text-center pb-3">Profile Information</h5>
-                    <form method="POST" action="{{ url_for('main.update_profile') }}">
-                        {{ ps_form.csrf_token(id="csrf_token_ps_form") }}
-                        <!-- Username and Email Row -->
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                {{ pr_form.username.label(class="form-label") }}
-                                {{ pr_form.username(class="form-control bg-light", id="username", autocomplete="username", readonly=true) }}
+        <div class="row align-items-stretch">
+            <!-- Profile Info Section -->
+            <div class="col-md-8">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body small">
+                        <h5 class="card-title text-center pb-3">Profile Information</h5>
+                        <form method="POST" action="{{ url_for('main.update_profile') }}">
+                            {{ ps_form.csrf_token(id="csrf_token_ps_form") }}
+                            <!-- Username and Email Row -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    {{ pr_form.username.label(class="form-label") }}
+                                    {{ pr_form.username(class="form-control bg-light", id="username", autocomplete="username", readonly=true) }}
+                                </div>
+                                <div class="col-md-6">
+                                    {{ pr_form.email.label(class="form-label") }}
+                                    {{ pr_form.email(class="form-control bg-light", id="email", readonly=true, autocomplete="email") }}
+                                </div>
                             </div>
-                            <div class="col-md-6">
-                                {{ pr_form.email.label(class="form-label") }}
-                                {{ pr_form.email(class="form-control bg-light", id="email", readonly=true, autocomplete="email") }}
-                            </div>
-                        </div>
-                        
-                        <!-- Phone Code and Phone Number Row -->
-                        <div class="row mb-3">
-                            <div class="col-md-3">
-                                {{ pr_form.code.label(class="form-label", for="country_code") }}
-                                {{ pr_form.code(class="form-control", id="country_code") }}
-                            </div>
-                            <div class="col-md-9">
-                                {{ pr_form.phone.label(class="form-label", for="phone_number") }}
-                                {{ pr_form.phone(class="form-control", id="phone_number", type="number", autocomplete="phone") }}
-                            </div>
-                        </div>
-                    
-                        <!-- Submit Button -->
-                        <div class="text-center">
-                            {{ pr_form.submit(class="btn btn-primary w-50 py-2", id="submit_profile") }}
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
 
-        <!-- Change Password Section -->
-        <div class="col-md-4">
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-title text-center pb-3">Change Password</h5>
-                    <form method="POST" action="{{ url_for('main.change_password') }}" novalidate>
-                        {{ ps_form.csrf_token(id="csrf_token_pr_form") }}
-                        <div class="mb-3">
-                            {{ ps_form.current_password.label(class="form-label") }}
-                            {{ ps_form.current_password(class="form-control", id="current_password") }}
-                            {% for error in ps_form.current_password.errors %}
-                                <div class="text-danger">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                        <div class="mb-3">
-                            {{ ps_form.new_password.label(class="form-label") }}
-                            {{ ps_form.new_password(class="form-control", id="new_password") }}
-                            {% for error in ps_form.new_password.errors %}
-                                <div class="text-danger">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                        <div class="mb-3">
-                            {{ ps_form.confirm_password.label(class="form-label") }}
-                            {{ ps_form.confirm_password(class="form-control", id="confirm_password") }}
-                            {% for error in ps_form.confirm_password.errors %}
-                                <div class="text-danger">{{ error }}</div>
-                            {% endfor %}
-                        </div>
+                            <!-- Combined Plan and Expiry -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="plan" class="form-label">Plan</label>
+                                    <input type="text" 
+                                        class="form-control bg-light" 
+                                        id="plan" 
+                                        value="{{ current_user.plan.plan }}" 
+                                        readonly>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="plan_expiry" class="form-label">Expiry</label>
+                                    <input type="text" 
+                                        class="form-control bg-light" 
+                                        id="plan_expiry" 
+                                        value="{{ current_user.subscription_end_date.strftime('%Y-%m-%d') }}" 
+                                        readonly>
+                                </div>
+                            </div>
+                            <hr style="border: 1px solid #cccc; margin: 10px 0;">
+                            <!-- Phone Code and Phone Number Row -->
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    {{ pr_form.code.label(class="form-label", for="country_code") }}
+                                    {{ pr_form.code(class="form-control", id="country_code") }}
+                                </div>
+                                <div class="col-md-9">
+                                    {{ pr_form.phone.label(class="form-label", for="phone_number") }}
+                                    {{ pr_form.phone(class="form-control", id="phone_number", type="number", autocomplete="phone") }}
+                                </div>
+                            </div>
                         
-                        <div class="text-center">
-                            {{ ps_form.submit(class="btn btn-danger w-50 py-2", id="submit_password") }}
-                        </div>
-                    </form>                    
+                            <!-- Submit Button -->
+                            <div class="text-center">
+                                {{ pr_form.submit(class="btn btn-primary w-50 py-2", id="submit_profile") }}
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        
+            <!-- Change Password Section -->
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body small">
+                        <h5 class="card-title text-center pb-3">Change Password</h5>
+                        <form method="POST" action="{{ url_for('main.change_password') }}" novalidate>
+                            {{ ps_form.csrf_token(id="csrf_token_pr_form") }}
+                            <div class="mb-3">
+                                {{ ps_form.current_password.label(class="form-label") }}
+                                {{ ps_form.current_password(class="form-control", id="current_password") }}
+                                {% for error in ps_form.current_password.errors %}
+                                    <div class="text-danger">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="mb-3">
+                                {{ ps_form.new_password.label(class="form-label") }}
+                                {{ ps_form.new_password(class="form-control", id="new_password") }}
+                                {% for error in ps_form.new_password.errors %}
+                                    <div class="text-danger">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="mb-3">
+                                {{ ps_form.confirm_password.label(class="form-label") }}
+                                {{ ps_form.confirm_password(class="form-control", id="confirm_password") }}
+                                {% for error in ps_form.confirm_password.errors %}
+                                    <div class="text-danger">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            
+                            <div class="text-center">
+                                {{ ps_form.submit(class="btn btn-danger w-50 py-2", id="submit_password") }}
+                            </div>
+                        </form>                    
+                    </div>
                 </div>
             </div>
         </div>
+        
     </div>
     <div class="text-center mt-4">
         <!-- Delete Account Button triggers modal -->

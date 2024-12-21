@@ -1,11 +1,10 @@
-from flask import Flask, session, redirect, url_for, flash, current_app
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_bootstrap import Bootstrap
-from flask_wtf.csrf import CSRFProtect, CSRFError
-from flask_login import LoginManager, current_user
+from flask_wtf.csrf import CSRFProtect
+from flask_login import LoginManager
 from flask_migrate import Migrate
 from flask_compress import Compress
-from datetime import timedelta
 
 db = SQLAlchemy()
 csrf = CSRFProtect()

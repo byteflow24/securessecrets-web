@@ -55,7 +55,10 @@ def set_language(lang):
 # flask middleware to ensure flashes are cleared
 @main.after_request
 def clear_flashes(response):
-    session.pop('_flashes', None)  # Clear flash messages after they've been used
+    # Only clear flashes for text/html responses after rendering
+    if '_flashes' in session and 'text/html' in response.content_type:
+        if 'flash-messages' in response.get_data(as_text=True):
+            session.pop('_flashes', None)
     return response
 
 
@@ -67,6 +70,9 @@ def register():
         return redirect(url_for('main.dashboard'))
     form = RegisterForm()
     plan_id = request.args.get('plan_id')
+    if not plan_id:
+        flash('Please choose plan agian.', 'warning')
+        return redirect(url_for('main.pricing'))
     
     if form.validate_on_submit():
         if form.confirm_password.data != form.password.data:
@@ -228,6 +234,17 @@ def login():
         PublicSecrets.share_date <= datetime.now()
     ).order_by(PublicSecrets.share_date.desc()).all()
 
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+
+    # Check if files exist; delete secrets with missing files
+    for public_secret in public_secrets[:]:
+        if public_secret.file:  # If there's a file associated
+            file_path = os.path.join(upload_folder, public_secret.file)
+            if not os.path.exists(file_path):  # File is missing
+                # Delete the secret from PublicSecrets
+                db.session.delete(public_secret)
+                public_secrets.remove(public_secret)
+
     # Decrypt and prepare public secrets for display
     decrypted_secrets = []
     for public_secret in public_secrets:
@@ -313,6 +330,7 @@ def reset_password():
 @main.route('/profile', methods=['GET', 'POST'])
 @login_required
 def update_profile():
+    secret_form = SecretForm()
     # If the user is not authenticated (session expired), return 401
     if not current_user.is_authenticated:
         return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
@@ -326,13 +344,13 @@ def update_profile():
         current_user.phone = pr_form.phone.data
         current_user.country_code = pr_form.code.data
         db.session.commit()
-        flash('Profile updated successfully!', 'success')
+        flash('Mobile number updated successfully!', 'success')
         return redirect(url_for('main.update_profile'))
     pr_form.code.data = current_user.country_code
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/profile_content.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login)
-    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login, show_header=True, show_footer=True)
+        return render_template('partials/profile_content.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login, secret_form=secret_form)
+    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login, secret_form=secret_form, show_header=True, show_footer=True)
 
 # Pagination for the login history
 @main.route('/api/login-history', methods=['GET'])
@@ -379,6 +397,7 @@ def change_password():
     
     pr_form = ProfileForm(obj=current_user)
     ps_form = ChangePasswordForm(request.form)
+    secret_form = SecretForm()
     login = LoginHistory.query.filter_by(user_id=current_user.id).all()
     last_login = LoginHistory.query.filter_by(user_id=current_user.id).order_by(LoginHistory.login_time.desc()).first()
     if ps_form.validate_on_submit():
@@ -402,13 +421,14 @@ def change_password():
     pr_form.code.data = current_user.country_code
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/profile_content.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login)
-    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login, show_header=True, show_footer=True)
+        return render_template('partials/profile_content.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login, secret_form=secret_form)
+    return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ps_form, login_history=login, last_login=last_login, secret_form=secret_form, show_header=True, show_footer=True)
 
 # dashboard server
 @main.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 def dashboard():
+    secret_form = SecretForm()
     # If the user is not authenticated (session expired), return 401
     if not current_user.is_authenticated:
         return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
@@ -504,9 +524,9 @@ def dashboard():
 
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/dashboard_content.html', current_user=current_user, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login)
+        return render_template('partials/dashboard_content.html', current_user=current_user, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login, secret_form=secret_form, show_secrets_list=False)
     
-    return render_template('dashboard.html', current_user=current_user, show_header=True, show_footer=True, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login)
+    return render_template('dashboard.html', current_user=current_user, show_header=True, show_footer=True, show_secrets_list=False, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login, secret_form=secret_form)
 
 # List of all secerts for the user 
 @main.route('/all-secrets', methods=['GET', 'POST'])
@@ -535,7 +555,7 @@ def all_secrets():
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return render_template('partials/all_secrets_content.html', user_secrets=decrypted_secrets, current_user=current_user, share_form=share_form, form=form, secret_form=secret_form)
-    return render_template('all_secrets.html', user_secrets=decrypted_secrets, current_user=current_user, form=form, share_form=share_form, secret_form=secret_form, show_header=True, show_footer=True)
+    return render_template('all_secrets.html', user_secrets=decrypted_secrets, current_user=current_user, form=form, share_form=share_form, secret_form=secret_form, show_header=True, show_footer=True, show_secrets_list=True)
 
 # Search and Filter
 @main.route('/search-secrets', methods=['POST'])
@@ -655,18 +675,32 @@ def upload_file():
     except Exception as e:
         return jsonify(error = str(e)), 500
 
+# Route to fetch the user's current storage usage and limit, requiring login.
+@main.route('/get-storage-info', methods=['GET'])
+@login_required
+def get_storage_info():
+    try:
+        used = current_user.storage_used
+        total = current_user.plan.storage_limit
+        return jsonify({'used': used, 'total': total})
+    except Exception as e:
+        print(f"Error fetching storage info: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # Sharing secret server
 @main.route('/share', methods=['POST'])
 def share():
     form = ShareForm()
-    print(request.form)
 
     # Default variable initialization
     sharing_type = None
     email, public, token, time_period, date, time, last_login = None, False, None, None, None, None, None
 
     if form.validate_on_submit():
+        print(form.email_login.data)
         # Determine sharing type
+        print("Form submission data:", form.data)
+
         if form.date_period.data:
             sharing_type = "last_login"
             if not form.email_login.data and not form.public_login.data:
@@ -705,9 +739,13 @@ def share():
 
             date = form.date.data
             time = form.time.data
+            if isinstance(time, str):  # Handle if time is submitted as a string
+                time = datetime.strptime(time, "%H:%M").time()
+            time_str = time.strftime("%H:%M")
+
             email = form.email_scheduled.data
             public = form.public_scheduled.data
-            message = f"Your secret is scheduled for {date} at {time.strftime('%H:%M')}."
+            message = f"Your secret is scheduled for {date} at {time_str}."
         else:
             return jsonify({"success": False, "message": "Invalid sharing type or missing fields!"}), 400
 
@@ -727,7 +765,7 @@ def share():
                 time_period=time_period if sharing_type == "last_login" else None,
                 token=token,
                 date_to_send=date if sharing_type == "scheduled" else None,
-                time_to_send=time if sharing_type == "scheduled" else None,
+                time_to_send=time_str if sharing_type == "scheduled" else None,
                 received=False,
                 delete_confirmed=form.confirm_deletion.data if sharing_type == "scheduled" else False,
             )
@@ -738,6 +776,7 @@ def share():
             public_secrets = PublicSecrets(
                 shared_secret_id=new_shared_secret.id,
                 username=current_user.username,
+                title=secret.title,
                 secret=secret.secret,
                 file=secret.file,
                 share_date=(
@@ -845,8 +884,8 @@ def delete_secret(sec_id):
         # Delete the secret from the database
         db.session.delete(secret)
         db.session.commit()
-
-        return redirect(url_for('main.all_secrets', user_id=secret.user_id))
+        flash('Secret has been deleted successfully.', 'success')
+        return redirect(url_for('main.all_secrets'))
 
     except IntegrityError:
         db.session.rollback()
@@ -872,8 +911,8 @@ def delete_account(user_id):
     logout_user()
     db.session.delete(user)
     db.session.commit()
-    flash("Your account has been deleted. We're sad to see you go.", "success")
-    return redirect(url_for('main.dashboard'))
+    flash("Your account has been deleted. We're sad to see you leave ☹️.", "success")
+    return redirect(url_for('main.login'))
 
 
 # Editing secret
@@ -1199,6 +1238,7 @@ def billing():
     if not current_user.is_authenticated:
         return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
     
+    secret_form = SecretForm()
     form = PlanUpgradeForm()
     if current_user.is_authenticated and not current_user.is_confirmed:
         return redirect(url_for('main.confirmation_pending'))
@@ -1210,8 +1250,8 @@ def billing():
     populate_plan_choices(form, user)
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/billing_content.html', user=user, payments=history_payment, form=form, plan=plans)
-    return render_template('billing.html', user=user, payments=history_payment, form=form, plan=plans, show_header=True, show_footer=True)
+        return render_template('partials/billing_content.html', user=user, payments=history_payment, form=form, plan=plans, secret_form=secret_form)
+    return render_template('billing.html', user=user, payments=history_payment, form=form, plan=plans, secret_form=secret_form, show_header=True, show_footer=True)
 
 # to pay the plan if still not paid
 @main.route('/pay_now', methods=['POST'])
@@ -1383,23 +1423,27 @@ def terms():
 
 @main.route('/about-us')
 def about():
+    secret_form = SecretForm()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/about_content.html')
-    return render_template('about.html', show_header=True, show_footer=True)
+        return render_template('partials/about_content.html', secret_form=secret_form)
+    return render_template('about.html', secret_form=secret_form, show_header=True, show_footer=True)
 
 
 @main.route('/contact-us')
 def contact():
+    secret_form = SecretForm()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/contact_content.html')
-    return render_template('contact.html', show_header=True, show_footer=True)
+        return render_template('partials/contact_content.html', secret_form=secret_form)
+    return render_template('contact.html', secret_form=secret_form, show_header=True, show_footer=True)
 
 
 @main.route('/privacy-policy')
 def privacy():
-    return render_template('privacy.html', show_header=True, show_footer=True)
+    secret_form = SecretForm()
+    return render_template('privacy.html', secret_form=secret_form, show_header=True, show_footer=True)
 
 
 @main.route('/cookie-policy')
 def cookie():
-    return render_template('cookie.html', show_header=True, show_footer=True)
+    secret_form = SecretForm()
+    return render_template('cookie.html', secret_form=secret_form, show_header=True, show_footer=True)

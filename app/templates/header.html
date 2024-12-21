@@ -35,6 +35,11 @@
                         {% else %}
                             <!-- Authenticated User Links -->
                             <li class="nav-item mx-1">
+                                <a href="#" class="btn btn-light px-2 py-2" data-bs-toggle="modal" data-bs-target="#newSecretModal">
+                                    <i class="bi bi-plus-square"></i> New Secret
+                                </a>
+                            </li>
+                            <li class="nav-item mx-1">
                                 <a class="btn btn-outline-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.dashboard') }}">Dashboard</a>
                             </li>
                             <li class="nav-item">
@@ -56,7 +61,7 @@
                             <!-- Dropdown Menu for Authenticated Users -->
                             <li class="nav-item dropdown">
                                 <a href="#" class="nav-link dropdown-toggle text-secondary px-2 py-2" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i> {{ current_user.username }}
+                                    <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i> {{ current_user.username | lower }}
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end stylish-dropdown" aria-labelledby="userMenu">
                                     <li><a class="dropdown-item dynamic-link" href="#" data-url="{{ url_for('main.update_profile') }}">Profile</a></li>

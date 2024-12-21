@@ -167,6 +167,7 @@ class PublicSecrets(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     shared_secret_id = db.Column(db.Integer, db.ForeignKey('shared_secrets.id', ondelete='SET NULL'), nullable=True)
     username = db.Column(String(50), unique=True, nullable=True)
+    title = db.Column(String(100), nullable=True)
     secret = db.Column(String, nullable=True)
     file = db.Column(String(255), nullable=True)
     share_date = db.Column(TIMESTAMP, nullable=True)

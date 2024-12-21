@@ -46,23 +46,25 @@ window.addEventListener('DOMContentLoaded', () => {
     
     // Toggles "Read More/Less" for overflowing secrets, expanding or collapsing content visibility. "Public Secrets Section"
     function initializeReadSecret() {
-        const secrets = document.querySelectorAll('.secret-wrapper');
+        const secrets = document.querySelectorAll('.secret-wrapper.clickable');
 
         secrets.forEach((wrapper) => {
-            const showMoreLink = wrapper.nextElementSibling; // Get the "Read More" link
-
-            // Check if the combined content overflows
-            if (wrapper.scrollHeight > wrapper.offsetHeight) {
-                showMoreLink.style.display = 'inline'; // Show "More" link
-            }
-
-            // Toggle expanded view
-            showMoreLink.addEventListener('click', function () {
+            // Toggle expanded/collapsed state on click
+            wrapper.addEventListener('click', function () {
                 const isExpanded = wrapper.style['-webkit-line-clamp'] === 'unset';
+
+                // Toggle styles
                 wrapper.style['-webkit-line-clamp'] = isExpanded ? '1' : 'unset';
                 wrapper.style['overflow'] = isExpanded ? 'hidden' : 'visible';
                 wrapper.style['display'] = isExpanded ? '-webkit-box' : 'block';
-                this.textContent = isExpanded ? 'Read More' : 'Read Less';
+            });
+
+            // Optional: Add a hover effect for better UX
+            wrapper.addEventListener('mouseover', function () {
+                wrapper.style.backgroundColor = '#f9f9f9';
+            });
+            wrapper.addEventListener('mouseout', function () {
+                wrapper.style.backgroundColor = '';
             });
         });
     }
@@ -562,27 +564,28 @@ window.addEventListener('DOMContentLoaded', () => {
         function handleFormResponse(data, form) {
             const formError = document.getElementById("formError");
             if (data.success) {
-                // Handle success: update the UI and close modal
-                const newSecretHTML = `
-                    <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center secret-link">
-                        <span>${data.title}</span>
-                        <small>${data.date}</small>
-                    </a>`;
                 const secretsList = document.querySelector("#accordionSecretsList");
-                // Show the flash message
-                if (data.flash_message) {
-                    showFlashMessage(data.flash_message, "success");
+                if (secretsList) {
+                    const newSecretHTML = `
+                        <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center secret-link">
+                            <span>${data.title}</span>
+                            <small>${data.date}</small>
+                        </a>`;
+                    
+                    // Remove "No secrets found" message if it exists
+                    const noSecretsAlert = secretsList.querySelector(".alert-info");
+                    if (noSecretsAlert) {
+                        noSecretsAlert.remove();
+                    }
+        
+                    // Add the new secret to the list
+                    secretsList.insertAdjacentHTML("afterbegin", newSecretHTML);
                 }
-                // Remove "No secrets found" message if it exists
-                const noSecretsAlert = secretsList.querySelector(".alert-info");
-                if (noSecretsAlert) {
-                    noSecretsAlert.remove();
-                }
+        
                 // Update storage info if provided
                 if (data.storageInfo) {
                     updateStorageInfo(data.storageInfo.used, data.storageInfo.total);
                 } else {
-                    // Fetch storage info if not included in the response
                     fetch('/get-storage-info', {
                         method: 'GET',
                         headers: {
@@ -597,9 +600,8 @@ window.addEventListener('DOMContentLoaded', () => {
                         })
                         .catch(error => console.error('Error fetching storage info:', error));
                 }
-        
-                // Add the new secret to the list
-                secretsList.insertAdjacentHTML("afterbegin", newSecretHTML);
+
+                showFlashMessage(data.flash_message, 'success');
         
                 // Reset the form and close the modal
                 form.reset();
@@ -608,7 +610,6 @@ window.addEventListener('DOMContentLoaded', () => {
                 // Reset file input and preview
                 resetFileInput();
             } else {
-                // Display the error in the modal
                 formError.style.display = "block";
                 formError.textContent = data.error || "An error occurred.";
             }
@@ -800,6 +801,9 @@ window.addEventListener('DOMContentLoaded', () => {
     function initializeShareButtons() {
         // Add event listener for the share form submission
         document.querySelectorAll('[id^="shareForm-"]').forEach(form => {
+            // Initialize required fields based on the initial state
+            toggleRequiredFields(form);
+            
             form.addEventListener('submit', function (event) {
                 event.preventDefault();
         
@@ -1063,29 +1067,52 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     
         // Toggle Required Fields Based on Sharing Type
-        function toggleRequiredFields() {
-            document.querySelectorAll('[id^="shareForm-"]').forEach(form => {
-                const sharingType = form.querySelector('input[name="sharing_type"]:checked').value;
-                const datePeriodInput = form.querySelector('input[name="date_period"]');
-                const dateInput = form.querySelector('input[name="date"]');
-                const timeInput = form.querySelector('input[name="time"]');
+        function toggleRequiredFields(form) {
+            const sharingTypeInput = form.querySelector('input[name="sharing_type"]:checked');
+            const sharingType = sharingTypeInput ? sharingTypeInput.value : null;
         
-                if (sharingType === "last_login") {
+            const datePeriodInput = form.querySelector('input[name="date_period"]');
+            const dateInput = form.querySelector('input[name="date"]');
+            const timeInput = form.querySelector('input[name="time"]');
+        
+            if (sharingType === "last_login") {
+                // Enable only date period input
+                if (datePeriodInput) {
                     datePeriodInput.required = true;
-                    dateInput.required = false;
-                    timeInput.required = false;
-                } else if (sharingType === "scheduled") {
-                    datePeriodInput.required = false;
-                    dateInput.required = true;
-                    timeInput.required = true;
+                    datePeriodInput.parentElement.style.display = 'block';
                 }
-            });
+                if (dateInput) dateInput.required = false;
+                if (timeInput) timeInput.required = false;
+                if (dateInput) dateInput.parentElement.style.display = 'none';
+                if (timeInput) timeInput.parentElement.style.display = 'none';
+            } else if (sharingType === "scheduled") {
+                // Enable date and time inputs
+                if (datePeriodInput) datePeriodInput.required = false;
+                if (dateInput) {
+                    dateInput.required = true;
+                    dateInput.parentElement.style.display = 'block';
+                }
+                if (timeInput) {
+                    timeInput.required = true;
+                    timeInput.parentElement.style.display = 'block';
+                }
+                if (datePeriodInput) datePeriodInput.parentElement.style.display = 'none';
+            } else {
+                // Hide all inputs if no valid sharing type is selected
+                if (datePeriodInput) datePeriodInput.parentElement.style.display = 'none';
+                if (dateInput) dateInput.parentElement.style.display = 'none';
+                if (timeInput) timeInput.parentElement.style.display = 'none';
+            }
         }
         
         // Attach toggle logic to sharing type changes
         document.querySelectorAll('input[name="sharing_type"]').forEach(input => {
-            input.addEventListener('change', toggleRequiredFields);
-        });                
+            input.addEventListener('change', function () {
+                const form = this.closest('form');
+                if (form) toggleRequiredFields(form);
+            });
+        });
+                        
     
     }
 

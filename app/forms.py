@@ -29,7 +29,7 @@ class RegisterForm(FlaskForm):
         )
     ])
     confirm_password = PasswordField("Confirm Password", validators=[DataRequired()])
-    username = StringField("Username", validators=[DataRequired()])
+    username = StringField("Username", validators=[DataRequired(), Length(min=3, max=20), Regexp('^[A-Za-z0-9_!@#-]+$', message="Username must be alphanumeric")])
     code = SelectField("Country Code", 
                        validators=[DataRequired(), 
                                    AnyOf(values=['+1', '+44', '+91', '+61', '+81', '+971', '+966', '+965', 
@@ -95,7 +95,7 @@ class ProfileForm(FlaskForm):
                 ('+57', 'Colombia (+57)'), ('+506', 'Costa Rica (+506)'), ('+385', 'Croatia (+385)'), 
                 ('+357', 'Cyprus (+357)'), ('+420', 'Czech Republic (+420)'), ('+45', 'Denmark (+45)')])
     phone = StringField("Phone Number", validators=[DataRequired(), Regexp(r'^\d+$', message="Phone number must contain only numbers.")])
-    submit = SubmitField("Update Profile")
+    submit = SubmitField("Change Mobile Number")
 
 # ChangePasswordForm
 class ChangePasswordForm(FlaskForm):

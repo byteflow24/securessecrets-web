@@ -901,7 +901,7 @@ def send_secret_email(email, secret_url):
     msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = email
     msg['Subject'] = Header('Important: Access Your Secret', 'utf-8')
-
+    print(email, secret_url)
     # Email body
     body = (
         f"<html>"

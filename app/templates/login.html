@@ -64,7 +64,7 @@
         }
 
         .news-container {
-            height: 360px;
+            height: 400px;
             overflow-y: auto;
             padding: 15px;
             border-radius: 10px;
@@ -97,6 +97,7 @@
         }
 
         .form-container {
+            height: 400px;
             padding: 23px;
             background-color: #f9f9f9;
             border: 1px solid #ddd;
@@ -139,16 +140,17 @@
         }
 
         .alert {
-            max-width: 40%; /* Limit the width of the alert */
-            margin: 0 auto 15px auto; /* Center align and add spacing below */
-            padding: 10px 15px; /* Reduce padding for a smaller appearance */
-            font-size: 1rem; /* Smaller font size */
-            border-radius: 8px; /* Rounded corners for a softer look */
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1); /* Light shadow for subtle emphasis */
+            max-width: 70%;
+            margin: 0 auto 15px auto;
+            padding: 10px 15px;
+            font-size: 1rem;
+            border-radius: 8px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
         }
-    
+
         .alert .btn-close {
-            padding: 0.25rem; /* Smaller close button */
+            padding: 0.7rem;
         }
 
 
@@ -156,9 +158,6 @@
             .login-section, .news-section {
                 width: 100%;
                 margin-bottom: 20px;
-            }
-            .alert {
-                width: 90%; /* Alert takes more space on smaller screens */
             }
         }
     </style>
@@ -180,12 +179,12 @@
                     {% with messages = get_flashed_messages(with_categories=true) %}
                         {% if messages %}
                             {% for category, message in messages %}
-                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                                    {{ message }}
-                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                                </div>
+                            <div class="alert alert-{{ category }} text-center mt-3 alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
                             {% endfor %}
-                        {% endif %}
+                        {% endif %} 
                     {% endwith %}
                 </div>
                 <!-- Left Login Section -->
@@ -225,11 +224,11 @@
                         {% for public in public_secrets %}
                         <div class="news-content">
                             <div class="d-flex justify-content-between align-items-center">
-                                <p><strong>{{ public.username or 'Anonymous' }}:</strong></p>
+                                <p class="text-secondary"><strong>@{{ public.username or 'Anonymous' }}</strong></p>
                                 <p style="font-size: 0.75rem;">{{ public.display_time }}</p>
                             </div>
-                            <div class="secret-wrapper" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;">
-                                <p class="secret-text">{{ public.secret|safe }}</p>
+                            <div class="secret-wrapper clickable" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; cursor: pointer;">
+                                <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.secret|safe }}</p>
                                 {% if public.file %}
                                     {% if public.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
                                         <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="File Preview" style="max-width: 40%; height: auto;">
@@ -250,7 +249,6 @@
                                     </p>
                                 {% endif %}
                             </div>
-                            <a href="javascript:void(0);" class="show-more" style="display: none; font-size: 0.7rem; color: blue;">Read More</a>
                             <hr>
                         </div>
                         {% endfor %}

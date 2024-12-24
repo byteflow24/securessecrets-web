@@ -1,7 +1,8 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, PasswordField, FileField, TextAreaField, SelectField, EmailField, DateField, BooleanField, DateTimeField, HiddenField, FieldList, TextAreaField
 from wtforms.validators import DataRequired, Optional, Length, Regexp, Email, AnyOf
-from .utils import email_domain_validator
+from .utils import email_domain_validator, validate_period
+from datetime import datetime, date
 
 
 
@@ -138,14 +139,21 @@ class SearchForm(FlaskForm):
 # Sharing the secret to some one
 class ShareForm(FlaskForm):
     sharing_type = HiddenField()
-    email_login = TextAreaField(
+    email_login = StringField(
         "Email:",
-        validators=[Optional(), Email(), email_domain_validator]
+        validators=[Optional(), Email(), email_domain_validator],
+        render_kw={"class": "form-control", "placeholder": "Enter recipient's email/s", "autocomplete": "off"}
     )
-    email_scheduled = TextAreaField(
+    email_scheduled = StringField(
         "Email:",
-        validators=[Optional(), Email(), email_domain_validator]
+        validators=[Optional(), Email(), email_domain_validator],
+        render_kw={"class": "form-control", "placeholder": "Enter recipient's email/s", "autocomplete": "off"}
     )
+    
+    # Hidden fields to store comma-separated emails
+    emails_login = HiddenField("Emails Login")
+    emails_scheduled = HiddenField("Emails Scheduled")
+
     date = DateField("Date: ",
         validators=[Optional()],  # Don't need any validator here for optional
         render_kw={"class": "form-control", "style": "border-radius: 10px;"}
@@ -166,34 +174,17 @@ class ShareForm(FlaskForm):
     )
     date_period = StringField(
         "Share the secret after last login by:",
-        validators=[Optional(), Length(min=2, max=4, message="Period must be number/s and one character from this list [d, m, y].")],
+        validators=[
+            Optional(),
+                Regexp(r'^\d+$', message="Field must contian only numbers between 1 and 360."),
+                Length(min=1, max=3, message="Filed must be from 1 to 3 numbers."),
+                validate_period
+        ],
         render_kw={"class": "form-control", "style": "width: 150px; border-radius: 10px;"}
     )
+
     
     submit = SubmitField("Send", render_kw={"class": "btn btn-primary w-50"})
-
-    # Custom validate method to handle field validation
-    def validate(self):
-        is_valid = super().validate()
-        sharing_type = self.sharing_type.data
-
-        if sharing_type == "last_login":
-            if not self.date_period.data:
-                self.date_period.errors.append("Please provide a period (e.g., 1d, 1m, or 1y).")
-                is_valid = False
-        elif sharing_type == "scheduled":
-            if not self.date.data:
-                self.date.errors.append("Specify a date for scheduled public sharing.")
-                is_valid = False
-            if not self.time.data:
-                self.time.errors.append("Specify a time for scheduled public sharing.")
-                is_valid = False
-
-        return is_valid
-
-    def validate_on_submit(self):
-        """Custom validate_on_submit to avoid the extra_validators argument."""
-        return self.is_submitted() and super().validate()
 
 
 # Deleting account

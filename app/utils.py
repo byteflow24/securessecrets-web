@@ -128,14 +128,14 @@ def populate_plan_choices(form, user):
     available_plans = [(0, "---Select a Plan---")] + [
         (plan.id, f"{plan.plan} - {plan.price} {plan.currency} ({plan.storage_limit / (1024 * 1024):.0f} MB)")
         for plan in plans if plan.id > user.plan_id
+    ] + [
+        (plan.id, f"{plan.plan} - {plan.price} {plan.currency} ({plan.storage_limit / (1024 * 1024):.0f} MB)")
+        for plan in plans if plan.id < user.plan_id
     ]
     
     if available_plans:
         form.plan_id.choices = available_plans
-    else:
-        form.plan_id.choices = [
-            (0, "You are on the highest plan available")
-        ]
+
 
 # Comprehensive list of common email domains and TLDs
 ALLOWED_DOMAINS = {
@@ -164,6 +164,14 @@ def email_domain_validator(form, field):
             )
     else:
         raise ValidationError("Invalid email format.")
+
+# ensure the field accepts only numbers between 1 and 360
+def validate_period(form, field):
+    if not field.data.isdigit():
+        raise ValidationError("The period must contain only numbers.")
+    value = int(field.data)
+    if value < 1 or value > 360:
+        raise ValidationError("Period must be number/s from 1 to 360.")
 
 
 # Configures Tap payment
@@ -735,10 +743,9 @@ def send_payment_email(email, username, plan_name, payment_amount, payment_date,
             f"<p>Your new subscription has been successfully activated, and you're all set to enjoy your plan's features.</p>"
         )
     elif subscription_type == "upgrade":
-        msg['Subject'] = Header('Your Plan Has Been Upgraded!', 'utf-8')
+        msg['Subject'] = Header('Your Plan Has Been Changed!', 'utf-8')
         unique_content = (
-            f"<p>Thank you for upgrading your subscription with SecuresSecrets.</p>"
-            f"<p>Your plan has been successfully upgraded, and you now have access to additional features.</p>"
+            f"<p>Your plan has been successfully changed, and you now have access to additional features.</p>"
         )
     elif subscription_type == "renewal":
         msg['Subject'] = Header('Your Subscription Has Been Renewed!', 'utf-8')
@@ -913,7 +920,7 @@ def send_secret_email(email, secret_url):
         f"<p><small>Note: the link will be deleted 1 hour after you open this link.</small></p>"
         f"<p>Best regards,</p>"
         f"<p>The SecuresSecrets Team</p>"
-        f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
+        f"<img src='cid:logo_image' style='width:150px; height:auto; margin-top:10px;' alt='SecuresSecrets Logo'>"
         f"</body>"
         f"</html>"
     )
@@ -927,7 +934,7 @@ def send_secret_email(email, secret_url):
         image = MIMEImage(img_data, name=os.path.basename(logo_path))
         image.add_header('Content-ID', '<logo_image>')
         msg.attach(image)
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         print(f"Logo image not found at path: {logo_path}")
 
     # Send the email via SMTP

@@ -7,38 +7,15 @@ from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, His
 from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, generate_token, send_verification_email, is_safe_url, decrypt_secrets, tokenize_card, create_charge, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import desc
 from datetime import date, datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
-from smtplib import SMTPException
 import os
 import traceback
 
 
 main = Blueprint('main', __name__)
-
-@main.before_request
-def make_session_permanent():
-    session.permanent = True
-    session.modified = True  # Updates the session's last access time
-
-    # Check for session expiration based on inactivity
-    if 'last_activity' in session:
-        now = datetime.now()
-        last_activity = session['last_activity']
-
-        # Convert last_activity to naive datetime
-        if hasattr(last_activity, 'tzinfo') and last_activity.tzinfo is not None:
-            last_activity = last_activity.replace(tzinfo=None)
-
-        if (now - last_activity).total_seconds() > 900:  # 15 minutes
-            session.clear()  # Clear session
-            flash('Your session has ended due to inactivity. Please log in again.')
-            return redirect(url_for('main.login'))  # Redirect to login page
-
-    # Update last activity timestamp
-    session['last_activity'] = datetime.now()
 
 @main.errorhandler(CSRFError)
 def handle_csrf_error(e):
@@ -60,6 +37,39 @@ def clear_flashes(response):
         if 'flash-messages' in response.get_data(as_text=True):
             session.pop('_flashes', None)
     return response
+
+# Add the before_request function
+@main.before_request
+def make_session_permanent():
+    # Skip session handling for specific routes (e.g., login, static files)
+    if request.endpoint in ['main.login', 'static']:
+        return
+
+    # Ensure the session is marked as permanent
+    session.permanent = True
+    session.modified = True
+
+    # Check if 'last_activity' exists in session
+    if 'last_activity' in session:
+        now = datetime.now()
+        last_activity = session['last_activity']
+
+        # Ensure last_activity is naive datetime (remove timezone if exists)
+        if hasattr(last_activity, 'tzinfo') and last_activity.tzinfo is not None:
+            last_activity = last_activity.replace(tzinfo=None)
+
+        # Check for inactivity (15 minutes = 900 seconds)
+        if (now - last_activity).total_seconds() > 900:
+            session.clear()  # Clear session to log the user out
+            flash('Your session has ended due to inactivity. Please log in again.', 'danger')
+            
+            # Signal the frontend about the session end
+            response = redirect(url_for('main.login'))
+            response.set_cookie("sessionEnded", "true")
+            return response  # Redirect to login page
+
+    # Update last activity timestamp to current time
+    session['last_activity'] = datetime.now()
 
 
 # Registeration server @sign-up
@@ -132,7 +142,7 @@ def register():
         form.phone.data = session['form_data'].get('phone')
 
     # No need for the Session timeout in this page
-    session.permanent = False
+    session.permanent = True
 
     return render_template('register.html', form=form, current_user=current_user, show_header=False, show_footer=True)
 
@@ -141,10 +151,10 @@ def register():
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
-    
+
     form = LoginForm()
     # Get next from both GET and POST
-    next_page = request.args.get('next') or request.form.get('next')  
+    next_page = request.args.get('next') or request.form.get('next')
 
     if form.validate_on_submit():
         password = form.password.data
@@ -203,17 +213,12 @@ def login():
             # Ensure secret.period is not None
             if secret.period:
                 # Calculate the new time period based on the period type (days, months, years)
-                if 'd' in secret.period:
-                    time_period = latest_login + timedelta(days=int(secret.period.strip('d')))
-                elif 'm' in secret.period:
-                    time_period = latest_login + relativedelta(months=int(secret.period.strip('m')))
-                elif 'y' in secret.period:
-                    time_period = latest_login + relativedelta(years=int(secret.period.strip('y')))
-                else:
-                    raise ValueError(f"Invalid time period format: {secret.period}")
-                
-                # Update the secret's time period
-                secret.time_period = time_period
+                time_period = latest_login + timedelta(days=int(secret.period))
+            else:
+                raise ValueError(f"Invalid time period format: {secret.period}")
+            
+            # Update the secret's time period
+            secret.time_period = time_period
 
             # Update the associated PublicSecrets share_date
             public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
@@ -462,17 +467,12 @@ def dashboard():
             # Ensure secret.period is not None
             if secret.period:
                 # Calculate the new time period based on the period type (days, months, years)
-                if 'd' in secret.period:
-                    time_period = latest_login + timedelta(days=int(secret.period.strip('d')))
-                elif 'm' in secret.period:
-                    time_period = latest_login + relativedelta(months=int(secret.period.strip('m')))
-                elif 'y' in secret.period:
-                    time_period = latest_login + relativedelta(years=int(secret.period.strip('y')))
-                else:
-                    raise ValueError(f"Invalid time period format: {secret.period}")
-                
-                # Update the secret's time period
-                secret.time_period = time_period
+                time_period = latest_login + timedelta(days=int(secret.period))
+            else:
+                raise ValueError(f"Invalid time period format: {secret.period}")
+            
+            # Update the secret's time period
+            secret.time_period = time_period
 
             # Update the associated PublicSecrets share_date
             public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
@@ -697,16 +697,15 @@ def share():
     email, public, token, time_period, date, time, last_login = None, False, None, None, None, None, None
 
     if form.validate_on_submit():
-        print(form.email_login.data)
         # Determine sharing type
         print("Form submission data:", form.data)
 
         if form.date_period.data:
             sharing_type = "last_login"
-            if not form.email_login.data and not form.public_login.data:
+            if not form.emails_login.data and not form.public_login.data:
                 return jsonify({"success": False, "message": "Email or Public must be selected for Last Login Check."}), 400
 
-            email = form.email_login.data
+            email = form.emails_login.data
             public = form.public_login.data
             date_period = form.date_period.data
 
@@ -723,18 +722,12 @@ def share():
                 return jsonify({"success": False, "message": "Last login time not found."}), 400
 
             # Calculate the time period
-            if 'd' in date_period:
-                time_period = last_login + timedelta(days=int(date_period.strip('d')))
-                message = f"Your secret will be shared after {date_period.replace('d', ' day/s')} from the last login."
-            elif 'm' in date_period:
-                time_period = last_login + relativedelta(months=int(date_period.strip('m')))
-                message = f"Your secret will be shared after {date_period.replace('m', ' month/s')} from the last login."
-            elif 'y' in date_period:
-                time_period = last_login + relativedelta(years=int(date_period.strip('y')))
-                message = f"Your secret will be shared after {date_period.replace('y', ' year/s')} from the last login."
+            if date_period:
+                time_period = last_login + timedelta(days=int(date_period))
+                message = f"Your secret will be shared after {date_period} day/s from the last login."
         elif form.date.data and form.time.data:
             sharing_type = "scheduled"
-            if not form.email_scheduled.data and not form.public_scheduled.data:
+            if not form.emails_scheduled.data and not form.public_scheduled.data:
                 return jsonify({"success": False, "message": "Email or Public must be selected for Scheduled Sharing."}), 400
 
             date = form.date.data
@@ -743,7 +736,7 @@ def share():
                 time = datetime.strptime(time, "%H:%M").time()
             time_str = time.strftime("%H:%M")
 
-            email = form.email_scheduled.data
+            email = form.emails_scheduled.data
             public = form.public_scheduled.data
             message = f"Your secret is scheduled for {date} at {time_str}."
         else:
@@ -771,22 +764,22 @@ def share():
             )
             db.session.add(new_shared_secret)
             db.session.commit()  # Commit to generate ID
-
-            # Add the public secret
-            public_secrets = PublicSecrets(
-                shared_secret_id=new_shared_secret.id,
-                username=current_user.username,
-                title=secret.title,
-                secret=secret.secret,
-                file=secret.file,
-                share_date=(
-                    time_period if sharing_type == "last_login"
-                    else datetime.combine(date, time.time()) if sharing_type == "scheduled"
-                    else None
+            if public:
+                # Add the public secret
+                public_secrets = PublicSecrets(
+                    shared_secret_id=new_shared_secret.id,
+                    username=current_user.username,
+                    title=secret.title,
+                    secret=secret.secret,
+                    file=secret.file,
+                    share_date=(
+                        time_period if sharing_type == "last_login"
+                        else datetime.combine(date, time.time()) if sharing_type == "scheduled"
+                        else None
+                    )
                 )
-            )
-            db.session.add(public_secrets)
-            db.session.commit()
+                db.session.add(public_secrets)
+                db.session.commit()
             flash(message, "success")
             return jsonify(success=True, message=message), 200
 
@@ -800,7 +793,8 @@ def share():
     # Log validation errors
     print("Validation errors:", form.errors)
     flash("Please fix the errors in the form.", "danger")
-    return jsonify(success=False, errors=form.errors), 400
+    errors = {field: error for field, error in form.errors.items()}
+    return jsonify(success=False, errors=errors), 400
 
 
 # The link where that person will read the >>SHARED_SECRET<<
@@ -816,8 +810,8 @@ def only_for_you(token):
             shared_secret.delete_at = now + timedelta(hours=1)
             db.session.commit()
         else:
-            # Check if the current time is past the delete time
-            if now > shared_secret.delete_at:
+            # Check if delete_at is not None and if the current time is past the delete time
+            if shared_secret.delete_at and now > shared_secret.delete_at:
                 # Delete the secret after 1 minute of opening
                 db.session.delete(shared_secret)
                 db.session.commit()
@@ -1335,7 +1329,7 @@ def upgrade_plan():
                 current_user.payment_agreement_id, amount, currency, description
             )
             if payment_response['status'] == 'CAPTURED':
-                flash(f"Upgrading for {plan.plan} succeeded!", "success")
+                flash(f"Plan changed to {plan.plan} successfully!", "success")
                 current_user.subscription_end_date = current_date + timedelta(days=30) if plan.billing_cycle == 'monthly' else current_user.subscription_end_date
                 current_user.subscription_status = "active"
                 current_user.plan_id = plan.id

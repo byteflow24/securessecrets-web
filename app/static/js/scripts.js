@@ -97,6 +97,7 @@ window.addEventListener('DOMContentLoaded', () => {
         .then(response => {
             // Check if the user is unauthorized (session expired)
             if (response.status === 401) {
+                showFlashMessage('Your session has ended due to inactivity. Please log in again.', 'danger')
                 window.location.href = '/';  // Redirect to login page
                 return;  // Stop further processing
             }
@@ -801,13 +802,14 @@ window.addEventListener('DOMContentLoaded', () => {
     function initializeShareButtons() {
         // Add event listener for the share form submission
         document.querySelectorAll('[id^="shareForm-"]').forEach(form => {
-            // Initialize required fields based on the initial state
-            toggleRequiredFields(form);
-            
             form.addEventListener('submit', function (event) {
                 event.preventDefault();
         
-                // Clear previous errors
+                const formError = this.querySelector("#formError");
+                formError.style.display = "none"; // Reset error display
+                formError.textContent = ""; // Clear previous error messages
+        
+                // Clear previous field-specific errors
                 this.querySelectorAll('.validation-error').forEach(el => el.remove());
                 this.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
         
@@ -822,17 +824,28 @@ window.addEventListener('DOMContentLoaded', () => {
                 function addValidationError(input, message) {
                     if (input) {
                         input.classList.add('is-invalid');
-                        const errorDiv = document.createElement('div');
-                        errorDiv.className = 'validation-error text-danger small';
-                        errorDiv.textContent = message;
-                        input.parentNode.appendChild(errorDiv);
+                
+                        // Check if there's already a validation error div
+                        let errorDiv = input.parentNode.querySelector('.validation-error');
+                        if (!errorDiv) {
+                            // Create a new error div if none exists
+                            errorDiv = document.createElement('div');
+                            errorDiv.className = 'validation-error text-danger small mt-1';
+                            input.parentNode.appendChild(errorDiv); // Append it to the parent container
+                        }
+                        errorDiv.textContent = message; // Update the error message
                     }
                 }
         
                 // Validate inputs based on sharing type
-                if (sharingType === "last_login" && (!datePeriodInput || !datePeriodInput.value.trim())) {
-                    isValid = false;
-                    addValidationError(datePeriodInput, "Please set the period for Last Login Check.");
+                if (sharingType === "last_login" && datePeriodInput) {
+                    if (!datePeriodInput.value.trim()) {
+                        isValid = false;
+                        addValidationError(datePeriodInput, "Please provide a period.");
+                    } else if (!/^\d+$/.test(datePeriodInput.value.trim())) {
+                        isValid = false;
+                        addValidationError(datePeriodInput, "The period must contain only numbers.");
+                    }
                 }
         
                 if (sharingType === "scheduled") {
@@ -846,7 +859,11 @@ window.addEventListener('DOMContentLoaded', () => {
                     }
                 }
         
-                if (!isValid) return; // Stop submission if validation fails
+                if (!isValid) {
+                    formError.style.display = "block";
+                    formError.textContent = "Please correct the highlighted errors and try again.";
+                    return; // Stop submission if validation fails
+                }
         
                 // Proceed with submission if valid
                 const url = this.action;
@@ -860,48 +877,52 @@ window.addEventListener('DOMContentLoaded', () => {
                         'X-CSRFToken': csrfToken, // Ensure csrfToken is defined globally or passed correctly
                     },
                 })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            // Show success flash message
-                            showFlashMessage(data.message, 'success');
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Show success flash message
+                        showFlashMessage(data.message, 'success');
         
-                            // Close the modal
-                            closeModal(this);
+                        // Close the modal
+                        closeModal(this);
         
-                            // Optional: Clear form fields
-                            clearModalFields(this);
+                        // Optional: Clear form fields
+                        clearModalFields(this);
+                    } else {
+                        // Show validation or error messages
+                        if (data.errors) {
+                            Object.entries(data.errors).forEach(([field, messages]) => {
+                                const inputElement = this.querySelector(`[name="${field}"]`);
+                                if (inputElement) {
+                                    addValidationError(inputElement, messages.join(', '));
+                                }
+                            });
                         } else {
-                            // Show validation or error messages
-                            if (data.errors) {
-                                Object.entries(data.errors).forEach(([field, messages]) => {
-                                    const inputElement = this.querySelector(`[name="${field}"]`);
-                                    if (inputElement) {
-                                        addValidationError(inputElement, messages.join(', '));
-                                    }
-                                });
-                            } else {
-                                showFlashMessage(data.message || 'An error occurred.', 'danger');
-                            }
+                            formError.style.display = "block";
+                            formError.textContent = data.message || 'An error occurred.';
                         }
-                    })
-                    .catch(error => {
-                        console.error('Error submitting form:', error);
-                        showFlashMessage('An unexpected error occurred.', 'danger');
-                    });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error submitting form:', error);
+                    formError.style.display = "block";
+                    formError.textContent = "An unexpected error occurred.";
+                });
             });
         });
-
-        // Helper function to display error messages
-        function addValidationError(inputElement, errorMessage) {
-            inputElement.classList.add('is-invalid');
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'validation-error text-danger small mt-1';
-            errorDiv.textContent = errorMessage;
         
-            // Add error after input element
-            inputElement.parentNode.insertBefore(errorDiv, inputElement.nextSibling);
-        }
+    
+        // Clear errors and reset form on modal close
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('hidden.bs.modal', function () {
+                const form = this.querySelector('form');
+                if (form) {
+                    form.querySelectorAll('.validation-error').forEach(el => el.remove());
+                    form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+                    form.reset(); // Reset form fields
+                }
+            });
+        });
     
         // Modal opening and closing events
         document.querySelectorAll('.modal').forEach(modal => {
@@ -978,93 +999,92 @@ window.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error initializing share buttons:', error);
         }
-    
+        
         function initializeEmailInput(inputId, containerId, hiddenFieldName) {
             const emailInput = document.getElementById(inputId);
             const emailInputContainer = document.getElementById(containerId);
-        
-            // Check if the container exists
-            if (!emailInputContainer) {
-                console.warn(`Email input container with ID '${containerId}' not found. Skipping initialization.`);
-                return; // Skip the rest of the function
+            
+            // Select the hidden field by name using the form
+            const form = emailInput.closest('form');
+            const hiddenEmailField = form.querySelector(`input[name="${hiddenFieldName}"]`);
+            
+            if (!hiddenEmailField) {
+                console.error(`Hidden field "${hiddenFieldName}" not found in the form.`);
+                return;
             }
         
-            // Hidden field to store email addresses
-            const hiddenEmailField = document.createElement('input');
-            hiddenEmailField.type = 'hidden';
-            hiddenEmailField.name = hiddenFieldName;
-            emailInputContainer.appendChild(hiddenEmailField);
-        
             let emails = [];
-            const maxEmails = 5; // Set the maximum number of emails allowed
+            const maxEmails = 5;
         
-            // Add email on 'Enter' or comma key press
-            emailInput.addEventListener('keydown', function(event) {
+            emailInput.addEventListener('keydown', function (event) {
                 if ((event.key === 'Enter' || event.key === ',') && emailInput.value.trim() !== '') {
                     event.preventDefault();
                     addEmail(emailInput.value.trim());
-                    emailInput.value = '';
+                    emailInput.value = ''; // Clear input field
                 }
             });
         
-            // Add email on input blur (when the field loses focus)
-            emailInput.addEventListener('blur', function() {
-                addEmail(emailInput.value.trim());
-                emailInput.value = '';
+            emailInput.addEventListener('blur', function () {
+                if (emailInput.value.trim() !== '') {
+                    addEmail(emailInput.value.trim());
+                    emailInput.value = ''; // Clear input field
+                }
             });
         
-            // Function to add email
             function addEmail(email) {
-                if (email && !emails.includes(email)) {
-                    if (emails.length >= maxEmails) {
-                        alert(`You can only add up to ${maxEmails} emails.`);
-                        return;
-                    }
-                    if (validateEmail(email)) {
-                        emails.push(email);
-                        updateEmails();
-                        createEmailTag(email);
-        
-                        // Remove placeholder after the first email is added
-                        emailInput.placeholder = '';
-                    } else {
-                        alert("Please enter a valid email address.");
-                    }
+                if (!validateEmail(email)) {
+                    alert("Please enter a valid email address.");
+                    return;
                 }
+                if (emails.includes(email)) {
+                    alert("This email is already added.");
+                    return;
+                }
+                if (emails.length >= maxEmails) {
+                    alert(`You can only add up to ${maxEmails} emails.`);
+                    return;
+                }
+        
+                emails.push(email);
+                updateEmails();
+                createEmailTag(email);
+        
+                // Print the emails list for debugging
+                console.log('Emails list:', emails);
             }
         
-            // Function to create a visual email tag
             function createEmailTag(email) {
                 const tag = document.createElement('span');
-                tag.classList.add('email-tag');
-                tag.innerHTML = `<span>${email}</span><span class="remove-tag" data-email="${email}">&times;</span>`;
+                tag.className = 'email-tag';
+                tag.innerHTML = `
+                    <span>${email}</span>
+                    <span class="remove-tag" data-email="${email}">&times;</span>
+                `;
                 emailInputContainer.insertBefore(tag, emailInput);
         
-                // Remove email on click
-                tag.querySelector('.remove-tag').addEventListener('click', function() {
-                    const emailToRemove = this.getAttribute('data-email');
+                tag.querySelector('.remove-tag').addEventListener('click', function () {
+                    const emailToRemove = this.dataset.email;
                     emails = emails.filter(e => e !== emailToRemove);
-                    updateEmails();
                     tag.remove();
+                    updateEmails();
         
-                    // Restore placeholder if all emails are removed
-                    if (emails.length === 0) {
-                        emailInput.placeholder = "Enter recipient's email/s";
-                    }
+                    // Print the updated emails list after removal
+                    console.log('Updated Emails list:', emails);
                 });
             }
         
-            // Update hidden input with emails array
             function updateEmails() {
-                hiddenEmailField.value = emails.join(','); // Store emails as comma-separated
+                hiddenEmailField.value = emails.join(',');
+        
+                // Log the hidden input value for debugging
+                console.log(`Hidden input "${hiddenFieldName}" value:`, hiddenEmailField.value);
             }
         
-            // Validate email format
             function validateEmail(email) {
                 const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 return re.test(email);
             }
-        }
+        }                        
     
         // Toggle Required Fields Based on Sharing Type
         function toggleRequiredFields(form) {
@@ -1119,11 +1139,12 @@ window.addEventListener('DOMContentLoaded', () => {
     // Upgrade plan event listener
     var confirmUpgradeButton = document.getElementById('confirm-upgrade');
     if (confirmUpgradeButton) {
-        confirmUpgradeButton.addEventListener('click', function() {
+        confirmUpgradeButton.addEventListener('click', function(event) {
             var planSelect = document.getElementById("upgrade-form").querySelector("select[name='plan_id']");
             if (planSelect.value == 0) {
-                alert("Please select a valid plan to upgrade.");
-                return false; // Prevent form submission
+                alert("Please select a valid plan to update.");
+                event.preventDefault(); // Prevent form submission
+                return false; // Optional, stops further propagation
             } else {
                 document.getElementById('upgrade-form').submit();
             }

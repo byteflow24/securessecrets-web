@@ -283,4 +283,35 @@
           </div>
       </div>
     </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            // Check if there's a message to show after login failure
+            const sessionEnded = localStorage.getItem("sessionEnded");
+            if (sessionEnded) {
+                alert("Your session ended due to inactivity. Please log in again.");
+                localStorage.removeItem("sessionEnded");
+            }
+    
+            // Store the next_page value in localStorage if needed
+            const nextPage = new URLSearchParams(window.location.search).get("next");
+            if (nextPage) {
+                localStorage.setItem("nextPage", nextPage);
+            }
+    
+            // Clear sensitive data on logout
+            document.getElementById("logoutButton")?.addEventListener("click", () => {
+                localStorage.removeItem("nextPage");
+                localStorage.removeItem("userData"); // Example if you're storing user data
+            });
+        });
+
+        // After successful login
+        if (localStorage.getItem("nextPage")) {
+            const nextPage = localStorage.getItem("nextPage");
+            localStorage.removeItem("nextPage"); // Clear it to avoid reuse
+            window.location.href = nextPage; // Redirect to the stored next page
+        }
+    </script>
+    
 {% endblock %}

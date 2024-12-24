@@ -9,6 +9,6 @@ class Config:
     MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 16 MB limit
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=15)
 
-    # SERVER_NAME = 'truly-resolution-gardens-io.trycloudflare.com'
+    # SERVER_NAME = 'jan-picnic-exposure-respect.trycloudflare.com '
     # APPLICATION_ROOT = '/'
     # PREFERRED_URL_SCHEME = 'https'

@@ -126,28 +126,15 @@
                 <div class="card-body mb-3">
                     <form id="upgrade-form" method="post" action="{{ url_for('main.upgrade_plan') }}">
                         {{ form.hidden_tag() }}
-                        {% if user.plan_id == plan[-1].id %}
-                            <div class="form-group mb-3">
-                                {{ form.plan_id.label }}
-                                {{ form.plan_id(class="form-control", disabled=true) }}
-                            </div>
-                            
-                            <div class="form-group d-flex justify-content-center w-100">
-                                <button type="button" class="btn btn-secondary" disabled>
-                                    You are on the highest plan
-                                </button>
-                            </div>
-                        {% else %}
-                             <div class="form-group mb-3">
-                                {{ form.plan_id.label }}
-                                {{ form.plan_id(class="form-control") }}
-                             </div>
-                            <div class="form-group d-flex justify-content-center w-100">
-                                <button type="button" class="btn btn-primary btn-block" data-bs-toggle="modal" data-bs-target="#confirmUpgradeModal">
-                                    Upgrade Now
-                                </button>
-                            </div>
-                        {% endif %}                            
+                        <div class="form-group mb-3">
+                            {{ form.plan_id.label }}
+                            {{ form.plan_id(class="form-control") }}
+                        </div>
+                        <div class="form-group d-flex justify-content-center w-100">
+                            <button type="button" class="btn btn-primary btn-block" data-bs-toggle="modal" data-bs-target="#confirmUpgradeModal">
+                                Update Plan Now
+                            </button>
+                        </div>                           
                     </form>
                 </div>
 

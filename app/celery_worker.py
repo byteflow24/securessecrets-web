@@ -6,6 +6,7 @@ from .models import SharedSecret
 from . import db
 from datetime import datetime
 import logging
+import os
 
 
 
@@ -17,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-celery = Celery(__name__, broker='redis://localhost:6379/0')
+celery = Celery(__name__, broker=os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
 
 
 def create_celery_app(app=None):

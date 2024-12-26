@@ -62,4 +62,4 @@ celerybeat-schedule
 celerybeat.pid
 
 # # New additions
-# uploads/*
+uploads/*

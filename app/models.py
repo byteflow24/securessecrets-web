@@ -1,5 +1,5 @@
 from . import db
-from sqlalchemy import Integer, String, ForeignKey, Boolean, DECIMAL, TIMESTAMP, func, Date, Text
+from sqlalchemy import Integer, String, ForeignKey, Boolean, DECIMAL, TIMESTAMP, func, Date, Text, text
 from flask_login import UserMixin
 
 # Users DB
@@ -166,7 +166,7 @@ class PublicSecrets(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     shared_secret_id = db.Column(db.Integer, db.ForeignKey('shared_secrets.id', ondelete='SET NULL'), nullable=True)
-    username = db.Column(String(50), unique=True, nullable=True)
+    username = db.Column(String(50), nullable=True)
     title = db.Column(String(100), nullable=True)
     secret = db.Column(String, nullable=True)
     file = db.Column(String(255), nullable=True)

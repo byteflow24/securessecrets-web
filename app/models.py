@@ -169,7 +169,7 @@ class PublicSecrets(db.Model):
     username = db.Column(String(50), nullable=True)
     title = db.Column(String(100), nullable=True)
     secret = db.Column(String, nullable=True)
-    file = db.Column(String(255), nullable=True)
+    file = db.Column(String, nullable=True)
     share_date = db.Column(TIMESTAMP, nullable=True)
 
     # Optional back-reference

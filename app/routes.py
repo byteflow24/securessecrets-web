@@ -187,6 +187,10 @@ def login():
                 return redirect(next_page)
             
             return redirect(url_for('main.dashboard'))
+        
+    # Get the current date and time
+    current_date = datetime.now().date()
+    current_time = datetime.now().time()
             
     # Fetch the public shared secrets and eager-load user and secret relationships
     shared_secret = db.session.execute(
@@ -205,31 +209,35 @@ def login():
             .limit(1)
         ).scalar_one_or_none()
 
-        # If a recent login exists and it's more recent than the current last_login
-        if latest_login and (not secret.last_login or latest_login > secret.last_login):
-            # Update the last_login to the latest login date
-            secret.last_login = latest_login
+        if secret.public:
+            # Initialize date_time with None
+            date_time = None
+            # If a recent login exists and it's more recent than the current last_login
+            if latest_login and (not secret.last_login or latest_login > secret.last_login):
+                # Update the last_login to the latest login date
+                secret.last_login = latest_login
 
-            # Ensure secret.period is not None
-            if secret.period:
-                # Calculate the new time period based on the period type (days, months, years)
-                time_period = latest_login + timedelta(days=int(secret.period))
-            else:
-                raise ValueError(f"Invalid time period format: {secret.period}")
-            
-            # Update the secret's time period
-            secret.time_period = time_period
+                # Ensure secret.period is not None
+                if secret.period:
+                    try:
+                        # Calculate the new time period based on the period (e.g., days)
+                        time_period = latest_login + timedelta(days=int(secret.period))
+                        secret.time_period = time_period
+                    except ValueError:
+                        # Skip this secret if `period` is invalid
+                        continue
+                elif secret.date_to_send == current_date and secret.time_to_send == current_time:
+                    # Combine date_to_send and time_to_send if they exist
+                    date_time = datetime.combine(secret.date_to_send, secret.time_to_send)
 
-            # Update the associated PublicSecrets share_date
-            public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
-            if public_secret:
-                # If time_period is still valid, update share_date
-                if secret.time_period:
-                    public_secret.share_date = secret.time_period
-        else:
-            # Handle cases where period is None (e.g., skip or log)
-            # print(f"Skipping secret {secret.id} as 'period' is None.")
-            continue
+                # Update the associated PublicSecrets share_date
+                public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
+                if public_secret:
+                    # If time_period is still valid, update share_date
+                    if secret.time_period:
+                        public_secret.share_date = secret.time_period
+                    else:
+                        public_secret.share_date = date_time
 
     # Commit changes to the database
     db.session.commit()
@@ -449,6 +457,8 @@ def dashboard():
         .options(db.joinedload(SharedSecret.user), db.joinedload(SharedSecret.secret))
     ).scalars().all()
 
+    current_date = datetime.now().date()
+    current_time = datetime.now().time()
     # Check if the user logged in recently and update the time period or scheduled date
     for secret in shared_secret:
         # Get the most recent login date for the user
@@ -459,31 +469,36 @@ def dashboard():
             .limit(1)
         ).scalar_one_or_none()
 
-        # If a recent login exists and it's more recent than the current last_login
-        if latest_login and (not secret.last_login or latest_login > secret.last_login):
-            # Update the last_login to the latest login date
-            secret.last_login = latest_login
-
-            # Ensure secret.period is not None
-            if secret.period:
-                # Calculate the new time period based on the period type (days, months, years)
-                time_period = latest_login + timedelta(days=int(secret.period))
-            else:
-                raise ValueError(f"Invalid time period format: {secret.period}")
+        if secret.public:
+            # Initialize date_time with None
+            date_time = None
             
-            # Update the secret's time period
-            secret.time_period = time_period
+            # If a recent login exists and it's more recent than the current last_login
+            if latest_login and (not secret.last_login or latest_login > secret.last_login):
+                # Update the last_login to the latest login date
+                secret.last_login = latest_login
 
-            # Update the associated PublicSecrets share_date
-            public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
-            if public_secret:
-                # If time_period is still valid, update share_date
-                if secret.time_period:
-                    public_secret.share_date = secret.time_period
-        else:
-            # Handle cases where period is None (e.g., skip or log)
-            # print(f"Skipping secret {secret.id} as 'period' is None.")
-            continue
+                # Ensure secret.period is not None
+                if secret.period:
+                    try:
+                        # Calculate the new time period based on the period (e.g., days)
+                        time_period = latest_login + timedelta(days=int(secret.period))
+                        secret.time_period = time_period
+                    except ValueError:
+                        # Skip this secret if `period` is invalid
+                        continue
+                elif secret.date_to_send == current_date and secret.time_to_send == current_time:
+                    # Combine date_to_send and time_to_send if they exist
+                    date_time = datetime.combine(secret.date_to_send, secret.time_to_send)
+
+                # Update the associated PublicSecrets share_date
+                public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
+                if public_secret:
+                    # If time_period is still valid, update share_date
+                    if secret.time_period:
+                        public_secret.share_date = secret.time_period
+                    else:
+                        public_secret.share_date = date_time
 
     # Commit changes to the database
     db.session.commit()

@@ -819,6 +819,13 @@ window.addEventListener('DOMContentLoaded', () => {
                 const timeInput = this.querySelector('input[name="time"]');
         
                 let isValid = true;
+
+                // if (!['last_login', 'scheduled'].includes(sharingType)) {
+                //     console.error("Invalid sharing type detected:", sharingType);
+                //     formError.style.display = "block";
+                //     formError.textContent = "Invalid sharing type selected.";
+                //     return; // Stop processing further
+                // }
         
                 // Helper function to add validation error
                 function addValidationError(input, message) {

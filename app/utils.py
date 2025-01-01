@@ -68,9 +68,12 @@ def subscription_ended():
             if not current_user.is_authenticated:
                 return redirect(url_for('main.login'))  # Redirect to login if not logged in
             
+            # Bypass subscription check for admin
+            if current_user.username == 'admin':
+                return func(*args, **kwargs)  # Allow full access for admin
+            
             # Check if the subscription is valid
             if (
-
                 ((current_user.trial_end_date and current_user.trial_end_date.date() >= current_date) or
                 (current_user.subscription_status == "active" and
                 (current_user.subscription_end_date and current_user.subscription_end_date.date() >= current_date)))
@@ -509,6 +512,10 @@ def trial_end_reminder():
     users = User.query.filter(User.trial_end_date.isnot(None)).all()
     
     for user in users:
+
+        if user.username == 'admin':
+            continue  # Skip processing for admin user
+
         # Ensuring trial_end_date is timezone-aware (assumed UTC)
         trial_end_date = user.trial_end_date
         if trial_end_date.tzinfo is None:
@@ -544,6 +551,10 @@ def not_paied_reminder():
     users = User.query.filter(User.subscription_end_date <= current_date).all()
 
     for user in users:
+        
+        if user.username == 'admin':
+            continue  # Skip processing for admin user
+
         plan = Plan.query.filter_by(id=user.plan_id).first()
         if user.subscription_end_date:
             if user.subscription_end_date.tzinfo is None:

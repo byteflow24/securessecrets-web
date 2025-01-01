@@ -57,6 +57,36 @@ def require_pricing_session():
         return decorated_function
     return decorator
 
+# Decorator to restrict access to dashboard and payment pages if the user's subscription or trial has ended
+def subscription_ended():
+    def decorator(func):
+        @wraps(func)
+        def decorated_function(*args, **kwargs):
+            current_date = datetime.now(timezone.utc).date()
+            
+            # Check if the user is logged in
+            if not current_user.is_authenticated:
+                return redirect(url_for('main.login'))  # Redirect to login if not logged in
+            
+            # Check if the subscription is valid
+            if (
+
+                ((current_user.trial_end_date and current_user.trial_end_date.date() >= current_date) or
+                (current_user.subscription_status == "active" and
+                (current_user.subscription_end_date and current_user.subscription_end_date.date() >= current_date)))
+            ):
+                # If the subscription is active, allow full access
+                return func(*args, **kwargs)
+            
+            # If the subscription has ended, restrict access to certain routes
+            if func.__name__ not in ('main.dashboard', 'main.payment'):
+                return redirect(url_for('main.dashboard'))  # Redirect to dashboard for restricted users
+            
+            return func(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
 # Mention this step at all_secrets server
 def decrypt_secrets(user_secrets):
     """Decrypt secrets for a given list of secrets."""
@@ -139,31 +169,43 @@ def populate_plan_choices(form, user):
 
 # Comprehensive list of common email domains and TLDs
 ALLOWED_DOMAINS = {
-    "gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "icloud.com", "aol.com",
-    "live.com", "msn.com", "comcast.net", "yandex.com", "mail.ru", "protonmail.com",
-    "zoho.com", "gmx.com", "fastmail.com", "yahoo.co.uk", "hotmail.co.uk"
+    "gmail", "hotmail", "outlook", "yahoo", "icloud", "aol",
+    "live", "msn", "comcast", "yandex", "mail", "protonmail",
+    "zoho", "gmx", "fastmail"
 }
 
 ALLOWED_TLDS = {".com", ".net", ".org", ".edu", ".gov", ".mil", ".qa", ".fr", ".de", ".uk", ".ca", ".us"}
 
-# Define the custom email validator
+
 def email_domain_validator(form, field):
-    email = field.data.lower()
-    domain_pattern = r'^[a-zA-Z0-9_.+-]+@([a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)$'
+    """
+    Validates email addresses to ensure they are from allowed domains and have allowed TLDs.
+    """
+    # Regex for extracting email domain
+    domain_pattern = r'^[a-zA-Z0-9_.+-]+@([a-zA-Z0-9-]+)\.([a-zA-Z]+)$'
     
-    match = re.match(domain_pattern, email)
-    if match:
-        domain = match.group(1)
-        domain_name, tld = domain.rsplit('.', 1)
-        tld = f".{tld}"
+    # Split the input into individual emails
+    emails = [email.strip().lower() for email in field.data.split(',') if email.strip()]
+
+    # Check the number of emails
+    if not (1 <= len(emails) <= 5):
+        raise ValidationError("You must provide between 1 and 5 email addresses.")
+    
+    # Validate each email individually
+    for email in emails:
+        match = re.match(domain_pattern, email)
+        if not match:
+            raise ValidationError(f"'{email}' is not a valid email address.")
         
-        if domain not in ALLOWED_DOMAINS or tld not in ALLOWED_TLDS:
+        domain_name = match.group(1)  # Extract the domain name (e.g., 'gmail')
+        tld = f".{match.group(2)}"   # Extract the TLD (e.g., '.com')
+        
+        # Check if domain and TLD are allowed
+        if domain_name not in ALLOWED_DOMAINS or tld not in ALLOWED_TLDS:
             raise ValidationError(
-                "Email must be from a common provider like Gmail, Hotmail, Outlook, or Yahoo, "
-                "and end with .com, .net, .org, etc."
+                f"'{email}' must be from an allowed domain like Gmail, Yahoo, Outlook, etc., "
+                f"and end with a common TLD such as .com, .net, or .org."
             )
-    else:
-        raise ValidationError("Invalid email format.")
 
 # ensure the field accepts only numbers between 1 and 360
 def validate_period(form, field):
@@ -173,6 +215,25 @@ def validate_period(form, field):
     if value < 1 or value > 360:
         raise ValidationError("Period must be number/s from 1 to 360.")
 
+# Ensure the date is today or in future
+def is_future_date_or_today(form, field):
+    """Validator to check if the selected date is today or in the future."""
+    if field.data:
+        selected_date = field.data
+        today_date = datetime.today().date()
+        if selected_date < today_date:
+            raise ValidationError("The selected date cannot be in the past.")
+
+# Ensure the time is today and in future
+def is_future_time_today(form, field):
+    """Validator to check if the selected time is today but not in the future."""
+    if field.data:
+        selected_time = field.data.time().replace(second=0, microsecond=0)  # Remove seconds and microseconds
+        current_time = datetime.now().time().replace(second=0, microsecond=0)  # Remove seconds and microseconds # Get only the time part (ignore the date)
+        
+        # Check if the selected time is in the future compared to the current time
+        if selected_time < current_time:
+            raise ValidationError("The selected time cannot be in the future.")
 
 # Configures Tap payment
 # API_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
@@ -470,9 +531,9 @@ def trial_end_reminder():
             email_reminder(user.email, user.username, formatted_trial_end_date, reminder_type="trial_week")
         elif days_difference == 1:
             email_reminder(user.email, user.username, formatted_trial_end_date, reminder_type="trial_day")
-        elif days_difference == 0:
+        elif days_difference <= 0:
             # When the trial ends, reset the trial_end_date to None
-            user.trial_end_date = None
+            user.trial_end_date = current_date
             db.session.commit()
 
 
@@ -499,7 +560,7 @@ def not_paied_reminder():
             if days_left in [-5, -3, -7]:
                 days_left = abs(days_left)
 
-            print(days_left)
+            logger.info(days_left)
 
             if days_left in [5, 3, 1]:  # Send reminders at 5, 3, and 1 day left
                 reminder_to_pay_email(user.username, user.email, plan.plan, days_left)
@@ -597,8 +658,7 @@ def email_reminder(email, username, trial_end_date, reminder_type):
             f"<body>"
             f"<h2>Hi {username},</h2>"
             f"<p>We hope you're enjoying your experience with SecuresSecrets!<p><br>"
-            f"<p>This is a friendly reminder that your free trial will end in 1 week, on {trial_end_date}.</p>"
-            f"<p>After the trial ends, your plan will automatically upgrade to a paid subscription so you can continue enjoying our service without interruption.</p><br>"
+            f"<p>This is a friendly reminder that your free trial will end in 1 week, on {trial_end_date}.</p><br>"
             f"<p>Best regards,</p>"
             f"<p>The SecuresSecrets Team</p>"
             f"<div style='padding-left: 30px;'>"
@@ -615,7 +675,7 @@ def email_reminder(email, username, trial_end_date, reminder_type):
             f"<body>"
             f"<h2>Hi {username},</h2>"
             f"<p>We wanted to remind you that your free trial with SecuresSecrets will end tomorrow, on {trial_end_date}.</p>"
-            f"<p>Your plan will automatically upgrade to a paid subscription so you can continue using all the features seamlessly.</p><br>"
+            f"<p>Please pay your plan so you can continue using all the features seamlessly.</p><br>"
             f"<p>Best regards,</p>"
             f"<p>The SecuresSecrets Team</p>"
             f"<div style='padding-left: 30px;'>"
@@ -739,7 +799,7 @@ def send_payment_email(email, username, plan_name, payment_amount, payment_date,
     if subscription_type == "new":
         msg['Subject'] = Header(f'{plan_name} Plan SecuresSecrets!', 'utf-8')
         unique_content = (
-            f"<p>Welcome to SecuresSecrets! We're thrilled to have you with us.</p>"
+            f"<p>Welcome to SecuresSecrets! We're happy to have you with us.</p>"
             f"<p>Your new subscription has been successfully activated, and you're all set to enjoy your plan's features.</p>"
         )
     elif subscription_type == "upgrade":
@@ -926,7 +986,7 @@ def send_secret_email(email, secret_url):
     )
     msg.attach(MIMEText(body, 'html'))
 
-    # Add the logo image to the email
+    # Add inline logo image
     logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.png')
     try:
         with open(logo_path, "rb") as img:
@@ -949,4 +1009,57 @@ def send_secret_email(email, secret_url):
     except Exception as e:
         print(f"An unexpected error occurred while sending email to {email}: {str(e)}")
         raise  # Re-raise the exception to be handled by Celery
+
+# contact us email
+def contact_email(name, email, phone, message):
+    # Set up message
+    msg = MIMEMultipart("related")
+    msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
+    msg['To'] = email
+    msg['Subject'] = Header('Thank You for Reaching Out!', 'utf-8')
+
+    # Construct body
+    body = (
+        f"<html>"
+        f"<body style='font-family: Arial, sans-serif; color: #333;'>"
+        f"<p>Dear {name},</p>"
+        f"<p>Thank you for contacting SecuresSecrets! We have received your message and appreciate you reaching out to us.</p>"
+        f"<h3>Your Contact Details</h3>"
+        f"<ul>"
+        f"<li><strong>Name:</strong> {name}</li>"
+        f"<li><strong>Email:</strong> {email}</li>"
+        f"<li><strong>Phone:</strong> {phone}</li>"
+        f"</ul>"
+        f"<h3>Your Message</h3>"
+        f"<p>{message}</p>"
+        f"<p>We will review your message and get back to you as soon as possible. If you have any additional questions or need immediate assistance, please reply to this email or reach out to our support team.</p>"
+        f"<p>Best regards,<br>The SecuresSecrets Team</p>"
+        f"<img src='cid:logo_image' style='width:150px; height:auto; margin-top:10px;' alt='SecuresSecrets Logo'>"
+        f"</body>"
+        f"</html>"
+    )
+
+    msg.attach(MIMEText(body, 'html'))
+
+    # Add inline logo image
+    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.png')
+    try:
+        with open(logo_path, "rb") as img:
+            img_data = img.read()
+        image = MIMEImage(img_data, name=os.path.basename(logo_path))
+        image.add_header('Content-ID', '<logo_image>')
+        msg.attach(image)
+    except FileNotFoundError:
+        print(f"Logo image not found at path: {logo_path}")
+
+    # Send email
+    try:
+        with smtplib.SMTP(SERVER, PORT) as connection:
+            connection.starttls()
+            connection.login(EMAIL, PSWD)
+            connection.send_message(msg)
+    except smtplib.SMTPException as e:
+        print(f"Failed to send email to {email}. SMTP error: {str(e)}")
+    except Exception as e:
+        print(f"An unexpected error occurred while sending email to {email}: {str(e)}")
 

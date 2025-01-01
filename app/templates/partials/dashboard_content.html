@@ -185,7 +185,7 @@
                         <p><strong>Username:</strong> {{ current_user.username }}</p>
                         <p><strong>Total Secrets:</strong> {{ secrets }}</p>
                         <p><strong>Plan:</strong> {{ current_user.plan.plan }}</p>
-                        <p><strong>Plan Expiry:</strong> {{ current_user.subscription_end_date.strftime('%Y-%m-%d') }}</p>
+                        <p><strong>Plan Expiry:</strong> {{ current_user.subscription_end_date.strftime('%Y-%m-%d') if current_user.subscription_end_date else 'Inactive' }}</p>
                         <p><strong>Last Login:</strong> {{ last_login.login_time }}</p>
                         <p class="form-label"><strong>Storage Usage:</strong></p>
                         <div class="progress" style="height: 20px; border-radius: 10px; overflow: hidden;">

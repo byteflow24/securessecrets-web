@@ -41,7 +41,7 @@ def create_celery_app(app=None):
         },
         'trial-end-reminder-daily': {
             'task': 'app.celery_worker.trial_end_reminder_task',
-            'schedule': crontab(hour=6, minute=0), 
+            'schedule': crontab(hour=6, minute=0), #hour=6, minute=0 / only minute='*'
         },
         'not-paid-reminder-daily': {
             'task': 'app.celery_worker.not_paied_reminder_task',
@@ -78,8 +78,12 @@ def send_email_task(email, token):
     with current_app.app_context():
         secret_url = url_for('main.only_for_you', token=token, _external=True)
 
+    # Clean the email by stripping curly braces and any extra spaces
+    clean_email = email.strip("{}").strip()  # Strip both curly braces and extra spaces
+    logger.info(f"Sending email to: {clean_email}, Secret URL: {secret_url}")
+
     # Call the email sending function
-    send_secret_email(email, secret_url)
+    send_secret_email(clean_email, secret_url)
 
 
 @shared_task
@@ -92,8 +96,13 @@ def check_scheduled_secrets():
     ).all()
 
     for secret in scheduled_secrets:
-        # Send the email using the task you already have
-        send_email_task.apply_async(args=[secret.email, secret.token])
+        # Split emails if multiple, strip curly braces and spaces for each
+        email_list = [email.strip("{}").strip() for email in secret.email.split(",")]
+        
+        for email in email_list:
+            # Send each email using the task
+            send_email_task.apply_async(args=[email, secret.token])
+
         secret.received = True  # Mark it as sent
         db.session.commit()
 

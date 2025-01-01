@@ -100,7 +100,7 @@
                                     <input type="text" 
                                         class="form-control bg-light" 
                                         id="plan_expiry" 
-                                        value="{{ current_user.subscription_end_date.strftime('%Y-%m-%d') }}" 
+                                        value="{{ current_user.subscription_end_date.strftime('%Y-%m-%d') if current_user.subscription_end_date else 'None'}}" 
                                         readonly>
                                 </div>
                             </div>

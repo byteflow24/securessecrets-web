@@ -2,12 +2,12 @@ from flask import Blueprint, render_template, redirect, url_for, send_from_direc
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFError
 from . import db
-from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, CardDetailsForm
+from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, CardDetailsForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, HistoryPayment, PublicSecrets
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, generate_token, send_verification_email, is_safe_url, decrypt_secrets, tokenize_card, create_charge, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, generate_token, send_verification_email, is_safe_url, decrypt_secrets, tokenize_card, create_charge, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email, contact_email
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc
 from datetime import date, datetime, timedelta, timezone
@@ -346,11 +346,12 @@ def reset_password():
 # Setting the profile
 @main.route('/profile', methods=['GET', 'POST'])
 @login_required
+@subscription_ended()
 def update_profile():
     secret_form = SecretForm()
     # If the user is not authenticated (session expired), return 401
     if not current_user.is_authenticated:
-        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
+        return jsonify({"error": "Unauthorized", "message": "Your session has expired. Please log in again."}), 401  # Explicitly return 401 status for AJAX
     
     pr_form = ProfileForm(obj=current_user)
     login = LoginHistory.query.filter_by(user_id=current_user.id).all()
@@ -372,6 +373,7 @@ def update_profile():
 # Pagination for the login history
 @main.route('/api/login-history', methods=['GET'])
 @login_required
+@subscription_ended()
 def api_login_history():
     # Get the page number from the request, default to 1
     page = request.args.get('page', 1, type=int)
@@ -407,11 +409,9 @@ def api_login_history():
 # Update password
 @main.route('/change-password', methods=['POST'])
 @login_required
+@subscription_ended()
 def change_password():
-    # If the user is not authenticated (session expired), return 401
-    if not current_user.is_authenticated:
-        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
-    
+
     pr_form = ProfileForm(obj=current_user)
     ps_form = ChangePasswordForm(request.form)
     secret_form = SecretForm()
@@ -448,7 +448,7 @@ def dashboard():
     secret_form = SecretForm()
     # If the user is not authenticated (session expired), return 401
     if not current_user.is_authenticated:
-        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
+        return jsonify({"error": "Unauthorized", "message": "Your session has expired. Please log in again."}), 401  # Explicitly return 401 status for AJAX
     
     # counting secrets for each user
     secrets = Secret.query.filter_by(user_id=current_user.id).count()
@@ -554,9 +554,13 @@ def dashboard():
 # List of all secerts for the user 
 @main.route('/all-secrets', methods=['GET', 'POST'])
 @login_required
+@subscription_ended()
 def all_secrets():
+
+    # If the user is not authenticated (session expired), return 401
     if not current_user.is_authenticated:
-        return jsonify(error = "Unauthorized"), 401
+        flash('Your session has expired. Please log in again.', 'danger')
+        return redirect(url_for('main.login')), 401  # Explicitly return 401 status for AJAX
 
     form = SearchForm()
     share_form = ShareForm()
@@ -613,6 +617,7 @@ def search_secrets():
 
 # New secret popup
 @main.route('/add-secret', methods=['POST'])
+@subscription_ended()
 def add_secret():
     form = SecretForm()
 
@@ -720,14 +725,16 @@ def share():
     email, public, token, time_period, date, time, last_login = None, False, None, None, None, None, None
 
     if form.validate_on_submit():
+        print("Form submission data:", form.data)
         # Determine sharing type
-
+        login_emails = [email.strip() for email in form.email_login.data.split(',') if email.strip()]
+        scheduled_emails = [email.strip() for email in form.email_scheduled.data.split(',') if email.strip()]
         if form.date_period.data:
             sharing_type = "last_login"
-            if not form.emails_login.data and not form.public_login.data:
+            if not login_emails and not form.public_login.data:
                 return jsonify({"success": False, "message": "Email or Public must be selected for Last Login Check."}), 400
 
-            email = form.emails_login.data
+            email = login_emails
             public = form.public_login.data
             date_period = form.date_period.data
 
@@ -749,7 +756,7 @@ def share():
                 message = f"Your secret will be shared after {date_period} day/s from the last login."
         elif form.date.data and form.time.data:
             sharing_type = "scheduled"
-            if not form.emails_scheduled.data and not form.public_scheduled.data:
+            if not scheduled_emails and not form.public_scheduled.data:
                 return jsonify({"success": False, "message": "Email or Public must be selected for Scheduled Sharing."}), 400
 
             date = form.date.data
@@ -758,14 +765,13 @@ def share():
                 time = datetime.strptime(time, "%H:%M").time()
             time_str = time.strftime("%H:%M")
 
-            email = form.emails_scheduled.data
+            email = scheduled_emails
             public = form.public_scheduled.data
             message = f"Your secret is scheduled for {date} at {time_str}."
         else:
             return jsonify({"success": False, "message": "Invalid sharing type or missing fields!"}), 400
 
         # Create and save the shared secret
-        print("Form submission data:", form.data)
         try:
             token = generate_token()
             secret = Secret.query.filter_by(id=request.args.get("secret_id")).first()
@@ -779,11 +785,12 @@ def share():
                 last_login=last_login if sharing_type == "last_login" else None,
                 period=date_period if sharing_type == "last_login" else None,
                 time_period=time_period if sharing_type == "last_login" else None,
+                public_delete_confirm=form.public_confirm_deletion.data if sharing_type == "last_login" else False,
                 token=token,
                 date_to_send=date if sharing_type == "scheduled" else None,
                 time_to_send=time_str if sharing_type == "scheduled" else None,
                 received=False,
-                delete_confirmed=form.confirm_deletion.data if sharing_type == "scheduled" else False,
+                schedule_delete_confirm=form.scheduled_confirm_deletion.data if sharing_type == "scheduled" else False,
             )
             db.session.add(new_shared_secret)
             db.session.commit()  # Commit to generate ID
@@ -868,9 +875,6 @@ def only_for_you(token):
 @main.route('/delete/<int:sec_id>', methods=['GET', 'POST'])
 @login_required
 def delete_secret(sec_id):
-    # If the user is not authenticated (session expired), return 401
-    if not current_user.is_authenticated:
-        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
     
     try:
         secret = db.get_or_404(Secret, sec_id)
@@ -914,31 +918,38 @@ def delete_secret(sec_id):
 @main.route('/delete-account/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def delete_account(user_id):
-    # If the user is not authenticated (session expired), return 401
-    if not current_user.is_authenticated:
-        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
     
     user = User.query.get(user_id)
-
     if user is None or user.id != current_user.id:
         flash("User not found or unauthorized action.", "danger")
         return redirect(url_for('main.update_profile'))
     
-    # Only proceed if the user confirms deletion (no need for form submission now)
-    logout_user()
-    db.session.delete(user)
-    db.session.commit()
-    flash("Your account has been deleted. We're sad to see you leave ☹️.", "success")
-    return redirect(url_for('main.login'))
+    try:
+        # Optionally, handle deleting related records if necessary, for example:
+        # db.session.query(SharedSecret).filter_by(user_id=user.id).delete()
+        # db.session.query(Post).filter_by(user_id=user.id).delete()
+        
+        # Delete the user account
+        db.session.delete(user)
+        db.session.commit()
+        # Log out the user before deletion
+        logout_user()
+
+        flash("Your account has been deleted. We're sad to see you leave ☹️.", "success")
+        return redirect(url_for('main.login'))
+    
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        flash("An error occurred while deleting your account. Please try again.", "danger")
+        print(e)
+        return redirect(url_for('main.update_profile'))
 
 
 # Editing secret
 @main.route('/update-secret/<int:secret_id>', methods=['POST'])
 @login_required
 def update_secret(secret_id):
-    if not current_user.is_authenticated:
-        return jsonify({"error": "Unauthorized"}), 401
-
+    
     form = SecretForm()
     secret = db.get_or_404(Secret, secret_id)
 
@@ -1051,14 +1062,14 @@ def pricing():
 def payment():
     # If the user is not authenticated (session expired), return 401
     if not current_user.is_authenticated:
-        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
+        return jsonify({"error": "Unauthorized", "message": "Your session has expired. Please log in again."}), 401  # Explicitly return 401 status for AJAX
     
     form = CardDetailsForm()
     plan_id = current_user.plan_id
     plan = db.get_or_404(Plan, plan_id)
     amount = plan.price
     currency = plan.currency
-    description = "new"
+    description = current_user.status if current_user.status == "new" else "renewal"
     if form.validate_on_submit():
         card = form.card_number.data
         ex_month, ex_year = form.exp_date.data.split('/')
@@ -1146,22 +1157,20 @@ def payment_complete():
                         authorization_id=charge_details['transaction']['authorization_id']
                     )
 
-                    # Save subscription details
-                    # if not user.trial_end_date or user.trial_end_date.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
-                    #     user.trial_start_date = datetime.now(timezone.utc)
-                    #     user.trial_end_date = datetime.now(timezone.utc) + timedelta(days=14)
-                    #     user.subscription_start_date = user.trial_end_date + timedelta(days=1)
-                    #     user.subscription_end_date = user.subscription_start_date + timedelta(days=30)
-                    # else:
-                    #     user.subscription_start_date = datetime.now(timezone.utc)
-                    #     user.subscription_end_date = user.subscription_start_date + timedelta(days=30)
-
                     user.subscription_status = "active"
                     user.customer_id = charge_details['customer']['id']
                     user.card_id = charge_details['card']['id']
 
+                    current_date = datetime.now(timezone.utc)
+
                     if 'payment_agreement' in charge_details:
                         user.payment_agreement_id = charge_details['payment_agreement']['id']
+
+                    user.subscription_start_date = current_date
+                    user.subscription_end_date = current_date + timedelta(days=29) if plan.billing_cycle == 'monthly' else user.subscription_end_date
+                    user.subscription_status = "active"
+                    if current_user.status == "new":
+                        user.status = None
 
                     # Add payment and history payment records to the session
                     db.session.add(new_payment)
@@ -1169,9 +1178,9 @@ def payment_complete():
                     db.session.flush()  # This prepares the session without committing
                     db.session.commit()
 
-                    description = charge_details.get("description", "renewal")
+                    description = charge_details.get("description")
                     if description == "new":
-                        send_payment_email(user.email, user.username, plan.plan, plan.price, user.subscription_start_date, "upgrade", charge_details['card']['brand'], charge_details['card']['last_four'])
+                        send_payment_email(user.email, user.username, plan.plan, plan.price, user.subscription_start_date, description, charge_details['card']['brand'], charge_details['card']['last_four'])
                         flash("Your plan has been successfully paid.", "success")
                     elif description == "upgrade":
                         send_payment_email(user.email, user.username, plan.plan, plan.price, user.subscription_start_date, "upgrade", charge_details['card']['brand'], charge_details['card']['last_four'])
@@ -1202,15 +1211,12 @@ def confirm_email(token):
     else:
         user.is_confirmed = True
         user.email_token = None  # Remove the token after confirmation
+        user.status = 'new'
         # Save subscription details
         if not user.trial_end_date or user.trial_end_date.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
             user.trial_start_date = datetime.now(timezone.utc)
-            user.trial_end_date = datetime.now(timezone.utc) + timedelta(days=14)
-            user.subscription_start_date = user.trial_end_date + timedelta(days=1)
-            user.subscription_end_date = user.subscription_start_date + timedelta(days=30)
-        # else:
-        #     user.subscription_start_date = datetime.now(timezone.utc)
-        #     user.subscription_end_date = user.subscription_start_date + timedelta(days=30)
+            user.trial_end_date = datetime.now(timezone.utc) + timedelta(days=13)
+
         db.session.commit()
         logout_user()
         flash('Your email has been verified, login now', 'success')
@@ -1250,10 +1256,8 @@ def resend_verification():
 # Billing page
 @main.route('/billing', methods=['GET'])
 @login_required
+@subscription_ended()
 def billing():
-    # If the user is not authenticated (session expired), return 401
-    if not current_user.is_authenticated:
-        return jsonify({"error": "Unauthorized"}), 401  # Explicitly return 401 status for AJAX
     
     secret_form = SecretForm()
     form = PlanUpgradeForm()
@@ -1273,6 +1277,7 @@ def billing():
 # to pay the plan if still not paid
 @main.route('/pay_now', methods=['POST'])
 @login_required
+@subscription_ended()
 def pay_now():
     payment_method = request.form.get('payment_method')
     current_date = datetime.now(timezone.utc)
@@ -1282,7 +1287,7 @@ def pay_now():
         user_plan = db.get_or_404(Plan, current_user.plan_id)
         amount = user_plan.price
         currency = user_plan.currency
-        description = "renewal"
+        description = current_user.status if current_user.status == "new" else "renewal"
 
         try:
             if payment_method == 'saved_card':
@@ -1309,8 +1314,11 @@ def pay_now():
 
             if payment_response['status'] == 'CAPTURED':
                 flash("Payment was successful!", "success")
-                current_user.subscription_end_date = current_date + timedelta(days=30) if user_plan.billing_cycle == 'monthly' else current_user.subscription_end_date
+                current_user.subscription_start_date = current_date
+                current_user.subscription_end_date = current_date + timedelta(days=29) if user_plan.billing_cycle == 'monthly' else current_user.subscription_end_date
                 current_user.subscription_status = "active"
+                if current_user.status == "new":
+                    current_user.status = None
                 db.session.add(history)
                 db.session.commit()
                 send_payment_email(current_user.email, current_user.username, user_plan.plan, amount, date_email, 'renewal', payment_response['card']['brand'],payment_response['card']['last_four'])
@@ -1326,6 +1334,7 @@ def pay_now():
 # Upgrading plan
 @main.route('/upgrade-plan', methods=['POST'])
 @login_required
+@subscription_ended()
 def upgrade_plan():
     form = PlanUpgradeForm()
     current_date = datetime.now(timezone.utc)
@@ -1432,11 +1441,10 @@ def download_file(filename):
         flash(f"Error downloading file: {str(e)}", "danger")
         return abort(500)
 
-
 @main.route('/terms-of-services')
 def terms():
-    return render_template('terms.html', show_header=True, show_footer=True)
-
+    secret_form = SecretForm()
+    return render_template('terms.html', secret_form=secret_form, show_header=True, show_footer=True)
 
 @main.route('/about-us')
 def about():
@@ -1445,20 +1453,29 @@ def about():
         return render_template('partials/about_content.html', secret_form=secret_form)
     return render_template('about.html', secret_form=secret_form, show_header=True, show_footer=True)
 
-
-@main.route('/contact-us')
+@main.route('/contact-us', methods=['GET' ,'POST'])
 def contact():
     secret_form = SecretForm()
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/contact_content.html', secret_form=secret_form)
-    return render_template('contact.html', secret_form=secret_form, show_header=True, show_footer=True)
+    form = ContactUsForm()
+    if form.validate_on_submit():
+        data = form.data
+        print("Form submitted successfully:", data)
+        try:
+            contact_email(data["name"], data["email"], data["phone"], data["message"])
+            flash('Your message has been sent successfully!', 'success')
+            return redirect(url_for('main.contact'))
+        except Exception as e:
+            print(f"Error sending email: {e}")
+            flash('An error occurred while sending your message. Please try again.', 'danger')
 
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('partials/contact_content.html', form=form, secret_form=secret_form)
+    return render_template('contact.html', form=form, secret_form=secret_form, show_header=True, show_footer=True)
 
 @main.route('/privacy-policy')
 def privacy():
     secret_form = SecretForm()
     return render_template('privacy.html', secret_form=secret_form, show_header=True, show_footer=True)
-
 
 @main.route('/cookie-policy')
 def cookie():

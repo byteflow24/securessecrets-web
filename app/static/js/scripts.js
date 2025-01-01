@@ -813,58 +813,38 @@ window.addEventListener('DOMContentLoaded', () => {
                 this.querySelectorAll('.validation-error').forEach(el => el.remove());
                 this.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
         
-                const sharingType = this.querySelector('input[name="sharing_type"]').value;
+                const sharingTypeField = this.querySelector('input[name="sharing_type"]');
                 const datePeriodInput = this.querySelector('input[name="date_period"]');
                 const dateInput = this.querySelector('input[name="date"]');
                 const timeInput = this.querySelector('input[name="time"]');
         
-                let isValid = true;
-
-                // if (!['last_login', 'scheduled'].includes(sharingType)) {
-                //     console.error("Invalid sharing type detected:", sharingType);
-                //     formError.style.display = "block";
-                //     formError.textContent = "Invalid sharing type selected.";
-                //     return; // Stop processing further
-                // }
-        
-                // Helper function to add validation error
-                function addValidationError(input, message) {
-                    if (input) {
-                        input.classList.add('is-invalid');
-                
-                        // Check if there's already a validation error div
-                        let errorDiv = input.parentNode.querySelector('.validation-error');
-                        if (!errorDiv) {
-                            // Create a new error div if none exists
-                            errorDiv = document.createElement('div');
-                            errorDiv.className = 'validation-error text-danger small mt-1';
-                            input.parentNode.appendChild(errorDiv); // Append it to the parent container
-                        }
-                        errorDiv.textContent = message; // Update the error message
-                    }
+                // Determine and set the sharing_type
+                if (datePeriodInput && datePeriodInput.value.trim()) {
+                    sharingTypeField.value = "last_login";
+                } else if (dateInput && dateInput.value.trim() && timeInput && timeInput.value.trim()) {
+                    sharingTypeField.value = "scheduled";
+                } else {
+                    console.error("Could not determine sharing type.");
+                    formError.style.display = "block";
+                    formError.textContent = "Please specify a valid sharing type.";
+                    return; // Stop submission
                 }
         
                 // Validate inputs based on sharing type
-                if (sharingType === "last_login" && datePeriodInput) {
-                    if (!datePeriodInput.value.trim()) {
-                        isValid = false;
-                        addValidationError(datePeriodInput, "Please provide a period.");
-                    } else if (!/^\d+$/.test(datePeriodInput.value.trim())) {
-                        isValid = false;
-                        addValidationError(datePeriodInput, "The period must contain only numbers.");
-                    }
-                }
+                let isValid = true;
         
-                if (sharingType === "scheduled") {
-                    if (!dateInput || !dateInput.value.trim()) {
-                        isValid = false;
-                        addValidationError(dateInput, "Please specify a date.");
+                function addValidationError(input, message) {
+                    if (input) {
+                        input.classList.add('is-invalid');
+                        let errorDiv = input.parentNode.querySelector('.validation-error');
+                        if (!errorDiv) {
+                            errorDiv = document.createElement('div');
+                            errorDiv.className = 'validation-error text-danger small mt-1';
+                            input.parentNode.appendChild(errorDiv);
+                        }
+                        errorDiv.textContent = message;
                     }
-                    if (!timeInput || !timeInput.value.trim()) {
-                        isValid = false;
-                        addValidationError(timeInput, "Please specify a time.");
-                    }
-                }
+                }                
         
                 if (!isValid) {
                     formError.style.display = "block";
@@ -896,7 +876,6 @@ window.addEventListener('DOMContentLoaded', () => {
                         // Optional: Clear form fields
                         clearModalFields(this);
                     } else {
-                        // Show validation or error messages
                         if (data.errors) {
                             Object.entries(data.errors).forEach(([field, messages]) => {
                                 const inputElement = this.querySelector(`[name="${field}"]`);
@@ -916,7 +895,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     formError.textContent = "An unexpected error occurred.";
                 });
             });
-        });
+        });        
         
     
         // Clear errors and reset form on modal close
@@ -925,6 +904,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 const form = this.querySelector('form');
                 if (form) {
                     form.querySelectorAll('.validation-error').forEach(el => el.remove());
+                    form.querySelectorAll('#formError').forEach(el => el.remove());
                     form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
                     form.reset(); // Reset form fields
                 }
@@ -999,99 +979,7 @@ window.addEventListener('DOMContentLoaded', () => {
             if (backdrop) backdrop.remove(); // Remove the backdrop
         }
     
-        // Email preparation for emailLogin
-        try {
-            initializeEmailInput('emailLogin', 'emailLoginContainer', 'emails_login');
-            initializeEmailInput('emailScheduled', 'emailScheduledContainer', 'emails_scheduled');
-        } catch (error) {
-            console.error('Error initializing share buttons:', error);
-        }
-        
-        function initializeEmailInput(inputId, containerId, hiddenFieldName) {
-            const emailInput = document.getElementById(inputId);
-            const emailInputContainer = document.getElementById(containerId);
-            
-            // Select the hidden field by name using the form
-            const form = emailInput.closest('form');
-            const hiddenEmailField = form.querySelector(`input[name="${hiddenFieldName}"]`);
-            
-            if (!hiddenEmailField) {
-                console.error(`Hidden field "${hiddenFieldName}" not found in the form.`);
-                return;
-            }
-        
-            let emails = [];
-            const maxEmails = 5;
-        
-            emailInput.addEventListener('keydown', function (event) {
-                if ((event.key === 'Enter' || event.key === ',') && emailInput.value.trim() !== '') {
-                    event.preventDefault();
-                    addEmail(emailInput.value.trim());
-                    emailInput.value = ''; // Clear input field
-                }
-            });
-        
-            emailInput.addEventListener('blur', function () {
-                if (emailInput.value.trim() !== '') {
-                    addEmail(emailInput.value.trim());
-                    emailInput.value = ''; // Clear input field
-                }
-            });
-        
-            function addEmail(email) {
-                if (!validateEmail(email)) {
-                    alert("Please enter a valid email address.");
-                    return;
-                }
-                if (emails.includes(email)) {
-                    alert("This email is already added.");
-                    return;
-                }
-                if (emails.length >= maxEmails) {
-                    alert(`You can only add up to ${maxEmails} emails.`);
-                    return;
-                }
-        
-                emails.push(email);
-                updateEmails();
-                createEmailTag(email);
-        
-                // Print the emails list for debugging
-                console.log('Emails list:', emails);
-            }
-        
-            function createEmailTag(email) {
-                const tag = document.createElement('span');
-                tag.className = 'email-tag';
-                tag.innerHTML = `
-                    <span>${email}</span>
-                    <span class="remove-tag" data-email="${email}">&times;</span>
-                `;
-                emailInputContainer.insertBefore(tag, emailInput);
-        
-                tag.querySelector('.remove-tag').addEventListener('click', function () {
-                    const emailToRemove = this.dataset.email;
-                    emails = emails.filter(e => e !== emailToRemove);
-                    tag.remove();
-                    updateEmails();
-        
-                    // Print the updated emails list after removal
-                    console.log('Updated Emails list:', emails);
-                });
-            }
-        
-            function updateEmails() {
-                hiddenEmailField.value = emails.join(',');
-        
-                // Log the hidden input value for debugging
-                console.log(`Hidden input "${hiddenFieldName}" value:`, hiddenEmailField.value);
-            }
-        
-            function validateEmail(email) {
-                const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                return re.test(email);
-            }
-        }                        
+      
     
         // Toggle Required Fields Based on Sharing Type
         function toggleRequiredFields(form) {

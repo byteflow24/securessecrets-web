@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField, PasswordField, FileField, TextAreaField, SelectField, EmailField, DateField, BooleanField, DateTimeField, HiddenField, FieldList, TextAreaField
+from wtforms import StringField, SubmitField, PasswordField, FileField, TextAreaField, SelectField, EmailField, DateField, BooleanField, DateTimeField, HiddenField, TelField, TextAreaField
 from wtforms.validators import DataRequired, Optional, Length, Regexp, Email, AnyOf
-from .utils import email_domain_validator, validate_period
+from .utils import email_domain_validator, validate_period, is_future_date_or_today, is_future_time_today
 from datetime import datetime, date
 
 
@@ -141,12 +141,12 @@ class ShareForm(FlaskForm):
     sharing_type = HiddenField()
     email_login = StringField(
         "Email:",
-        validators=[Optional(), Email(), email_domain_validator],
+        validators=[Optional(), email_domain_validator],
         render_kw={"class": "form-control", "placeholder": "Enter recipient's email/s", "autocomplete": "off"}
     )
     email_scheduled = StringField(
         "Email:",
-        validators=[Optional(), Email(), email_domain_validator],
+        validators=[Optional(), email_domain_validator],
         render_kw={"class": "form-control", "placeholder": "Enter recipient's email/s", "autocomplete": "off"}
     )
     
@@ -155,15 +155,20 @@ class ShareForm(FlaskForm):
     emails_scheduled = HiddenField("Emails Scheduled")
 
     date = DateField("Date: ",
-        validators=[Optional()],  # Don't need any validator here for optional
+        validators=[Optional(), is_future_date_or_today],  # Don't need any validator here for optional
         render_kw={"class": "form-control", "style": "border-radius: 10px;"}
     )
-    time = DateTimeField("Time: ", format='%H:%M', validators=[Optional()],
+    time = DateTimeField("Time: ", format='%H:%M', validators=[Optional(), is_future_time_today],
         render_kw={"class": "form-control", "type": "time", "style": "border-radius: 10px;"})
     
-    confirm_deletion = BooleanField(
+    scheduled_confirm_deletion = BooleanField(
         "I want the link to be deleted 1 hour after it is opened.", validators=[Optional()]
     )
+
+    public_confirm_deletion = BooleanField(
+        "I want the link to be deleted 1 hour after it is opened.", validators=[Optional()]
+    )
+
     public_login = BooleanField(
         "Share to Public", validators=[Optional()],
         render_kw={"class": "form-check-input"}
@@ -183,7 +188,6 @@ class ShareForm(FlaskForm):
         render_kw={"class": "form-control", "style": "width: 150px; border-radius: 10px;"}
     )
 
-    
     submit = SubmitField("Send", render_kw={"class": "btn btn-primary w-50"})
 
 
@@ -217,3 +221,10 @@ class CardDetailsForm(FlaskForm):
     ])
     submit = SubmitField("Pay")
 
+# Contact us form
+class ContactUsForm(FlaskForm):
+    name = StringField("Name", validators=[DataRequired()])
+    email = EmailField("Email", validators=[DataRequired(), Email(), email_domain_validator])
+    phone = TelField("Phone Number", validators=[DataRequired()])
+    message = TextAreaField("Message", validators=[DataRequired()])
+    submit = SubmitField("Send Message")

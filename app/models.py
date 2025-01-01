@@ -29,12 +29,12 @@ class User(UserMixin, db.Model):
     subscription_start_date = db.Column(TIMESTAMP, nullable=True)
     subscription_end_date = db.Column(TIMESTAMP, nullable=True)
     subscription_status = db.Column(String(20), nullable=False, default="inactive")
-
+    status = db.Column(String(4), nullable=True)
 
     secrets = db.relationship('Secret', back_populates='user', cascade="all, delete-orphan")
     payments = db.relationship('Payment', back_populates='user', cascade="all, delete-orphan")
     plan = db.relationship('Plan', back_populates='users')
-    shared_secrets = db.relationship('SharedSecret', back_populates='user')
+    shared_secrets = db.relationship('SharedSecret', back_populates='user', cascade="all, delete-orphan")
     history_payments = db.relationship('HistoryPayment', back_populates='user')
     login_history = db.relationship('LoginHistory', back_populates='user', cascade="all, delete-orphan")
 
@@ -152,7 +152,8 @@ class SharedSecret(db.Model):
     date_to_send = db.Column(db.DateTime, nullable=True)
     time_to_send = db.Column(db.Time, nullable=True)
     received = db.Column(db.Boolean, default=False)
-    delete_confirmed = db.Column(db.Boolean, default=False)
+    schedule_delete_confirm = db.Column(db.Boolean, default=False)
+    public_delete_confirm = db.Column(db.Boolean, default=False)
     received_time = db.Column(TIMESTAMP, nullable=True, default=func.now())
     delete_at = db.Column(TIMESTAMP, nullable=True)
 

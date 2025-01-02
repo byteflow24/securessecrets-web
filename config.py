@@ -12,6 +12,6 @@ class Config:
     MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500 MB limit
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=15)
 
-    # SERVER_NAME = 'progress-absolutely-amplifier-indicated.trycloudflare.com'
-    # APPLICATION_ROOT = '/'
-    # PREFERRED_URL_SCHEME = 'https'
+    SERVER_NAME = 'www.securessecrets.com'
+    APPLICATION_ROOT = '/'
+    PREFERRED_URL_SCHEME = 'https'

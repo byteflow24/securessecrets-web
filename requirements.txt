@@ -61,3 +61,4 @@ Werkzeug==3.0.4
 WTForms==3.2.1
 zstandard==0.23.0
 flask-compress==1.17
+honcho==1.0.1

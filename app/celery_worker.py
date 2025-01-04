@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 celery = Celery(__name__, broker=os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+# celery = Celery(__name__, broker='redis://localhost:6379/0')
 
 
 def create_celery_app(app=None):
@@ -41,11 +42,11 @@ def create_celery_app(app=None):
         },
         'trial-end-reminder-daily': {
             'task': 'app.celery_worker.trial_end_reminder_task',
-            'schedule': crontab(hour=6, minute=0), #hour=6, minute=0 / only minute='*'
+            'schedule': crontab(hour=0, minute=0), #hour=6, minute=0 / only minute='*'
         },
         'not-paid-reminder-daily': {
             'task': 'app.celery_worker.not_paied_reminder_task',
-            'schedule': crontab(hour=10, minute=0),
+            'schedule': crontab(hour=0, minute=0),
         },
         'check-scheduled-secrets-every-minute': {
             'task': 'app.celery_worker.check_scheduled_secrets',

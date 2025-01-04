@@ -484,7 +484,8 @@ def initiate_recurring_payment():
 
                         # Update the subscription end date (monthly/yearly)
                         if user_plan.billing_cycle == 'monthly':
-                            user.subscription_end_date = current_date + timedelta(days=30)
+                            user.subscription_start_date = current_date
+                            user.subscription_end_date = current_date + timedelta(days=29)
                             user.subscription_status = "active"
 
                         send_payment_email(user.email, user.username, user_plan.plan, amount, current_date, "renewal", payment_method.card_brand, payment_method.card_last_four)
@@ -551,7 +552,7 @@ def not_paied_reminder():
     users = User.query.filter(User.subscription_end_date <= current_date).all()
 
     for user in users:
-        
+
         if user.username == 'admin':
             continue  # Skip processing for admin user
 
@@ -564,6 +565,11 @@ def not_paied_reminder():
             
             # Get only the date part of subscription_end_date (ignore time)
             subscription_end_date = subscription_end_date.date()
+
+            # will make the user inactive if the subscription ended
+            if subscription_end_date > current_date:
+                user.subscription_status = "inactive"
+                db.session.commit()
 
             # Calculate the difference in days
             days_left = (subscription_end_date - current_date).days
@@ -1023,13 +1029,13 @@ def send_secret_email(email, secret_url):
 
 # contact us email
 def contact_email(name, email, phone, message):
-    # Set up message
+    # User email setup
     msg = MIMEMultipart("related")
     msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = email
     msg['Subject'] = Header('Thank You for Reaching Out!', 'utf-8')
 
-    # Construct body
+    # Construct user email body
     body = (
         f"<html>"
         f"<body style='font-family: Arial, sans-serif; color: #333;'>"
@@ -1049,7 +1055,6 @@ def contact_email(name, email, phone, message):
         f"</body>"
         f"</html>"
     )
-
     msg.attach(MIMEText(body, 'html'))
 
     # Add inline logo image
@@ -1063,14 +1068,39 @@ def contact_email(name, email, phone, message):
     except FileNotFoundError:
         print(f"Logo image not found at path: {logo_path}")
 
-    # Send email
+    # Admin notification setup
+    admin_msg = MIMEMultipart("alternative")
+    admin_msg['From'] = formataddr(('SecuresSecrets Notifications', EMAIL))
+    admin_msg['To'] = EMAIL
+    admin_msg['Subject'] = Header('New Contact Us Submission', 'utf-8')
+
+    admin_body = (
+        f"<html>"
+        f"<body style='font-family: Arial, sans-serif; color: #333;'>"
+        f"<h3>New Contact Us Submission</h3>"
+        f"<ul>"
+        f"<li><strong>Name:</strong> {name}</li>"
+        f"<li><strong>Email:</strong> {email}</li>"
+        f"<li><strong>Phone:</strong> {phone}</li>"
+        f"<li><strong>Message:</strong><br>{message}</li>"
+        f"</ul>"
+        f"<p>Sent from the contact form on your site.</p>"
+        f"</body>"
+        f"</html>"
+    )
+    admin_msg.attach(MIMEText(admin_body, 'html'))
+
+    # Send emails
     try:
         with smtplib.SMTP(SERVER, PORT) as connection:
             connection.starttls()
             connection.login(EMAIL, PSWD)
+            # Send email to user
             connection.send_message(msg)
+            # Send email to admin
+            connection.send_message(admin_msg)
     except smtplib.SMTPException as e:
-        print(f"Failed to send email to {email}. SMTP error: {str(e)}")
+        print(f"Failed to send email. SMTP error: {str(e)}")
     except Exception as e:
-        print(f"An unexpected error occurred while sending email to {email}: {str(e)}")
+        print(f"An unexpected error occurred while sending emails: {str(e)}")
 

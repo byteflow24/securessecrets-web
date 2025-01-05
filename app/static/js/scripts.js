@@ -72,10 +72,10 @@ window.addEventListener('DOMContentLoaded', () => {
     // CSRF token for AJAX requests
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     function reinitializeAllComponents() {
+        initializeNavbar();
         initializeSecretLinks();
         initializePinStarButtons();
         initializeShareButtons();
-        initializeNavbar();
         initializeNewSecretForm();
         initializeSearchForm();
         initializeUpdateSecretForm();
@@ -91,33 +91,36 @@ window.addEventListener('DOMContentLoaded', () => {
             method: 'GET',
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRFToken': csrfToken,  // Include CSRF token if required
+                'X-CSRFToken': csrfToken, // Include CSRF token if required
             }
         })
         .then(response => {
             // Check if the user is unauthorized (session expired)
             if (response.status === 401) {
-                showFlashMessage('Your session has ended due to inactivity. Please log in again.', 'danger')
-                window.location.href = '/';  // Redirect to login page
-                return;  // Stop further processing
+                showFlashMessage('Your session has ended due to inactivity. Please log in again.', 'danger');
+                window.location.href = '/'; // Redirect to login page
+                return null; // Stop further processing
             }
-    
-            return response.text();
-        })
-        .then(html => {
-            document.getElementById('content-container').innerHTML = html; // Load the response into the content container
-            history.pushState(null, '', url);  // Update URL without page reload
-            
-            reinitializeAllComponents(); // Reinitialize everything
 
-            // Add event listener for dynamically created dynamic links
-            document.getElementById('content-container').addEventListener('click', function(event) {
-                if (event.target.matches('.dynamic-link')) {
-                    event.preventDefault();
-                    loadContent(event.target.getAttribute('data-url'));
-                }
-            });
-    
+            return response.json(); // Parse response as JSON
+        })
+        .then(data => {
+            if (!data) return; // Exit if no data is returned
+
+            // Update the main content
+            document.getElementById('content-container').innerHTML = data.html;
+
+            // Update the page title
+            if (data.title) {
+                document.title = data.title;
+            }
+
+            // Update browser history
+            history.pushState(null, data.title || '', url);
+
+            // Reinitialize components
+            reinitializeAllComponents();
+
             // Reset focus and scroll position
             document.getElementById('content-container').focus();
             document.body.scrollTop = 0; // For Safari
@@ -125,64 +128,98 @@ window.addEventListener('DOMContentLoaded', () => {
         })
         .catch(error => console.error('Error loading page:', error));
     }
-    
-    // Handle the navbar AJAX without the loading of the page
+
+    // Handle dynamic links with AJAX
     document.querySelectorAll('.dynamic-link').forEach(link => {
-        link.addEventListener('click', function(event) {
-            event.preventDefault(); // Prevent the default anchor behavior
-            const url = this.getAttribute('data-url'); // Get the URL from data attribute
+        link.addEventListener('click', function (event) {
+            event.preventDefault(); // Prevent default anchor behavior
+            const url = this.getAttribute('data-url'); // Get URL from data attribute
             loadContent(url); // Call the function to load content
         });
     });
-    
-    
+
     // Add event listener for the logo link
     document.querySelectorAll('.logo-link').forEach(link => {
-        link.addEventListener('click', function(event) {
-            event.preventDefault(); // Prevent the default anchor behavior
-            const url = this.getAttribute('data-url'); // Get the URL from data attribute
+        link.addEventListener('click', function (event) {
+            event.preventDefault(); // Prevent default anchor behavior
+            const url = this.getAttribute('data-url'); // Get URL from data attribute
             loadContent(url); // Call the function to load content
         });
     });
-    
+
     // Handle back/forward browser buttons
     window.addEventListener('popstate', function () {
         fetch(location.href, {
             method: 'GET',
             headers: {
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
             }
         })
-            .then(response => {
-                if (!response.ok) {
-                    console.error(`Failed to load: ${response.status}`);
-                    return;
-                }
-                return response.text();
-            })
-            .then(html => {
-                if (html) {
-                    const contentContainer = document.getElementById('content-container');
-                    if (contentContainer) {
-                        contentContainer.innerHTML = html;
-    
-                        // Reinitialize scripts to ensure everything works
-                        reinitializeAllComponents();
-                    }
-                }
-            })
-            .catch(error => console.error('Error handling popstate:', error));
+        .then(response => {
+            if (!response.ok) {
+                console.error(`Failed to load: ${response.status}`);
+                return null;
+            }
+            return response.json(); // Parse response as JSON
+        })
+        .then(data => {
+            if (!data) return; // Exit if no data is returned
+
+            // Update the main content
+            document.getElementById('content-container').innerHTML = data.html;
+
+            // Update the page title
+            if (data.title) {
+                document.title = data.title;
+            }
+
+            // Reinitialize components
+            reinitializeAllComponents();
+        })
+        .catch(error => console.error('Error handling popstate:', error));
     });
 
-    // Initializes the tab bar
+    // Initializes the Navbar
     function initializeNavbar() {
-        // Reinitialize navbar or tab bar logic if needed
-        const tabLinks = document.querySelectorAll('.nav-link'); // Adjust based on your HTML structure
+        const tabLinks = document.querySelectorAll('.dynamic-link'); // Target dynamic links in the navbar
+    
+        // Function to update the active state based on the current URL
+        function updateActiveTab() {
+            const currentPath = window.location.pathname;
+    
+            tabLinks.forEach(link => {
+                // Remove active class from all links
+                link.classList.remove('active');
+    
+                // Add active class if the link's `data-url` matches the current path
+                const linkPath = new URL(link.dataset.url || link.href, window.location.origin).pathname;
+                if (linkPath === currentPath) {
+                    link.classList.add('active');
+                }
+            });
+        }
+    
+        // Attach click listeners to update the active state dynamically
         tabLinks.forEach(link => {
-            link.addEventListener('click', function() {
-                // Custom logic for tab activation
+            link.addEventListener('click', function (event) {
+                // Prevent default navigation for dynamic links
+                event.preventDefault();
+    
+                // Load the content via AJAX
+                const url = this.dataset.url || this.href;
+                loadContent(url);
+    
+                // Manually update the active state
+                tabLinks.forEach(tab => tab.classList.remove('active'));
+                this.classList.add('active');
             });
         });
+    
+        // Update active state when navigating via back/forward buttons
+        window.addEventListener('popstate', updateActiveTab);
+    
+        // Update active tab on initialization
+        updateActiveTab();
     }
 
     // Initialize secret links

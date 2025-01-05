@@ -645,7 +645,7 @@ def reset_password_email(email, username, token):
         f"{reset_url}.\n\n"
         f"If you didn’t request this, you can safely ignore this email.\n\n"
         f"Best regards,\n"
-        f"The SecuresSecrets Team"
+        f"SecuresSecrets Support Team."
     )
 
     msg.attach(MIMEText(body, 'plain'))
@@ -677,7 +677,7 @@ def email_reminder(email, username, trial_end_date, reminder_type):
             f"<p>We hope you're enjoying your experience with SecuresSecrets!<p><br>"
             f"<p>This is a friendly reminder that your free trial will end in 1 week, on {trial_end_date}.</p><br>"
             f"<p>Best regards,</p>"
-            f"<p>The SecuresSecrets Team</p>"
+            f"<p>SecuresSecrets Support Team.</p>"
             f"<div style='padding-left: 30px;'>"
             f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
             f"</div>"
@@ -694,7 +694,7 @@ def email_reminder(email, username, trial_end_date, reminder_type):
             f"<p>We wanted to remind you that your free trial with SecuresSecrets will end tomorrow, on {trial_end_date}.</p>"
             f"<p>Please pay your plan so you can continue using all the features seamlessly.</p><br>"
             f"<p>Best regards,</p>"
-            f"<p>The SecuresSecrets Team</p>"
+            f"<p>SecuresSecrets Support Team.</p>"
             f"<div style='padding-left: 30px;'>"
             f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
             f"</div>"
@@ -744,7 +744,7 @@ def reminder_to_pay_email(username, email, plan_name, days_left):
             f"<p>This is a reminder that you have <strong>5 days</strong> left to renew your subscription for the {plan_name} plan.</p>"
             f"<p>If you do not renew, your account will be deleted after this period.</p><br>"
             f"<p>Best regards,</p>"
-            f"<p>The SecuresSecrets Team</p>"
+            f"<p>SecuresSecrets Support Team.</p>"
             f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
             f"</body>"
             f"</html>"
@@ -759,7 +759,7 @@ def reminder_to_pay_email(username, email, plan_name, days_left):
             f"<p>This is a reminder that you have <strong>3 days</strong> left to renew your subscription for the {plan_name} plan.</p>"
             f"<p>If you do not renew, your account will be deleted after this period.</p><br>"
             f"<p>Best regards,</p>"
-            f"<p>The SecuresSecrets Team</p>"
+            f"<p>SecuresSecrets Support Team.</p>"
             f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
             f"</body>"
             f"</html>"
@@ -775,7 +775,7 @@ def reminder_to_pay_email(username, email, plan_name, days_left):
             f"<p>Unfortunately, if you do not renew today, your account will be deleted.</p><br>"
             f"<p>We hope to see you back soon!</p>"
             f"<p>Best regards,</p>"
-            f"<p>The SecuresSecrets Team</p>"
+            f"<p>SecuresSecrets Support Team.</p>"
             f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
             f"</body>"
             f"</html>"
@@ -849,7 +849,7 @@ def send_payment_email(email, username, plan_name, payment_amount, payment_date,
         f"<h3>Activation Timeline</h3>"
         f"<p>{payment_date.strftime('%B %d, %Y')} - {subscription_type.capitalize()} successful</p>"
         f"<p>If you have any questions or need assistance, please reach out to our support team. We're here to help!</p>"
-        f"<p>Best regards,<br>The SecuresSecrets Team</p>"
+        f"<p>Best regards,<br>SecuresSecrets Support Team.</p>"
         f"<img src='cid:logo_image' style='width:150px; height:auto; margin-top:10px;' alt='SecuresSecrets Logo'>"
         f"</body>"
         f"</html>"
@@ -898,7 +898,7 @@ def send_payment_failed_email(email, username, failure_status, plan_name, card_t
         f"<p>Payment Method: {card_type} ending in {last_4_digit}</p>"
         f"<p>Please update your payment details or try again to avoid any interruptions in your service.</p>"
         f"<p>If you have any questions or need further assistance, feel free to contact our support team.</p>"
-        f"<p>Best regards,<br>The SecuresSecrets Team</p>"
+        f"<p>Best regards,<br>SecuresSecrets Support Team.</p>"
         f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
         f"</body>"
         f"</html>"
@@ -947,7 +947,7 @@ def send_verification_email(user_email, username, token):
         f"<p>Thank you for signing up to SecuresSecrets. Before we can continue, we need to validate your email address.</p>"
         f"<p>Please click the link below to verify your email:</p>"
         f"<p><a href='{verification_url}'>{verification_url}</a></p>"
-        f"<p>Best regards,<br>The SecuresSecrets Team</p>"
+        f"<p>Best regards,<br>SecuresSecrets Support Team.</p>"
         f"<img src='cid:logo_image' style='width:150px; height:auto; margin-top:10px;' alt='SecuresSecrets Logo'>"
         f"</body>"
         f"</html>"
@@ -985,7 +985,6 @@ def send_secret_email(email, secret_url):
     msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = email
     msg['Subject'] = Header('Important: Access Your Secret', 'utf-8')
-    print(email, secret_url)
     # Email body
     body = (
         f"<html>"
@@ -996,7 +995,7 @@ def send_secret_email(email, secret_url):
         f"<p><a href='{secret_url}'>Click here to view the secret</a></p>"
         f"<p><small>Note: the link will be deleted 1 hour after you open this link.</small></p>"
         f"<p>Best regards,</p>"
-        f"<p>The SecuresSecrets Team</p>"
+        f"<p>SecuresSecrets Support Team.</p>"
         f"<img src='cid:logo_image' style='width:150px; height:auto; margin-top:10px;' alt='SecuresSecrets Logo'>"
         f"</body>"
         f"</html>"
@@ -1050,7 +1049,7 @@ def contact_email(name, email, phone, message):
         f"<h3>Your Message</h3>"
         f"<p>{message}</p>"
         f"<p>We will review your message and get back to you as soon as possible. If you have any additional questions or need immediate assistance, please reply to this email or reach out to our support team.</p>"
-        f"<p>Best regards,<br>The SecuresSecrets Team</p>"
+        f"<p>Best regards,<br>SecuresSecrets Support Team.</p>"
         f"<img src='cid:logo_image' style='width:150px; height:auto; margin-top:10px;' alt='SecuresSecrets Logo'>"
         f"</body>"
         f"</html>"

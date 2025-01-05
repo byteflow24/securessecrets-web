@@ -30,6 +30,11 @@
 
     <!-- CSRF Token -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <!-- Title -->
+    <meta name="page-title" content="{% block page_title %}Secures Secrets{% endblock %}">
+    <title>{% block title %}Secures Secrets{% endblock %}</title>
+
     
     <!-- jQuery Script -->
     <script src="https://code.jquery.com/jquery-3.6.1.min.js" crossorigin="anonymous"></script>
@@ -41,7 +46,6 @@
     {% block styles %}
     {% endblock %}
     
-    <title>{% block title %}{% endblock %}</title>
 </head>
 <body class="mx-auto" style="background-image: url('../static/assets/images/bg.jpg'); background-size: 100%; background-size: cover; background-position: center; background-repeat: no-repeat; height: 100%;">
     <div id="content">

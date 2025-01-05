@@ -160,6 +160,12 @@
   display: block; /* Ensure it's visible */
 }
 
+.btn.active {
+  background-color: #343a40; /* Darker background */
+  color: #fff; /* White text */
+  border-color: #343a40; /* Match the background */
+}
+
 body {
   margin: 0;
   padding: 0;

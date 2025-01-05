@@ -24,13 +24,16 @@
                         {% if not current_user.is_authenticated %}
                             <!-- Guest Links -->
                             <li class="nav-item mx-1">
-                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.pricing') }}">Pricing</a>
+                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}" 
+                                   href="#" data-url="{{ url_for('main.pricing') }}">Pricing</a>
                             </li>
                             <li class="nav-item mx-1">
-                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.about') }}">About Us</a>
+                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}" 
+                                   href="#" data-url="{{ url_for('main.about') }}">About Us</a>
                             </li>
                             <li class="nav-item mx-1">
-                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a>
+                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link {% if request.endpoint == 'main.contact' %}active{% endif %}" 
+                                   href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a>
                             </li>
                         {% else %}
                             <!-- Authenticated User Links -->
@@ -40,10 +43,12 @@
                                 </a>
                             </li>
                             <li class="nav-item mx-1">
-                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.dashboard') }}">Dashboard</a>
+                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" 
+                                   href="#" data-url="{{ url_for('main.dashboard') }}">Dashboard</a>
                             </li>
                             <li class="nav-item">
-                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link" href="#" data-url="{{ url_for('main.all_secrets') }}">My Secrets</a>
+                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link {% if request.endpoint == 'main.all_secrets' %}active{% endif %}" 
+                                   href="#" data-url="{{ url_for('main.all_secrets') }}">My Secrets</a>
                             </li>
                         {% endif %}
                     </ul>
@@ -64,11 +69,15 @@
                                     <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i> {{ current_user.username | lower }}
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end stylish-dropdown" aria-labelledby="userMenu">
-                                    <li><a class="dropdown-item dynamic-link" href="#" data-url="{{ url_for('main.update_profile') }}">Profile</a></li>
-                                    <li><a class="dropdown-item dynamic-link" href="#" data-url="{{ url_for('main.billing') }}">Billing</a></li>
+                                    <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.update_profile' %}active{% endif %}"
+                                        href="#" data-url="{{ url_for('main.update_profile') }}">Profile</a></li>
+                                    <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.billing' %}active{% endif %}"
+                                        href="#" data-url="{{ url_for('main.billing') }}">Billing</a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item dynamic-link" href="#" data-url="{{ url_for('main.about') }}">About Us</a></li>
-                                    <li><a class="dropdown-item dynamic-link" href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a></li>
+                                    <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}"
+                                        href="#" data-url="{{ url_for('main.about') }}">About Us</a></li>
+                                    <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.contact' %}active{% endif %}"
+                                        href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a></li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item" href="{{ url_for('main.logout') }}">Logout</a></li>
                                 </ul>

@@ -367,7 +367,16 @@ def update_profile():
     pr_form.code.data = current_user.country_code
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/profile_content.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login, secret_form=secret_form)
+        return jsonify({
+            'html': render_template('partials/profile_content.html',
+                                    current_user=current_user,
+                                    pr_form=pr_form,
+                                    ps_form=ChangePasswordForm(),
+                                    login_history=login,
+                                    last_login=last_login,
+                                    secret_form=secret_form),
+            'title': 'Profile - Secures Secrets'
+        })
     return render_template('profile.html', current_user=current_user, pr_form=pr_form, ps_form=ChangePasswordForm(), login_history=login, last_login=last_login, secret_form=secret_form, show_header=True, show_footer=True)
 
 # Pagination for the login history
@@ -480,6 +489,7 @@ def dashboard():
 
         if secret.public:
             # If a recent login exists and it's more recent than the current last_login
+            print(latest_login and (not secret.last_login or latest_login > secret.last_login))
             if latest_login and (not secret.last_login or latest_login > secret.last_login):
                 # Update the last_login to the latest login date
                 secret.last_login = latest_login
@@ -547,8 +557,16 @@ def dashboard():
 
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/dashboard_content.html', current_user=current_user, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login, secret_form=secret_form, show_secrets_list=False)
-    
+        return jsonify({
+            'html': render_template('partials/dashboard_content.html', 
+                                    current_user=current_user, 
+                                    public_secrets=decrypted_secrets, 
+                                    secrets=secrets, 
+                                    last_login=last_login, 
+                                    secret_form=secret_form, 
+                                    show_secrets_list=False),
+            'title': 'Dashboard - Secures Secrets'
+        })
     return render_template('dashboard.html', current_user=current_user, show_header=True, show_footer=True, show_secrets_list=False, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login, secret_form=secret_form)
 
 # List of all secerts for the user 
@@ -581,7 +599,15 @@ def all_secrets():
     decrypted_secrets = decrypt_secrets(user_secrets)
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/all_secrets_content.html', user_secrets=decrypted_secrets, current_user=current_user, share_form=share_form, form=form, secret_form=secret_form)
+        return jsonify({
+            'html': render_template('partials/all_secrets_content.html',
+                                    user_secrets=decrypted_secrets,
+                                    current_user=current_user,
+                                    share_form=share_form,
+                                    form=form,
+                                    secret_form=secret_form),
+            'title': 'All Secrets - Secures Secrets'
+        })
     return render_template('all_secrets.html', user_secrets=decrypted_secrets, current_user=current_user, form=form, share_form=share_form, secret_form=secret_form, show_header=True, show_footer=True, show_secrets_list=True)
 
 # Search and Filter
@@ -1048,11 +1074,19 @@ def pricing():
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
     session['from_pricing'] = True
+
     if current_user.is_authenticated and not current_user.is_confirmed:
         return redirect(url_for('main.confirmation_pending'))
+    
     plans = db.session.execute(db.select(Plan).order_by(Plan.id)).scalars().all()
+
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/pricing_content.html', plans=plans)
+        return jsonify({
+            'html': render_template('partials/pricing_content.html',
+                                    plans=plans),
+            'title': 'Pricing - Secures Secrets'
+        })
+    
     return render_template('pricing.html', current_user=current_user, plans=plans, show_header=True, show_footer=True)
 
 
@@ -1271,7 +1305,14 @@ def billing():
     populate_plan_choices(form, user)
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/billing_content.html', user=user, payments=history_payment, form=form, plan=plans, secret_form=secret_form)
+        return jsonify({
+            'html': render_template('partials/billing_content.html',
+                     user=user,
+                     payments=history_payment,
+                     form=form, plan=plans,
+                     secret_form=secret_form),
+            'title': 'Billing - Secures Secrets'
+        })
     return render_template('billing.html', user=user, payments=history_payment, form=form, plan=plans, secret_form=secret_form, show_header=True, show_footer=True)
 
 # to pay the plan if still not paid
@@ -1450,7 +1491,11 @@ def terms():
 def about():
     secret_form = SecretForm()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/about_content.html', secret_form=secret_form)
+        return jsonify({
+                'html': render_template('partials/about_content.html',
+                                        secret_form=secret_form),
+                'title': 'About Us - Secures Secrets'
+            })
     return render_template('about.html', secret_form=secret_form, show_header=True, show_footer=True)
 
 @main.route('/contact-us', methods=['GET' ,'POST'])
@@ -1469,7 +1514,12 @@ def contact():
             flash('An error occurred while sending your message. Please try again.', 'danger')
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render_template('partials/contact_content.html', form=form, secret_form=secret_form)
+        return jsonify({
+                    'html': render_template('partials/contact_content.html',
+                                            form=form,
+                                            secret_form=secret_form),
+                    'title': 'Contact Us - Secures Secrets'
+                })
     return render_template('contact.html', form=form, secret_form=secret_form, show_header=True, show_footer=True)
 
 @main.route('/privacy-policy')

@@ -489,7 +489,6 @@ def dashboard():
 
         if secret.public:
             # If a recent login exists and it's more recent than the current last_login
-            print(latest_login and (not secret.last_login or latest_login > secret.last_login))
             if latest_login and (not secret.last_login or latest_login > secret.last_login):
                 # Update the last_login to the latest login date
                 secret.last_login = latest_login
@@ -649,6 +648,13 @@ def add_secret():
 
     if form.validate_on_submit():
         try:
+            # Check if the user has reached the secret limit
+            secret_limit = 10
+            query = db.select(Secret).where(Secret.user_id == current_user.id)
+            user_secrets = db.session.execute(query).scalars().all()
+            if current_user.plan.plan == 'Basic' and len(user_secrets) >= secret_limit:
+                return jsonify(success=False, error=f"You have reached the maximum limit of {secret_limit} secrets for your Basic plan."), 403
+
             # Check if both secret and file are missing
             if not form.secret.data.strip() and not request.form.get("uploadedFileName"):
                 return jsonify(success=False, error="Please provide a secret or upload a file."), 400

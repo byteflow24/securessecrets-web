@@ -5,12 +5,20 @@ from flask_wtf.csrf import CSRFProtect
 from flask_login import LoginManager
 from flask_migrate import Migrate
 from flask_compress import Compress
+from flask_talisman import Talisman
 
 db = SQLAlchemy()
 csrf = CSRFProtect()
 login_manager = LoginManager()
 bootstrap = Bootstrap()
 migrate = Migrate()
+
+csp = {
+    'default-src': ["'self'"],
+    'script-src': ["'self'", "https://pagead2.googlesyndication.com"],
+    'frame-src': ["https://googleads.g.doubleclick.net", "https://google.com"],
+    'frame-ancestors': ["'self'", "https://google.com", "https://googleads.g.doubleclick.net"]
+}
 
 def create_app():
     app = Flask(__name__)
@@ -29,6 +37,7 @@ def create_app():
     bootstrap.init_app(app)
     Compress(app)
     CSRFProtect(app)
+    Talisman(app, content_security_policy=csp)
 
     # Import inside function to avoid circular import
     with app.app_context():

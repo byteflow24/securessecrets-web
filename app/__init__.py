@@ -15,9 +15,36 @@ migrate = Migrate()
 
 csp = {
     'default-src': ["'self'"],
-    'script-src': ["'self'", "https://pagead2.googlesyndication.com"],
-    'frame-src': ["https://googleads.g.doubleclick.net", "https://google.com"],
-    'frame-ancestors': ["'self'", "https://google.com", "https://googleads.g.doubleclick.net"]
+    'script-src': [
+        "'self'",
+        "https://cdn.jsdelivr.net",
+        "https://code.jquery.com",
+        "https://www.googletagmanager.com",
+        "https://use.fontawesome.com",
+        "https://cdnjs.cloudflare.com",
+    ],
+    'style-src': [
+        "'self'",
+        "https://cdn.jsdelivr.net",
+        "https://fonts.googleapis.com",
+    ],
+    'font-src': [
+        "'self'",
+        "https://cdn.jsdelivr.net",
+        "https://fonts.gstatic.com",
+    ],
+    'img-src': [
+        "'self'",
+        "https://pagead2.googlesyndication.com",
+    ],
+    'connect-src': [
+        "'self'",
+        "https://ep1.adtrafficquality.google",
+    ],
+    'frame-src': [
+        "'self'",
+        "https://googleads.g.doubleclick.net",
+    ],
 }
 
 def create_app():

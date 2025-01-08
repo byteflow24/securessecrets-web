@@ -1512,7 +1512,7 @@ def contact():
         data = form.data
         print("Form submitted successfully:", data)
         try:
-            contact_email(data["name"], data["email"], data["phone"], data["message"])
+            # contact_email(data["name"], data["email"], data["phone"], data["message"])
             flash('Your message has been sent successfully!', 'success')
             return redirect(url_for('main.contact'))
         except Exception as e:

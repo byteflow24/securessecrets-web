@@ -296,7 +296,6 @@ def create_charge(amount, currency, description, email, phone_country_code, phon
         print(error_details)
         description = error_details.get('response', {}).get('message', 'Unknown error occurred')
         raise Exception(f"Charge creation failed: {description}")
-    
 
 # Getting Charge Details by charge_id
 def get_charge_details(charge_id):

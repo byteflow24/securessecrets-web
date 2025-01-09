@@ -1199,9 +1199,6 @@ window.addEventListener('DOMContentLoaded', () => {
             });
         }
     }
-    
-
-
 
     // Close popup function
     window.closePopup = function(index) {

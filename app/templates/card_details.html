@@ -1,4 +1,112 @@
 {% extends 'base.html' %}
+{% block styles %}
+    <style>
+        .form-row {
+            width: 70%;
+            float: left;
+            background-color: #ededed;
+        }
+        #card-element {
+        background-color: transparent;
+        height: 40px;
+        border-radius: 4px;
+        border: 1px solid transparent;
+        box-shadow: 0 1px 3px 0 #e6ebf1;
+        -webkit-transition: box-shadow 150ms ease;
+        transition: box-shadow 150ms ease;
+        }
+        
+        #card-element--focus {
+          box-shadow: 0 1px 3px 0 #cfd7df;
+        }
+        
+        #card-element--invalid {
+          border-color: #fa755a;
+        }
+        
+        #card-element--webkit-autofill {
+          background-color: #fefde5 !important;
+        }
+        
+        #submitbutton,#tap-btn{
+        align-items:flex-start;
+        background-attachment:scroll;background-clip:border-box;
+        background-color:rgb(50, 50, 93);background-image:none;
+        background-origin:padding-box;
+        background-position-x:0%;
+        background-position-y:0%;
+        background-size:auto;
+        border-bottom-color:rgb(255, 255, 255);
+        border-bottom-left-radius:4px;
+        border-bottom-right-radius:4px;border-bottom-style:none;
+        border-bottom-width:0px;border-image-outset:0px;
+        border-image-repeat:stretch;border-image-slice:100%;
+        border-image-source:none;border-image-width:1;
+        border-left-color:rgb(255, 255, 255);
+        border-left-style:none;
+        border-left-width:0px;
+        border-right-color:rgb(255, 255, 255);
+        border-right-style:none;
+        border-right-width:0px;
+        border-top-color:rgb(255, 255, 255);
+        border-top-left-radius:4px;
+        border-top-right-radius:4px;
+        border-top-style:none;
+        border-top-width:0px;
+        box-shadow:rgba(50, 50, 93, 0.11) 0px 4px 6px 0px, rgba(0, 0, 0, 0.08) 0px 1px 3px 0px;
+        box-sizing:border-box;color:rgb(255, 255, 255);
+        cursor:pointer;
+        display:block;
+        float:left;
+        font-family:"Helvetica Neue", Helvetica, sans-serif;
+        font-size:15px;
+        font-stretch:100%;
+        font-style:normal;
+        font-variant-caps:normal;
+        font-variant-east-asian:normal;
+        font-variant-ligatures:normal;
+        font-variant-numeric:normal;
+        font-weight:600;
+        height:35px;
+        letter-spacing:0.375px;
+        line-height:35px;
+        margin-bottom:0px;
+        margin-left:12px;
+        margin-right:0px;
+        margin-top:28px;
+        outline-color:rgb(255, 255, 255);
+        outline-style:none;
+        outline-width:0px;
+        overflow-x:visible;
+        overflow-y:visible;
+        padding-bottom:0px;
+        padding-left:14px;
+        padding-right:14px;
+        padding-top:0px;
+        text-align:center;
+        text-decoration-color:rgb(255, 255, 255);
+        text-decoration-line:none;
+        text-decoration-style:solid;
+        text-indent:0px;
+        text-rendering:auto;
+        text-shadow:none;
+        text-size-adjust:100%;
+        text-transform:none;
+        transition-delay:0s;
+        transition-duration:0.15s;
+        transition-property:all;
+        transition-timing-function:ease;
+        white-space:nowrap;
+        width:150.781px;
+        word-spacing:0px;
+        writing-mode:horizontal-tb;
+        -webkit-appearance:none;
+        -webkit-font-smoothing:antialiased;
+        -webkit-tap-highlight-color:rgba(0, 0, 0, 0);
+        -webkit-border-image:none;
+        }
+    </style>
+{% endblock %}
 {% block content %}
 <div class="d-flex align-items-center justify-content-center">
     <div class="col-md-8 col-lg-6 col-xl-5">
@@ -23,54 +131,128 @@
                     <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" style="width: 150px;">
                 </a>
             </div>
-
             <!-- Form Heading -->
-            <h3 class="text-center mb-4">Card Details</h3>
-
-            <div class="mb-3">
-                <div id="amount" class="bg-light text-secondary">
-                    {{ current_user.plan.price }} USD
+            <h3 class="text-center mb-2">Card Details</h3>
+            <div class="mb-2">
+                <div id="amount" class="bg-light text-secondary small">
+                    ${{ current_user.plan.price }}
                 </div>
             </div>
-
             <!-- Payment Form -->
-            <form method="POST" novalidate style="background-color: #cbcfd1; padding: 20px; border-radius: 8px;">
-                {{ form.hidden_tag() }}
+            <form class="mb-5" id="form-container" method="post" action="/charge">
+                
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-                <div class="mb-3">
-                    {{ form.card_number(class="form-control", placeholder="Card number") }}
-                    {% for error in form.card_number.errors %}
-                        <div class="text-danger small">{{ error }}</div>
-                    {% endfor %}
+                <!-- Tap element will be mounted here -->
+                <div id="element-container"></div>
+                
+                <!-- Error handler for displaying validation messages -->
+                <div id="card-errors" role="alert" style="color: red;"></div>
+                
+                <!-- Success message -->
+                <div id="success" style="display: none; position: relative; float: left;">
+                Success! Your token is <span id="token"></span>
                 </div>
-
-                <div class="row mb-3">
-                    <div class="col-md-5">
-                        {{ form.exp_date(class="form-control", id="exp_month", placeholder="MM/YY") }}
-                        {% for error in form.exp_date.errors %}
-                            <div class="text-danger small">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    <div class="col-md-5">
-                        {{ form.cvc(class="form-control", id="cvc", placeholder="CVC") }}
-                        {% for error in form.cvc.errors %}
-                            <div class="text-danger small">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    {{ form.name(class="form-control", autocomplete="name", placeholder="Name on your card") }}
-                    {% for error in form.name.errors %}
-                        <div class="text-danger small">{{ error }}</div>
-                    {% endfor %}
-                </div>
-
-                <div class="text-center">
-                    {{ form.submit(class="btn btn-primary btn-block w-50") }}
-                </div>
-            </form>
+                
+                <!-- Submit button -->
+                <button id="tap-btn" type="submit">Submit</button>
+          </form>
         </div>
     </div>
 </div>
+
+<script>
+    window.addEventListener('DOMContentLoaded', () => {
+        //pass your public key from tap's dashboard
+        var tap = Tapjsli('pk_test_owTZCS0bujHvaiArMx8LORsP');
+
+        var elements = tap.elements({});
+
+        var style = {
+            base: {
+                color: '#535353',
+                lineHeight: '18px',
+                fontFamily: 'sans-serif',
+                fontSmoothing: 'antialiased',
+                fontSize: '16px',
+                '::placeholder': {
+                color: 'rgba(0, 0, 0, 0.26)',
+                fontSize:'15px'
+                }
+            },
+            invalid: {
+                color: 'red'
+            }
+        };
+        // input labels/placeholders
+        var labels = {
+            cardNumber:"Card Number",
+            expirationDate:"MM/YY",
+            cvv:"CVV",
+            cardHolder:"Card Holder Name"
+        };
+        //payment options
+        var paymentOptions = {
+            currencyCode:["KWD","USD","SAR", "QAR"], //change the currency array as per your requirement
+            labels : labels,
+            TextDirection:'ltr', //only two values valid (rtl, ltr)
+            paymentAllowed: "all" //default string 'all' to show all payment methods enabled on your account
+        }
+        //create element, pass style and payment options
+        var card = elements.create('card', {style: style},paymentOptions);
+        //mount element
+        card.mount('#element-container');
+
+        // Flag to disable the submit button after the first submission, preventing duplicate requests
+        var form = document.getElementById('form-container');
+        var submitButton = document.getElementById('tap-btn');
+        var isSubmitting = false;
+
+        form.addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent default submission
+
+            if (isSubmitting) {
+                console.log("Form submission blocked to prevent duplicates.");
+                return;
+            }
+
+            isSubmitting = true;
+            submitButton.disabled = true;
+
+            tap.createToken(card).then(function(result) {
+                if (result.error) {
+                    console.error("Error creating token:", result.error.message);
+                    isSubmitting = false;
+                    submitButton.disabled = false;
+                } else {
+                    console.log("Token created successfully:", result.id);
+                    tapTokenHandler(result);
+                }
+            });
+        });
+
+        function tapTokenHandler(result) {
+            console.log("Handling token:", result.id);
+            var form = document.getElementById('form-container');
+        
+            // Remove any existing `tapToken` inputs
+            var existingTokenInput = form.querySelector('input[name="tapToken"]');
+            if (existingTokenInput) {
+                existingTokenInput.remove();
+            }
+        
+            // Add new token input
+            var hiddenInput = document.createElement('input');
+            hiddenInput.setAttribute('type', 'hidden');
+            hiddenInput.setAttribute('name', 'tapToken');
+            hiddenInput.setAttribute('value', result.id);
+            form.appendChild(hiddenInput);
+        
+            console.log("Token attached to form:", hiddenInput);
+            form.submit(); // Submit the form only after attaching the token
+        }
+        
+    });
+</script>
+
 {% endblock %}

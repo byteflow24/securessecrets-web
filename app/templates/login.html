@@ -24,6 +24,27 @@
             flex: 1;
         }
 
+        /* Ad containers */
+        .ad-container {
+            position: fixed;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+            z-index: 100;
+            padding-left: 10px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 1200px) {
+            .ad-container {
+                display: none;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+        }
+
         /* To avoid negative margins from Bootstrap row */
         .row {
             margin-left: 0;
@@ -35,6 +56,7 @@
             display: flex;
             justify-content: center;
             gap: 20px; /* Adjust gap as needed */
+            margin-top: 15px;
         }
 
         .title-container {
@@ -163,7 +185,21 @@
     </style>
 {% endblock %}
 {% block content %}
-    <div class="container-fluid">
+    <!-- Left Ad -->
+    <div class="ad-container">
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9464389592028949"
+        crossorigin="anonymous"></script>
+        <!-- secSecAd -->
+        <ins class="adsbygoogle"
+            style="display:inline-block;width:120px;height:500px"
+            data-ad-client="ca-pub-9464389592028949"
+            data-ad-slot="9615555620"></ins>
+        <script>
+            (adsbygoogle = window.adsbygoogle || []).push({});
+        </script>
+    </div>
+    <!-- Main Content -->
+    <div class="container-fluid main-content">
         <div class="row h-100 justify-content-center align-items-center">
             <!-- Centered Title Section -->
             <div class="col-12 title-container pb-3">
@@ -313,5 +349,4 @@
             window.location.href = nextPage; // Redirect to the stored next page
         }
     </script>
-    
 {% endblock %}

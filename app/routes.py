@@ -1223,7 +1223,7 @@ def payment_complete():
                         send_payment_email(user.email, user.username, plan.plan, plan.price, user.subscription_start_date, "upgrade", charge_details['card']['brand'], charge_details['card']['last_four'])
                         flash("Your plan has been successfully upgraded.", "success")
                     elif description == "renewal":
-                        send_payment_email(user.email, user.username, plan.price, user.subscription_start_date, "renewal", charge_details['card']['brand'], charge_details['card']['last_four'])
+                        send_payment_email(user.email, user.username, plan.plan, plan.price, user.subscription_start_date, "renewal", charge_details['card']['brand'], charge_details['card']['last_four'])
                         flash("Your subscription has been successfully renewed.", "success")
 
                     return redirect(url_for('main.dashboard'))

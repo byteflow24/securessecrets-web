@@ -241,7 +241,7 @@ def is_future_time_today(form, field):
 # Configures Tap payment
 API_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
 # API_KEY = os.environ.get("TAP_TEST_API_SECRET")
-# API_KEY = "sk_test_XKokBfNWv6FIYuTMg5sLPjhJ"
+# API_KEY = "sk_test_wRAkPb5foQ4N8qMn2JIluzdZ"
 API_URL = "https://api.tap.company/v2"
 
 # Creating a charge and redirecting to Tap's hosted payment page, handling 3D Secure if needed

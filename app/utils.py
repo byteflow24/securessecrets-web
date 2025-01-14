@@ -241,7 +241,7 @@ def is_future_time_today(form, field):
 # Configures Tap payment
 API_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
 # API_KEY = os.environ.get("TAP_TEST_API_SECRET")
-# API_KEY = "sk_test_wRAkPb5foQ4N8qMn2JIluzdZ"
+# API_KEY = "sk_test_XKokBfNWv6FIYuTMg5sLPjhJ"
 API_URL = "https://api.tap.company/v2"
 
 # Creating a charge and redirecting to Tap's hosted payment page, handling 3D Secure if needed
@@ -273,30 +273,29 @@ def create_charge(amount, currency, description, email, phone_country_code, phon
     }
 
     response = requests.post(f"{API_URL}/charges", headers=headers, json=data)
-    response_data = response.json()
-
+    
     if response.status_code == 200:
+        charge_response = response.json()
+
         # Handle 3D Secure if required
-        if response_data.get('status') == 'INITIATED':
-            if response_data.get('threeDSecure', False):
+        if charge_response.get('status') == 'INITIATED':
+            if charge_response.get('threeDSecure', False):
                 # If 3D Secure is required, redirect to the 3D Secure authentication page
-                payment_url = response_data.get('transaction', {}).get('url')
+                payment_url = charge_response.get('transaction', {}).get('url')
                 if payment_url:
                     return payment_url  # Return URL for redirection to 3D Secure
                 else:
                     raise Exception("Failed to retrieve 3D Secure redirection URL.")
             else:
-                return response_data  # If no 3D Secure is needed, return the charge response
+                return charge_response  # If no 3D Secure is needed, return the charge response
 
-        raise Exception(f"Payment initiation failed: {response_data.get('response', {}).get('message', 'Unknown error')}")
+        raise Exception(f"Payment initiation failed: {charge_response.get('response', {}).get('message', 'Unknown error')}")
 
     else:
-        error_code = response_data.get('errors', [{}])[0].get('code')
-        if error_code == '1244':
-            raise Exception("Token has expired. Please try again.")
-        else:
-            description = response_data.get('errors', [{}])[0].get('description', 'Unknown error occurred.')
-            raise Exception(f"Charge creation failed: {description}")
+        error_details = response.json()
+        print(error_details)
+        description = error_details.get('response', {}).get('message', 'Unknown error occurred')
+        raise Exception(f"Charge creation failed: {description}")
 
 # Getting Charge Details by charge_id
 def get_charge_details(charge_id):

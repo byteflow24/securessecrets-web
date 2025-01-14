@@ -273,29 +273,30 @@ def create_charge(amount, currency, description, email, phone_country_code, phon
     }
 
     response = requests.post(f"{API_URL}/charges", headers=headers, json=data)
-    
-    if response.status_code == 200:
-        charge_response = response.json()
+    response_data = response.json()
 
+    if response.status_code == 200:
         # Handle 3D Secure if required
-        if charge_response.get('status') == 'INITIATED':
-            if charge_response.get('threeDSecure', False):
+        if response_data.get('status') == 'INITIATED':
+            if response_data.get('threeDSecure', False):
                 # If 3D Secure is required, redirect to the 3D Secure authentication page
-                payment_url = charge_response.get('transaction', {}).get('url')
+                payment_url = response_data.get('transaction', {}).get('url')
                 if payment_url:
                     return payment_url  # Return URL for redirection to 3D Secure
                 else:
                     raise Exception("Failed to retrieve 3D Secure redirection URL.")
             else:
-                return charge_response  # If no 3D Secure is needed, return the charge response
+                return response_data  # If no 3D Secure is needed, return the charge response
 
-        raise Exception(f"Payment initiation failed: {charge_response.get('response', {}).get('message', 'Unknown error')}")
+        raise Exception(f"Payment initiation failed: {response_data.get('response', {}).get('message', 'Unknown error')}")
 
     else:
-        error_details = response.json()
-        print(error_details)
-        description = error_details.get('response', {}).get('message', 'Unknown error occurred')
-        raise Exception(f"Charge creation failed: {description}")
+        error_code = response_data.get('errors', [{}])[0].get('code')
+        if error_code == '1244':
+            raise Exception("Token has expired. Please try again.")
+        else:
+            description = response_data.get('errors', [{}])[0].get('description', 'Unknown error occurred.')
+            raise Exception(f"Charge creation failed: {description}")
 
 # Getting Charge Details by charge_id
 def get_charge_details(charge_id):

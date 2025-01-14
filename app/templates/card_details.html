@@ -126,20 +126,20 @@
             {% endwith %}
             
             <!-- Centered Logo -->
-            <div class="text-center mb-4">
+            <div class="text-center mb-2">
                 <a href="{{ url_for('main.login') }}" class="d-inline-flex link-body-emphasis">
                     <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" style="width: 150px;">
                 </a>
             </div>
             <!-- Form Heading -->
-            <h3 class="text-center mb-2">Card Details</h3>
             <div class="mb-2">
-                <div id="amount" class="bg-light text-secondary small">
-                    ${{ current_user.plan.price }}
+                <div id="amount" class="bg-light small d-flex justify-content-between align-items-center">
+                    <p><strong>Pay Invoice</strong></p>
+                    <span class="text-secondary">${{ current_user.plan.price }}</span>
                 </div>
             </div>
             <!-- Payment Form -->
-            <form class="mb-5" id="form-container" method="post" action="/charge">
+            <form class="mb-4" id="form-container" method="post" action="/charge">
                 
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -154,8 +154,13 @@
                 Success! Your token is <span id="token"></span>
                 </div>
                 
-                <!-- Submit button -->
-                <button id="tap-btn" type="submit">Submit</button>
+                <div class="d-flex justify-content-between align-items-center">
+                    <!-- Submit Button -->
+                    <button id="tap-btn" type="submit" class="btn btn-primary">Submit</button>
+
+                    <!-- Back Link -->
+                    <a href="{{ url_for('main.dashboard') }}" class="btn btn-link mt-5 text-decoration-underline">Back</a>
+                </div>
           </form>
         </div>
     </div>
@@ -222,16 +227,16 @@
         var isSubmitting = false;
 
         form.addEventListener('submit', function(event) {
-            event.preventDefault(); // Prevent default submission
-
+            event.preventDefault();
+        
             if (isSubmitting) {
                 console.log("Form submission blocked to prevent duplicates.");
                 return;
             }
-
+        
             isSubmitting = true;
             submitButton.disabled = true;
-
+        
             tap.createToken(card).then(function(result) {
                 if (result.error) {
                     console.error("Error creating token:", result.error.message);
@@ -241,6 +246,10 @@
                     console.log("Token created successfully:", result.id);
                     tapTokenHandler(result);
                 }
+            }).catch(function(error) {
+                console.error("Unexpected error:", error);
+                isSubmitting = false;
+                submitButton.disabled = false;
             });
         });
 

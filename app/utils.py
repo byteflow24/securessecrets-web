@@ -171,21 +171,12 @@ def populate_plan_choices(form, user):
 
 
 # Comprehensive list of common email domains and TLDs
-ALLOWED_DOMAINS = {
-    "gmail", "hotmail", "outlook", "yahoo", "icloud", "aol",
-    "live", "msn", "comcast", "yandex", "mail", "protonmail",
-    "zoho", "gmx", "fastmail"
-}
-
-ALLOWED_TLDS = {".com", ".net", ".org", ".edu", ".gov", ".mil", ".qa", ".fr", ".de", ".uk", ".ca", ".us"}
-
-
 def email_domain_validator(form, field):
     """
     Validates email addresses to ensure they are from allowed domains and have allowed TLDs.
     """
     # Regex for extracting email domain
-    domain_pattern = r'^[a-zA-Z0-9_.+-]+@([a-zA-Z0-9-]+)\.([a-zA-Z]+)$'
+    domain_pattern = r'^[a-zA-Z0-9_.+-]+@([a-zA-Z0-9-]+)\.([a-zA-Z0-9-.]+)$'
     
     # Split the input into individual emails
     emails = [email.strip().lower() for email in field.data.split(',') if email.strip()]
@@ -200,15 +191,6 @@ def email_domain_validator(form, field):
         if not match:
             raise ValidationError(f"'{email}' is not a valid email address.")
         
-        domain_name = match.group(1)  # Extract the domain name (e.g., 'gmail')
-        tld = f".{match.group(2)}"   # Extract the TLD (e.g., '.com')
-        
-        # Check if domain and TLD are allowed
-        if domain_name not in ALLOWED_DOMAINS or tld not in ALLOWED_TLDS:
-            raise ValidationError(
-                f"'{email}' must be from an allowed domain like Gmail, Yahoo, Outlook, etc., "
-                f"and end with a common TLD such as .com, .net, or .org."
-            )
 
 # ensure the field accepts only numbers between 1 and 360
 def validate_period(form, field):
@@ -926,12 +908,10 @@ def send_payment_failed_email(email, username, failure_status, plan_name, card_t
     except Exception as e:
         print(f"An unexpected error occurred while sending email to {email}: {str(e)}")
 
-
-
 # Verification email
 def send_verification_email(user_email, username, token):
     
-    msg = MIMEMultipart()
+    msg = MIMEMultipart("related")
     msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = user_email
     msg['Subject'] = Header('Welcome to SecuresSecrets!', 'utf-8')
@@ -947,12 +927,13 @@ def send_verification_email(user_email, username, token):
         f"<p>Please click the link below to verify your email:</p>"
         f"<p><a href='{verification_url}'>{verification_url}</a></p>"
         f"<p>Best regards,<br>SecuresSecrets Support Team.</p>"
-        f"<img src='cid:logo_image' style='width:150px; height:auto; margin-top:10px;' alt='SecuresSecrets Logo'>"
+        f"<div style='padding-left: 30px;'>"
+        f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
+        f"</div>"
         f"</body>"
         f"</html>"
-
     )
-    
+
     msg.attach(MIMEText(body, 'html'))
 
     # Add the logo image to the email
@@ -961,12 +942,14 @@ def send_verification_email(user_email, username, token):
         with open(logo_path, "rb") as img:
             img_data = img.read()
         image = MIMEImage(img_data, name=os.path.basename(logo_path))
-        image.add_header('Content-ID', '<logo_image>')
+        image.add_header('Content-ID', '<logo_image>')  # Use this Content-ID in the HTML
+        image.add_header('Content-Disposition', 'inline', filename=os.path.basename(logo_path))
         msg.attach(image)
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         print(f"Logo image not found at path: {logo_path}")
-    
+
     try:
+        # Send the email via SMTP
         with smtplib.SMTP(SERVER, PORT) as connection:
             connection.starttls()
             connection.login(EMAIL, PSWD)
@@ -974,13 +957,12 @@ def send_verification_email(user_email, username, token):
     except smtplib.SMTPException as e:
         print(f"Failed to send email to {user_email}. SMTP error: {str(e)}")
     except Exception as e:
-        print(f"An error occurred while sending email to {user_email}: {str(e)}")
-
+        print(f"An unexpected error occurred while sending email to {user_email}: {str(e)}")
 
 # Sending the eamil
 def send_secret_email(email, secret_url):
     # Construct the email message
-    msg = MIMEMultipart()
+    msg = MIMEMultipart("related")
     msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = email
     msg['Subject'] = Header('Important: Access Your Secret', 'utf-8')

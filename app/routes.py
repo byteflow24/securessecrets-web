@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc
 from datetime import date, datetime, timedelta, timezone
+import pytz
 from dateutil.relativedelta import relativedelta
 import os
 import traceback
@@ -122,7 +123,6 @@ def register():
         db.session.add(new_user)
         try:
             db.session.commit()
-            login_user(new_user)  # Log in the new user after successful commit
             # Send verification email
             send_verification_email(new_user.email, new_user.username, new_user.email_token)
             # Redirect to confirmation pending page
@@ -1325,7 +1325,6 @@ def billing():
 def pay_now():
     payment_method = request.form.get('payment_method')
     current_date = datetime.now(timezone.utc)
-    date_email = datetime.now()
 
     if current_user.subscription_status != "active":
         user_plan = db.get_or_404(Plan, current_user.plan_id)
@@ -1365,15 +1364,13 @@ def pay_now():
                     current_user.status = None
                 db.session.add(history)
                 db.session.commit()
-                send_payment_email(current_user.email, current_user.username, user_plan.plan, amount, date_email, 'renewal', payment_response['card']['brand'],payment_response['card']['last_four'])
+                send_payment_email(current_user.email, current_user.username, user_plan.plan, amount, current_user.subscription_start_date, 'renewal', payment_response['card']['brand'],payment_response['card']['last_four'])
             else:
                 flash("Payment failed. Please try again.", "danger")
         except Exception as e:
             flash(str(e), "danger")
 
         return redirect(url_for('main.billing'))
-
-
 
 # Upgrading plan
 @main.route('/upgrade-plan', methods=['POST'])
@@ -1382,7 +1379,6 @@ def pay_now():
 def upgrade_plan():
     form = PlanUpgradeForm()
     current_date = datetime.now(timezone.utc)
-    date_email = datetime.now()
     # Populate form choices using the helper function
     populate_plan_choices(form, current_user)
 
@@ -1406,6 +1402,7 @@ def upgrade_plan():
             )
             if payment_response['status'] == 'CAPTURED':
                 flash(f"Plan changed to {plan.plan} successfully!", "success")
+                current_user.subscription_start_date = current_date
                 current_user.subscription_end_date = current_date + timedelta(days=30) if plan.billing_cycle == 'monthly' else current_user.subscription_end_date
                 current_user.subscription_status = "active"
                 current_user.plan_id = plan.id
@@ -1423,7 +1420,7 @@ def upgrade_plan():
                     )
                 db.session.add(history)
                 db.session.commit()
-                send_payment_email(current_user.email, current_user.username, plan.plan, amount, date_email, 'upgrade', payment_response['card']['brand'],payment_response['card']['last_four'])
+                send_payment_email(current_user.email, current_user.username, plan.plan, amount, current_user.subscription_start_date, 'upgrade', payment_response['card']['brand'],payment_response['card']['last_four'])
             else:
                 flash("Payment failed. Please try again.", "danger")
         except Exception as e:

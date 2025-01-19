@@ -19,7 +19,7 @@ password_regex = r'^(?=.*[A-Z])(?=.*\d)(?=.*\W)(?=.*[a-z]).{8,}$'
 
 # Create a form to register new users
 class RegisterForm(FlaskForm):
-    email = EmailField("Email", validators=[DataRequired(), Email(), email_domain_validator])
+    email = EmailField("Email", validators=[DataRequired(), Email()])
     password = PasswordField("Password", validators=[DataRequired(),
         Regexp(
             regex=password_regex,

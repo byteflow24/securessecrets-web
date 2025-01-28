@@ -19,6 +19,7 @@ from email.mime.image import MIMEImage
 from email.utils import formataddr
 from email.header import Header
 import logging
+import uuid
 
 
 logger = logging.getLogger(__name__)
@@ -220,11 +221,61 @@ def is_future_time_today(form, field):
         if selected_time < current_time:
             raise ValidationError("The selected time cannot be in the future.")
 
-# Configures Tap payment
-API_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
-# API_KEY = os.environ.get("TAP_TEST_API_SECRET")
-# API_KEY = "sk_test_XKokBfNWv6FIYuTMg5sLPjhJ"
-API_URL = "https://api.tap.company/v2"
+# Configures PayPal Payment Gateway
+TAP_PROD_SECRET_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
+PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_CLIENT_ID")
+PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_CLIENT_SECRET")
+request_id = f"PRODUCT-{uuid.uuid4()}"
+API_KEY = "sk_test_XKokBfNWv6FIYuTMg5sLPjhJ"
+API_URL = "https://api-m.sandbox.paypal.com/v1"
+
+# Get the access token
+def get_access_token():
+    headers = {
+        "Accept": "application/json",
+        "Accept-Language": "en_US",
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+    data = {
+        "grant_type": "client_credentials"
+    }
+    url = f"{API_URL}/oauth2/token"
+
+    response = requests.post(url, headers=headers, data=data, auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET))
+
+    # Check if request was successful
+    if response.status_code == 200:
+        return response.json()["access_token"]
+    else:
+        print(f"Failed to fetch access token: {response.status_code}")
+        print(response.json())
+        return None
+    
+# Create API Product
+def create_product():
+    headers = {
+        'Authorization': f'Bearer {get_access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'PayPal-Request-Id': request_id,
+        'Prefer': 'return=representation',
+    }
+    data = '{ "name": "Secures Secrets Service", "description": "A secure platform for sharing and managing confidential information", "type": "SERVICE", "category": "SOFTWARE"}'
+    url = f'{API_URL}/catalogs/products'
+
+    response = requests.post(url, headers=headers, data=data)
+
+    # Check if request was successful
+    if response.status_code == 200:
+        return response.json()["id"]
+    else:
+        print(f"Failed to fetch product id: {response.status_code}")
+        print(response.json())
+        return None
+    
+# Create Subscription Plan
+# def create_plan(name, description, value, currancy):
+
 
 # Creating a charge and redirecting to Tap's hosted payment page, handling 3D Secure if needed
 def create_charge(amount, currency, description, email, phone_country_code, phone_number, first_name, plan_id, source_id):

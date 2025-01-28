@@ -1276,7 +1276,6 @@ def confirmation_pending():
 @main.route('/resend-verification')
 def resend_verification():
     user_id = request.args.get('user')
-    print(user_id)
     is_user = User.query.filter_by(id=user_id).first()
     # Logic to resend the verification email
     if is_user and not is_user.is_confirmed:

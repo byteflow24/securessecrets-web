@@ -28,12 +28,13 @@ def create_app():
     Migrate(app, db)
     bootstrap.init_app(app)
     Compress(app)
-    CSRFProtect(app)
 
     # Import inside function to avoid circular import
     with app.app_context():
-        from .routes import main as main_blueprint
+        from .routes import main as main_blueprint, paypal_webhook
         app.register_blueprint(main_blueprint)
+
+        csrf.exempt(paypal_webhook)
 
     return app
 

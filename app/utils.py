@@ -20,6 +20,7 @@ from email.utils import formataddr
 from email.header import Header
 import logging
 import uuid
+import json
 
 
 logger = logging.getLogger(__name__)
@@ -76,8 +77,8 @@ def subscription_ended():
             # Check if the subscription is valid
             if (
                 ((current_user.trial_end_date and current_user.trial_end_date.date() >= current_date) or
-                (current_user.subscription_status == "active" and
-                (current_user.subscription_end_date and current_user.subscription_end_date.date() >= current_date)))
+                (current_user.subscription_status == "ACTIVE" and
+                (current_user.next_billing_date and current_user.next_billing_date.date() >= current_date)))
             ):
                 # If the subscription is active, allow full access
                 return func(*args, **kwargs)
@@ -222,15 +223,25 @@ def is_future_time_today(form, field):
             raise ValidationError("The selected time cannot be in the future.")
 
 # Configures PayPal Payment Gateway
-TAP_PROD_SECRET_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
-PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_CLIENT_ID")
-PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_CLIENT_SECRET")
-request_id = f"PRODUCT-{uuid.uuid4()}"
-API_KEY = "sk_test_XKokBfNWv6FIYuTMg5sLPjhJ"
+# TAP_PROD_SECRET_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
+####################### LIVE ACTION #######################
+# PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_LIVE_CLIENT_ID")
+# PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_LIVE_CLIENT_SECRET")
+# API_URL = "https://api-m.paypal.com/v1"
+####################### SENDBOX ACTION #######################
+PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_SENDBOX_CLIENT_ID")
+PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_SENDBOX_CLIENT_SECRET")
+PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_WEBHOOK_ID")
 API_URL = "https://api-m.sandbox.paypal.com/v1"
+# Generating request id
+request_id = uuid.uuid4()
+
+API_KEY = "sk_test_XKokBfNWv6FIYuTMg5sLPjhJ"
+
 
 # Get the access token
 def get_access_token():
+
     headers = {
         "Accept": "application/json",
         "Accept-Language": "en_US",
@@ -251,13 +262,16 @@ def get_access_token():
         print(response.json())
         return None
     
-# Create API Product
+# Create Product API
 def create_product():
+
+    access_token = get_access_token()
+
     headers = {
-        'Authorization': f'Bearer {get_access_token}',
+        'Authorization': f'Bearer {access_token}',
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'PayPal-Request-Id': request_id,
+        'PayPal-Request-Id': f"PRODUCT-{request_id}",
         'Prefer': 'return=representation',
     }
     data = '{ "name": "Secures Secrets Service", "description": "A secure platform for sharing and managing confidential information", "type": "SERVICE", "category": "SOFTWARE"}'
@@ -266,16 +280,459 @@ def create_product():
     response = requests.post(url, headers=headers, data=data)
 
     # Check if request was successful
-    if response.status_code == 200:
-        return response.json()["id"]
+    if response.status_code == 201:
+        plan = Plan.query.filter_by(product_id="None").first()
+        plan.product_id = response.json()["id"]
+        db.session.commit()
+        print("Successed fetching product details")
     else:
         print(f"Failed to fetch product id: {response.status_code}")
         print(response.json())
         return None
     
-# Create Subscription Plan
-# def create_plan(name, description, value, currancy):
+def create_plan():
+    access_token = get_access_token()
+    plan = Plan.query.filter_by(plan="Basic").first()
 
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'PayPal-Request-Id': f'PLAN-{request_id}',
+        'Prefer': 'return=representation',
+    }
+
+    ############################################ Basic Plan (Trial + Regular Billing Cycle) ############################################
+    basic_plan_data = {
+        "product_id": plan.product_id,
+        "name": "Basic",
+        "description": "Access to basic features with a 14-day trial",
+        "status": "ACTIVE",
+        "billing_cycles": [
+            {
+                "frequency": {
+                    "interval_unit": "DAY",
+                    "interval_count": 14
+                },
+                "tenure_type": "TRIAL",
+                "sequence": 1,
+                "total_cycles": 1,
+                "pricing_scheme": {
+                    "fixed_price": {
+                    "value": "0",
+                    "currency_code": "USD"
+                    }
+                }
+            },
+            {
+                "frequency": {
+                    "interval_unit": "MONTH",
+                    "interval_count": 1
+                },
+                "tenure_type": "REGULAR",
+                "sequence": 2,
+                "total_cycles": 0,  # 0 means the subscription is indefinite
+                "pricing_scheme": {
+                    "fixed_price": {
+                        "value": "0.99",  # Monthly price
+                        "currency_code": "USD"
+                    }
+                }
+            }
+        ],
+        "payment_preferences": {
+            "auto_bill_outstanding": True,
+            "setup_fee": {
+                "value": "0",
+                "currency_code": "USD"
+            },
+            "setup_fee_failure_action": "CONTINUE",
+            "payment_failure_threshold": 3
+        }
+    }
+    
+    ############################################ Premium Plan (Trial + Regular Billing Cycle) ############################################
+    premium_plan_data = {
+        "product_id": plan.product_id,  # Replace with your actual product ID
+        "name": "Premium",
+        "description": "Access to premium features with a 14-day trial",
+        "status": "ACTIVE",
+        "billing_cycles": [
+            {
+                "frequency": {
+                    "interval_unit": "DAY",
+                    "interval_count": 14
+                },
+                "tenure_type": "TRIAL",
+                "sequence": 1,
+                "total_cycles": 1,
+                "pricing_scheme": {
+                    "fixed_price": {
+                    "value": "0",
+                    "currency_code": "USD"
+                    }
+                }
+            },
+            {
+                "frequency": {
+                    "interval_unit": "MONTH",
+                    "interval_count": 1
+                },
+                "tenure_type": "REGULAR",
+                "sequence": 2,
+                "total_cycles": 0,  # 0 means the subscription is indefinite
+                "pricing_scheme": {
+                    "fixed_price": {
+                        "value": "1.99",  # Monthly price
+                        "currency_code": "USD"
+                    }
+                }
+            }
+        ],
+        "payment_preferences": {
+            "auto_bill_outstanding": True,
+            "setup_fee": {
+                "value": "0",
+                "currency_code": "USD"
+            },
+            "setup_fee_failure_action": "CONTINUE",
+            "payment_failure_threshold": 3
+        },
+    }
+
+    ############################################ Non-Trial Basic Plan ############################################
+    basic_non_trial_plan_data = {
+        "product_id": plan.product_id,
+        "name": "Basic (No Trial)",
+        "description": "Access to basic features without trial",
+        "status": "ACTIVE",
+        "billing_cycles": [
+            {
+                "frequency": {
+                    "interval_unit": "MONTH",
+                    "interval_count": 1
+                },
+                "tenure_type": "REGULAR",
+                "sequence": 1,
+                "total_cycles": 0,  # No trial, regular billing
+                "pricing_scheme": {
+                    "fixed_price": {
+                        "value": "0.99",  # Monthly price
+                        "currency_code": "USD"
+                    }
+                }
+            }
+        ],
+        "payment_preferences": {
+            "auto_bill_outstanding": True,
+            "setup_fee": {
+                "value": "0",
+                "currency_code": "USD"
+            },
+            "setup_fee_failure_action": "CONTINUE",
+            "payment_failure_threshold": 3
+        }
+    }
+
+    ############################################ Non-Trial Premium Plan ############################################
+    premium_non_trial_plan_data = {
+        "product_id": plan.product_id,  # Replace with your actual product ID
+        "name": "Premium (No Trial)",
+        "description": "Access to premium features without trial",
+        "status": "ACTIVE",
+        "billing_cycles": [
+            {
+                "frequency": {
+                    "interval_unit": "MONTH",
+                    "interval_count": 1
+                },
+                "tenure_type": "REGULAR",
+                "sequence": 1,
+                "total_cycles": 0,  # No trial, regular billing
+                "pricing_scheme": {
+                    "fixed_price": {
+                        "value": "1.99",  # Monthly price
+                        "currency_code": "USD"
+                    }
+                }
+            }
+        ],
+        "payment_preferences": {
+            "auto_bill_outstanding": True,
+            "setup_fee": {
+                "value": "0",
+                "currency_code": "USD"
+            },
+            "setup_fee_failure_action": "CONTINUE",
+            "payment_failure_threshold": 3
+        },
+    }
+
+    ############################################ Serialize data to JSON strings ############################################
+    # basic_plan_json = json.dumps(basic_plan_data)
+    # premium_plan_json = json.dumps(premium_plan_data)
+    # basic_non_trial_plan_json = json.dumps(basic_non_trial_plan_data)
+    premium_non_trial_plan_json = json.dumps(premium_non_trial_plan_data)
+
+    url = f"{API_URL}/billing/plans"
+
+    ############################################ Create the Basic and Premium Plans ############################################
+    # response_basic = requests.post(url, headers=headers, data=basic_plan_json)
+    # response_premium = requests.post(url, headers=headers, data=premium_plan_json)
+    # response_basic_non_trial = requests.post(url, headers=headers, data=basic_non_trial_plan_json)
+    response_premium_non_trial = requests.post(url, headers=headers, data=premium_non_trial_plan_json)
+
+    # if response_basic.status_code == 201:
+    #     basic_plan = Plan.query.filter_by(plan="Basic").first()
+    #     basic_plan.paypal_plan_id = response_basic.json()['id']
+    #     db.session.commit()
+    #     print("Basic Plan Created Successfully!")
+    # else:
+    #     print("Failed to create Basic Plan:", response_basic.json())
+
+    # if response_premium.status_code == 201:
+    #     premium_plan = Plan.query.filter_by(plan="Premium").first()
+    #     premium_plan.paypal_plan_id = response_premium.json()['id']
+    #     db.session.commit()
+    #     print("Premium Plan Created Successfully!")
+    # else:
+    #     print("Failed to create Premium Plan:", response_premium.json())
+
+    # if response_basic_non_trial.status_code == 201:
+    #     basic_plan = Plan.query.filter_by(plan="Basic").first()
+
+    #     # Check if paypal_plan_id is already a list, if not, initialize it as a list
+    #     if isinstance(basic_plan.paypal_plan_id, list):
+    #         basic_plan.paypal_plan_id.append(response_basic_non_trial.json()['id'])
+    #     else:
+    #         # If it's not a list, just set it to a list with the new plan id
+    #         basic_plan.paypal_plan_id = [response_basic_non_trial.json()['id']]
+
+    #     db.session.commit()
+    #     print("Non-Trial Basic Plan Created Successfully!", response_basic_non_trial.json())
+    # else:
+    #     print("Failed to create Non-Trial Basic Plan:", response_basic_non_trial.json())
+
+    if response_premium_non_trial.status_code == 201:
+        # Fetch the existing plan
+        premium_plan = Plan.query.filter_by(plan="Premium").first()
+        
+        # Check if paypal_plan_id is already a list or a JSON string
+        if isinstance(premium_plan.paypal_plan_id, str):
+            existing_plan_ids = json.loads(premium_plan.paypal_plan_id)
+        elif isinstance(premium_plan.paypal_plan_id, list) or premium_plan.paypal_plan_id is None:
+            existing_plan_ids = premium_plan.paypal_plan_id or []
+        else:
+            raise TypeError("Unexpected type for paypal_plan_id")
+
+        # Append the new PayPal Plan ID
+        existing_plan_ids.append(response_premium_non_trial.json()['id'])
+
+        # Store back as JSON string
+        premium_plan.paypal_plan_id = json.dumps(existing_plan_ids)
+        db.session.commit()
+
+        print("Basic Plan Created Successfully!")
+        print(response_premium_non_trial.json())  # Contains the plan_id for Basic
+    else:
+        print("Failed to create Basic Plan.")
+        print(response_premium_non_trial.json())
+
+# Predefined plans with billing cycles
+available_plans = {
+    "P-08C947799V946961VM6QKINY": basic_non_trial_plan_data,  # Replace with actual plan IDs
+    "P-3C333386F50890337M6QKMQY": premium_non_trial_plan_data,  # Replace with actual plan IDs
+}
+
+# Create new subscription
+def create_new_subscription(user, new_plan_id):
+    # Validate the new_plan_id against available plans
+    if new_plan_id not in available_plans:
+        print(f"Error: Invalid plan ID {new_plan_id}. Please select a valid plan.")
+        return None
+
+    access_token = get_access_token()
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+    }
+    
+    # Make sure the start_time is at least a few minutes into the future
+    future_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+    current_time = future_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Define billing cycles for the selected plan
+    billing_cycles = available_plans[new_plan_id]["billing_cycles"]
+
+    data = {
+        "plan_id": new_plan_id,
+        "subscriber": {
+            "email_address": user.email,
+            "payer_id": user.paypal_payer_id,  # Assuming you store the PayPal payer ID
+        },
+        "start_time": current_time,  # Start at least 5 minutes into the future
+        "quantity": "1",
+        "shipping_amount": {
+            "currency_code": "USD",
+            "value": "0.0"
+        },
+        "billing_cycles": billing_cycles,  # Include the billing cycles for the selected plan
+        "payment_preferences": {
+            "service_type": "PREPAID",
+            "auto_bill_outstanding": True
+        }
+    }
+
+    url = f"{API_URL}/billing/subscriptions"
+    response = requests.post(url, headers=headers, data=json.dumps(data))
+
+    if response.status_code == 201:
+        print("New subscription created successfully.")
+        return response.json()  # Returns the subscription details
+    else:
+        print("Failed to create new subscription:", response.json())
+        return None
+
+
+# Cancel subscription
+def cancel_subscription(subscription_id, reason):
+    access_token = get_access_token()
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+    }
+    data = json.dumps({"reason": reason})
+
+    url = f'{API_URL}/billing/subscriptions/{subscription_id}/cancel'
+    response = requests.post(url, headers=headers, data=data)
+
+    if response.status_code == 204:
+        print("Subscription canceled successfully!")
+        return True
+    else:
+        print("Failed to cancel subscription:", response.json())
+        return False
+    
+# Change subscription plan
+def change_subscription_plan(user_subscription_id, new_plan_id):
+    access_token = get_access_token()
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+    }
+    data = json.dumps({
+        "plan_id": new_plan_id,  # Correct way to change the plan
+    })
+
+    url = f'{API_URL}/billing/subscriptions/{user_subscription_id}/revise'
+    response = requests.post(url, headers=headers, data=data)
+
+    if response.status_code == 200:
+        print("Subscription updated successfully!")
+        return True
+    else:
+        print("Failed to update subscription:", response.json())
+        return False
+
+# Deactivate plan function
+def deactivate_plan(plan_id):
+    access_token = get_access_token()
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+    }
+    data = '{}'
+
+    url = f'{API_URL}/billing/plans/{plan_id}/deactivate'
+    response = requests.post(url, headers=headers, data=data)
+
+    if response.status_code == 204:
+        print("Deactivated plan Successfully!")
+
+    else:
+        print("Failed to deactivate plan.")
+
+# List plans
+def call_plans():
+
+    access_token = get_access_token()
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Prefer': 'return=representation',
+    }
+
+    params = (
+        ('sort_by', 'create_time'),
+        ('sort_order', 'desc'),
+    )
+
+    url = f'{API_URL}/billing/plans'
+    response = requests.get(url, headers=headers, params=params)
+
+    if response.status_code == 200:
+        print("Premium Plan Created Successfully!")
+        print(response.json())
+    else:
+        print("Failed to retrieve Plans.")
+        print(response.json())
+
+# Get user subscription details
+def get_subscription_details(subscription_id):
+
+    access_token = get_access_token()
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+    }
+
+    url = f"{API_URL}/billing/subscriptions/{subscription_id}"
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        print(response.json())
+        return response.json()
+    else:
+        print("Failed to get user subscription details:")
+        print(response.json())
+
+# Webhook veryfication
+def verify_paypal_webhook(data, request_headers):
+
+    access_token = get_access_token()
+
+    auth_headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+    }
+    verify_data = {
+        "auth_algo": request_headers.get("PAYPAL-AUTH-ALGO"),
+        "cert_url": request_headers.get("PAYPAL-CERT-URL"),
+        "transmission_id": request_headers.get("PAYPAL-TRANSMISSION-ID"),
+        "transmission_sig": request_headers.get("PAYPAL-TRANSMISSION-SIG"),
+        "transmission_time": request_headers.get("PAYPAL-TRANSMISSION-TIME"),
+        "webhook_id": PAYPAL_WEBHOOK_ID,
+        "webhook_event": data,
+    }
+
+    url = f"{API_URL}/notifications/verify-webhook-signature"
+    response = requests.post(url, headers=auth_headers, json=verify_data)
+
+    if response.status_code == 200 and response.json().get("verification_status") == "SUCCESS":
+        return True
+    return False
 
 # Creating a charge and redirecting to Tap's hosted payment page, handling 3D Secure if needed
 def create_charge(amount, currency, description, email, phone_country_code, phone_number, first_name, plan_id, source_id):
@@ -465,6 +922,155 @@ def get_ip():
 # Get user agent
 def get_user_agent():
     return request.user_agent.string
+
+# Triggered when a user makes a successful payment.
+def handle_payment_success(data):
+    try:
+        # Access the necessary data from the webhook payload
+        subscription_id = data['resource'].get('billing_agreement_id')  # Use .get() to avoid KeyError if the key is missing
+        payment_amount = data['resource']['amount'].get('total')  # Ensure correct access to total
+        currency = data['resource']['amount'].get('currency')
+        transaction_id = data['resource'].get('id')
+
+        # Log the data for debugging
+        print(f"Subscription ID: {subscription_id}")
+        print(f"Payment Amount: {payment_amount}")
+        print(f"Currency: {currency}")
+        print(f"Transaction ID: {transaction_id}")
+
+        # Find the user associated with the subscription
+        user = User.query.filter_by(paypal_subscription_id=subscription_id).first()
+        if not user:
+            print(f"No user found for subscription ID {subscription_id}")
+            return
+
+        # Create a new payment record in the database
+        new_payment = Payment(
+            user_id=user.id,
+            subscription_id=subscription_id,
+            amount=payment_amount,
+            currency=currency,
+            transaction_id=transaction_id,
+            payment_date=datetime.now(timezone.utc)
+        )
+        db.session.add(new_payment)
+
+        # Retrieve and update subscription info
+        subscription_data = get_subscription_details(subscription_id)
+        billing_info = subscription_data.get("billing_info", {})
+
+        next_billing = billing_info.get("next_billing_time")
+        if next_billing and user.next_billing_date != next_billing:
+            user.next_billing_date = next_billing
+
+        db.session.commit()
+        print(f"Payment successful for User {user.id}, Amount: {payment_amount}")
+
+    except KeyError as e:
+        print(f"Error processing payment data: Missing key {e}")
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
+
+# Triggered when subscription created
+def change_subscription_plan(data):
+    subscription_id = data['resource']['id']
+    plan_id = data['resource']['plan_id']
+    subscriber_email = data['resource']['subscriber']['email_address']
+    start_time = data['resource']['start_time']
+    status = data['resource']['status']
+
+    # Log the received subscription creation data
+    print(f"Subscription Created: ID: {subscription_id}, Plan ID: {plan_id}, Email: {subscriber_email}, Status: {status}")
+
+    matching_plan = Plan.query.filter(Plan.paypal_plan_id.contains(plan_id)).first()
+    if not matching_plan:
+        print(f"No matching plan found for PayPal plan ID {plan_id}")
+        return  # Stop execution if no matching plan is found
+    
+
+    # Assuming you have the user record, update their subscription info
+    user = User.query.filter_by(paypal_subscription_id=subscription_id).first()
+    if user:
+        user.paypal_subscription_id = subscription_id
+        user.plan_id = matching_plan.id
+        user.subscription_start_time = start_time
+        user.subscription_status = status
+        db.session.commit()
+        print(f"User {user.id} subscription updated to {status}")
+
+# Triggered when a payment is declined.
+def handle_payment_failed(data):
+    user_id = data['resource']['billing_agreement_id']
+    user = User.query.filter_by(paypal_subscription_id=user_id).first()
+    if not user:
+        print(f"No user found for subscription ID {user_id}")
+        return
+
+    user.failed_payments += 1  # Track failed attempts
+    if user.failed_payments >= 3:
+        user.subscription_status = "SUSPENDED"
+    
+    db.session.commit()
+    print(f"Payment failed for User {user_id}")
+
+# Triggered when a user cancels their subscription.
+def handle_subscription_canceled(data):
+    user_id = data['resource']['id']
+    user = User.query.filter_by(paypal_subscription_id=user_id).first()
+    if not user:
+        print(f"No user found for subscription ID {user_id}")
+    user.subscription_status = "CANCELED"
+    db.session.commit()
+    print(f"User {user_id} canceled their subscription.")
+
+# Triggered when a user suspended their subscription.
+def handle_subscription_suspended(data):
+    user_id = data['resource']['id']
+    user = User.query.filter_by(paypal_subscription_id=user_id).first()
+    if not user:
+        print(f"No user found for subscription ID {user_id}")
+    user.subscription_status = "SUSPENDED"
+    db.session.commit()
+    print(f"User {user_id} suspended their subscription.")
+
+# Triggered when a user upgrades/downgrades their subscription.
+def handle_subscription_updated(data):
+    user_id = data['resource']['id']
+    new_plan_id = data['resource'].get('plan_id')  # Use .get() to avoid KeyError if missing
+    if not new_plan_id:
+        print("No new plan ID found in the updated subscription data.")
+        return  # Exit if no new plan ID is provided
+
+    # Find the user associated with the subscription ID
+    user = User.query.filter_by(paypal_subscription_id=user_id).first()
+    if not user:
+        print(f"No user found for subscription ID {user_id}")
+        return  # Stop execution if no user is found
+
+    # Find the plan that matches the new PayPal plan ID
+    matching_plan = Plan.query.filter(Plan.paypal_plan_id.contains(new_plan_id)).first()
+    if not matching_plan:
+        print(f"No matching plan found for PayPal plan ID {new_plan_id}")
+        return  # Stop execution if no matching plan is found
+    
+    # Update the user's plan ID in the database
+    user.plan_id = matching_plan.id
+
+    # If needed, you can update additional subscription details such as next billing date or amount
+    subscription_data = data['resource']
+    next_billing_time = subscription_data.get('billing_info', {}).get('next_billing_time')
+    if next_billing_time:
+        user.next_billing_date = next_billing_time  # Update next billing date
+
+    # Assuming you have a 'subscription_amount' field to track the subscription amount
+    subscription_amount = subscription_data.get('billing_info', {}).get('last_payment', {}).get('amount', {}).get('value')
+    if subscription_amount:
+        user.subscription_amount = subscription_amount  # Update the subscription amount
+
+    db.session.commit()  # Commit the changes to the database
+
+    print(f"User {user.id} updated their subscription to Plan: {new_plan_id}")
+    print(f"Updated subscription details: {get_subscription_details(user_id)}")
 
 
 # Recurring payment process

@@ -171,7 +171,7 @@
                         {% endif %} 
                     {% endwith %}
                 </div>
-                {% if current_user.subscription_status == "inactive" %}
+                {% if current_user.subscription_status != "ACTIVE" %}
                     <div class="alert alert-warning text-center">
                         You have not paid for your plan. <a href="{{ url_for('main.payment') }}" class="link-primary link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover">Pay now</a>
                     </div>
@@ -185,7 +185,7 @@
                         <p><strong>Username:</strong> {{ current_user.username }}</p>
                         <p><strong>Total Secrets:</strong> {{ secrets ~ '/10' if current_user.plan and current_user.plan.plan == 'Basic' else secrets }}</p>
                         <p><strong>Plan:</strong> {{ current_user.plan.plan }}</p>
-                        <p><strong>Plan Expiry:</strong> {{ current_user.subscription_end_date.strftime('%Y-%m-%d') if current_user.subscription_end_date else 'Inactive' }}</p>
+                        <p><strong>Next Billing Date:</strong> {{ current_user.next_billing_date.strftime('%Y-%m-%d') if current_user.next_billing_date else 'INACTIVE' }}</p>
                         <p><strong>Last Login:</strong> {{ last_login.login_time }}</p>
                         <p class="form-label"><strong>Storage Usage:</strong></p>
                         <div class="progress" style="height: 20px; border-radius: 10px; overflow: hidden;">

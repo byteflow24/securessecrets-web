@@ -1,6 +1,6 @@
 
 <!-- Main Content-->
-<main class="mb-4">
+<main class="mb-5">
     <div class="container px-4 px-lg-5">
       <div class="row gx-4 gx-lg-5 justify-content-center">
         <div class="col-md-10 col-lg-8 col-xl-7">
@@ -27,7 +27,7 @@
                 {% endwith %}
             </div>
           <!-- Contact Form Card -->
-          <div class="card shadow-lg border-0 rounded-4">
+          <div class="card shadow-lg border-0 rounded-4 mb-4">
             <div class="card-body p-5">
               <form id="contactForm" action="{{ url_for('main.contact') }}" method="post" novalidate>
                 {{ form.hidden_tag() }}

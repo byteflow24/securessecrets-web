@@ -1,6 +1,6 @@
 <div class="container mt-5 mb-5">
     <div class="row justify-content-center">
-        <div class="col-md-8">
+        <div class="col-md-8 mt-3">
 
             <!-- Flash Messages -->
             {% with messages = get_flashed_messages(with_categories=true) %}
@@ -22,7 +22,7 @@
                 </div>
                 <div class="card-body text-center">
                     <p class="lead"><strong>{{ user.plan.plan }}</strong></p>
-                    <p>Status: <span class="badge {% if user.subscription_status == 'active' %}bg-success{% else %}bg-danger{% endif %} text-white">
+                    <p>Status: <span class="badge {% if user.subscription_status == 'ACTIVE' %}bg-success{% else %}bg-danger{% endif %} text-white">
                         {{ user.subscription_status|capitalize }}
                     </span></p>
                 </div>
@@ -63,7 +63,7 @@
 
             <!-- Pay Now Button -->
             <!-- Notification to the user -->
-            {% if user.subscription_status != 'active' %}
+            {% if user.subscription_status != 'ACTIVE' %}
             <div class="text-center mb-4">
                 <p class="text-warning">Your bill has not been paid yet. You can pay it now by clicking the button below.</p>
                 <!-- Pay Now Button -->
@@ -124,7 +124,7 @@
                     <h5 class="mb-0">Upgrade Plan</h5>
                 </div>
                 <div class="card-body mb-3">
-                    <form id="upgrade-form" method="post" action="{{ url_for('main.upgrade_plan') }}">
+                    <form id="upgrade-form" method="post" action="{{ url_for('main.change_plan') }}">
                         {{ form.hidden_tag() }}
                         <div class="form-group mb-3">
                             {{ form.plan_id.label }}

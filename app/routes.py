@@ -1,10 +1,10 @@
 from flask import Blueprint, render_template, redirect, url_for, send_from_directory, flash, request, session, jsonify, current_app, abort, get_flashed_messages
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFError
-from . import db
+from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, CardDetailsForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, HistoryPayment, PublicSecrets
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, generate_token, send_verification_email, is_safe_url, decrypt_secrets, tokenize_card, create_charge, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email, contact_email
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, get_access_token, deactivate_plan, create_plan, call_plans, create_charge, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -15,6 +15,8 @@ import pytz
 from dateutil.relativedelta import relativedelta
 import os
 import traceback
+import requests
+import logging
 
 
 main = Blueprint('main', __name__)
@@ -153,6 +155,13 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
 
+    # get_subscription_details("I-NHYJ4905XGAT")
+    # get_access_token()
+    # call_plans()
+    # create_plan()
+    # deactivate_plan('P-4W733477VW405671EM6NS3CQ')
+    # cancel_subscription("I-NHYJ4905XGAT", "Testing")
+
     form = LoginForm()
     # Get next from both GET and POST
     next_page = request.args.get('next') or request.form.get('next')
@@ -213,35 +222,34 @@ def login():
         # Initialize date_time with None for cases when no scheduled date is set
         date_time = None
 
-        if secret.public:
-            # If a recent login exists and it's more recent than the current last_login
-            if latest_login and (not secret.last_login or latest_login > secret.last_login):
-                # Update the last_login to the latest login date
-                secret.last_login = latest_login
+        # If a recent login exists and it's more recent than the current last_login
+        if latest_login and (not secret.last_login and latest_login > secret.last_login):
+            # Update the last_login to the latest login date
+            secret.last_login = latest_login
 
-                # Handle `period` and calculate `time_period` if `period` is present
-                if secret.period:
-                    try:
-                        # Calculate the new time period based on the period (e.g., days)
-                        time_period = latest_login + timedelta(days=int(secret.period))
-                        secret.time_period = time_period
-                    except ValueError:
-                        # Skip this secret if `period` is invalid but do not raise an error
-                        continue
+            # Handle `period` and calculate `time_period` if `period` is present
+            if secret.period:
+                try:
+                    # Calculate the new time period based on the period (e.g., days)
+                    time_period = latest_login + timedelta(days=int(secret.period))
+                    secret.time_period = time_period
+                except ValueError:
+                    # Skip this secret if `period` is invalid but do not raise an error
+                    continue
 
-            # Handle the scenario when `date_to_send` and `time_to_send` are used
-            if secret.date_to_send == current_date and secret.time_to_send == current_time:
-                # Combine date_to_send and time_to_send if they exist and match the current time
-                date_time = datetime.combine(secret.date_to_send, secret.time_to_send)
+        # Handle the scenario when `date_to_send` and `time_to_send` are used
+        if secret.date_to_send == current_date and secret.time_to_send == current_time:
+            # Combine date_to_send and time_to_send if they exist and match the current time
+            date_time = datetime.combine(secret.date_to_send, secret.time_to_send)
 
-            # Update the associated PublicSecrets share_date if available
-            public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
-            if public_secret:
-                # Update share_date based on valid `time_period` or `date_time`
-                if secret.time_period:
-                    public_secret.share_date = secret.time_period
-                elif date_time:
-                    public_secret.share_date = date_time
+        # Update the associated PublicSecrets share_date if available
+        public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
+        if public_secret:
+            # Update share_date based on valid `time_period` or `date_time`
+            if secret.time_period:
+                public_secret.share_date = secret.time_period
+            elif date_time:
+                public_secret.share_date = date_time
 
     # Commit changes to the database
     db.session.commit()
@@ -459,6 +467,11 @@ def dashboard():
     if not current_user.is_authenticated:
         return jsonify({"error": "Unauthorized", "message": "Your session has expired. Please log in again."}), 401  # Explicitly return 401 status for AJAX
     
+    # cancel_subscription('I-JWXGEDPYF9XT', 'I was testing only')
+    # redirect the new users to the payment page to continue using the account
+    if current_user.status == "new":
+        return redirect(url_for("main.payment"))
+    
     # counting secrets for each user
     secrets = Secret.query.filter_by(user_id=current_user.id).count()
     last_login = current_user.login_history[-1] if current_user.login_history else None
@@ -487,35 +500,34 @@ def dashboard():
         # Initialize date_time with None for cases when no scheduled date is set
         date_time = None
 
-        if secret.public:
-            # If a recent login exists and it's more recent than the current last_login
-            if latest_login and (not secret.last_login or latest_login > secret.last_login):
-                # Update the last_login to the latest login date
-                secret.last_login = latest_login
+        # If a recent login exists and it's more recent than the current last_login
+        if latest_login and (not secret.last_login and latest_login > secret.last_login):
+            # Update the last_login to the latest login date
+            secret.last_login = latest_login
 
-                # Handle `period` and calculate `time_period` if `period` is present
-                if secret.period:
-                    try:
-                        # Calculate the new time period based on the period (e.g., days)
-                        time_period = latest_login + timedelta(days=int(secret.period))
-                        secret.time_period = time_period
-                    except ValueError:
-                        # Skip this secret if `period` is invalid but do not raise an error
-                        continue
+            # Handle `period` and calculate `time_period` if `period` is present
+            if secret.period:
+                try:
+                    # Calculate the new time period based on the period (e.g., days)
+                    time_period = latest_login + timedelta(days=int(secret.period))
+                    secret.time_period = time_period
+                except ValueError:
+                    # Skip this secret if `period` is invalid but do not raise an error
+                    continue
 
-            # Handle the scenario when `date_to_send` and `time_to_send` are used
-            if secret.date_to_send == current_date and secret.time_to_send == current_time:
-                # Combine date_to_send and time_to_send if they exist and match the current time
-                date_time = datetime.combine(secret.date_to_send, secret.time_to_send)
+        # Handle the scenario when `date_to_send` and `time_to_send` are used
+        if secret.date_to_send == current_date and secret.time_to_send == current_time:
+            # Combine date_to_send and time_to_send if they exist and match the current time
+            date_time = datetime.combine(secret.date_to_send, secret.time_to_send)
 
-            # Update the associated PublicSecrets share_date if available
-            public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
-            if public_secret:
-                # Update share_date based on valid `time_period` or `date_time`
-                if secret.time_period:
-                    public_secret.share_date = secret.time_period
-                elif date_time:
-                    public_secret.share_date = date_time
+        # Update the associated PublicSecrets share_date if available
+        public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
+        if public_secret:
+            # Update share_date based on valid `time_period` or `date_time`
+            if secret.time_period:
+                public_secret.share_date = secret.time_period
+            elif date_time:
+                public_secret.share_date = date_time
 
     # Commit changes to the database
     db.session.commit()
@@ -1101,45 +1113,78 @@ def pricing():
 def payment():
     # If the user is not authenticated (session expired), return 401
     if not current_user.is_authenticated:
-        return jsonify({"error": "Unauthorized", "message": "Your session has expired. Please log in again."}), 401  # Explicitly return 401 status for AJAX
+        return jsonify({"error": "Unauthorized", "message": "Your session has expired. Please log in again."}), 401
     
-    plan_id = current_user.plan_id
-    plan = db.get_or_404(Plan, plan_id)
-    amount = plan.price
-    currency = plan.currency
-    description = current_user.status if current_user.status == "new" else "renewal"
-    
-    if request.method == 'POST':
-        # Retrieve the token from the form (sent by the frontend)
-        token_id = request.form.get('tapToken')  # This is the token ID generated by Tap JS
-        print(token_id)
-        print("In here")
+    client_id = os.environ.get("PAYPAL_SENDBOX_CLIENT_ID")
+    paypal_plan_id = current_user.plan.paypal_plan_id[1]
 
-        if not token_id:
-            flash("Payment token is missing. Please try again.", "danger")
-            return redirect(url_for('main.payment'))
+    if not client_id or not paypal_plan_id:
+        return jsonify({"status": "error", "message": "Missing data"}), 400
 
-        try:
-            # Now create the charge using the token
-            charge_response = create_charge(amount, currency, description, current_user.email, current_user.country_code, current_user.phone, current_user.username, plan_id, token_id)
-            
-            if isinstance(charge_response, str):
-                # If it's a URL (3D Secure), redirect
-                return redirect(charge_response)
+    return render_template("card_details.html", show_header=False, show_footer=False, client_id=client_id, paypal_plan_id=paypal_plan_id)
 
-            if charge_response.get('status') == 'CAPTURED':
-                payment_url = charge_response.get('transaction', {}).get('url')
-                if payment_url:
-                    return redirect(payment_url)
 
-            flash("Failed to initiate payment. Please try again.", "danger")
-            return redirect(url_for('main.payment'))
+@main.route('/process-subscription', methods=['POST'])
+def process_subscription():
+    # Parse the incoming JSON data
+    data = request.get_json()
 
-        except Exception as e:
-            flash(str(e), "danger")
-            return redirect(url_for('main.payment'))
+    subscription_id = data.get('subscription_id')
+    user_id = data.get('user_id')
 
-    return render_template("card_details.html", show_header=False, show_footer=False)
+    if not subscription_id or not user_id:
+        return jsonify({"status": "error", "message": "Missing data"}), 400
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"status": "error", "message": "User not found"}), 404
+
+    try:
+        subscription_data = get_subscription_details(subscription_id)
+        print("Full Subscription Data:", subscription_data)  # Log response for debugging
+
+        # Extract relevant details
+        status = subscription_data.get("status", "UNKNOWN")
+        start_time = subscription_data.get("start_time")  # When the subscription started
+        billing_info = subscription_data.get("billing_info", {})
+
+        # Get Trial End Date
+        trial_end = None
+        next_billing_date = None
+        failed_payments = billing_info.get("failed_payments_count", 0)
+
+        if "cycle_executions" in billing_info:
+            for cycle in billing_info["cycle_executions"]:
+                if cycle["sequence"] == 1 and cycle["tenure_type"] == "TRIAL":
+                    trial_end = billing_info.get("next_billing_time")
+                elif (cycle["sequence"] == 1 or cycle["sequence"] == 2) and cycle["tenure_type"] == "REGULAR":
+                    next_billing_date = billing_info.get("next_billing_time")
+
+        # Update User Subscription in DB
+        user.paypal_subscription_id = subscription_id
+        user.subscription_status = status
+        user.trial_start_date = start_time  # Subscription start = trial start
+        user.trial_end_date = trial_end
+        user.subscription_start_date = start_time
+        user.next_billing_date = next_billing_date  # Next billing date
+        user.fialed_payments = failed_payments
+        user.updated_at = datetime.now()
+        user.status = None
+
+        db.session.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": "Subscription processed",
+            "subscription_status": status,
+            "trial_end_date": trial_end,
+            "next_billing_date": next_billing_date
+        }), 200
+
+    except requests.exceptions.RequestException as e:
+        print("Error fetching subscription details:", e)
+        return jsonify({"status": "error", "message": "Failed to retrieve PayPal subscription details"}), 500
+
 
 # Payment completed
 @main.route('/payment_complete')
@@ -1204,7 +1249,7 @@ def payment_complete():
                         user.payment_agreement_id = charge_details['payment_agreement']['id']
 
                     user.subscription_start_date = current_date
-                    user.subscription_end_date = current_date + timedelta(days=29) if plan.billing_cycle == 'monthly' else user.subscription_end_date
+                    user.next_billing_date = current_date + timedelta(days=29) if plan.billing_cycle == 'monthly' else user.next_billing_date
                     user.subscription_status = "active"
                     if current_user.status == "new":
                         user.status = None
@@ -1291,12 +1336,11 @@ def resend_verification():
 
 # Billing page
 @main.route('/billing', methods=['GET'])
-@login_required
 @subscription_ended()
 def billing():
-    
     secret_form = SecretForm()
     form = PlanUpgradeForm()
+
     if current_user.is_authenticated and not current_user.is_confirmed:
         return redirect(url_for('main.confirmation_pending'))
     user = User.query.get(current_user.id)
@@ -1319,13 +1363,12 @@ def billing():
 
 # to pay the plan if still not paid
 @main.route('/pay_now', methods=['POST'])
-@login_required
 @subscription_ended()
 def pay_now():
     payment_method = request.form.get('payment_method')
     current_date = datetime.now(timezone.utc)
 
-    if current_user.subscription_status != "active":
+    if current_user.subscription_status != "ACTIVE":
         user_plan = db.get_or_404(Plan, current_user.plan_id)
         amount = user_plan.price
         currency = user_plan.currency
@@ -1357,7 +1400,7 @@ def pay_now():
             if payment_response['status'] == 'CAPTURED':
                 flash("Payment was successful!", "success")
                 current_user.subscription_start_date = current_date
-                current_user.subscription_end_date = current_date + timedelta(days=29) if user_plan.billing_cycle == 'monthly' else current_user.subscription_end_date
+                current_user.next_billing_date = current_date + timedelta(days=29) if user_plan.billing_cycle == 'monthly' else current_user.next_billing_date
                 current_user.subscription_status = "active"
                 if current_user.status == "new":
                     current_user.status = None
@@ -1373,7 +1416,6 @@ def pay_now():
 
 # Upgrading plan
 @main.route('/upgrade-plan', methods=['POST'])
-@login_required
 @subscription_ended()
 def upgrade_plan():
     form = PlanUpgradeForm()
@@ -1402,7 +1444,7 @@ def upgrade_plan():
             if payment_response['status'] == 'CAPTURED':
                 flash(f"Plan changed to {plan.plan} successfully!", "success")
                 current_user.subscription_start_date = current_date
-                current_user.subscription_end_date = current_date + timedelta(days=30) if plan.billing_cycle == 'monthly' else current_user.subscription_end_date
+                current_user.next_billing_date = current_date + timedelta(days=30) if plan.billing_cycle == 'monthly' else current_user.next_billing_date
                 current_user.subscription_status = "active"
                 current_user.plan_id = plan.id
                 history = HistoryPayment(
@@ -1427,6 +1469,91 @@ def upgrade_plan():
 
         return redirect(url_for('main.billing'))
 
+# Upgrade/ Downgrade plan
+@main.route('/change-plan', methods=['POST'])
+@subscription_ended()
+def change_plan():
+    form = PlanUpgradeForm()
+
+    populate_plan_choices(form, current_user)
+
+    if form.plan_id.data == 0:
+        flash("Please select a valid plan to upgrade.", "danger")
+        return redirect(url_for('main.billing'))
+    
+    # Check if the form is valid
+    if form.validate_on_submit():
+        selected_plan_id = form.plan_id.data
+        # Retrieve the selected plan from the database
+        plan = db.get_or_404(Plan, selected_plan_id)
+        if not plan:
+            return jsonify({"status": "error", "message": "No plan specified"}), 400
+
+        new_plan_id = plan.paypal_plan_id[1]  # PayPal Plan ID (e.g., Premium or Basic)
+        print(f"Selected new plan ID: {new_plan_id}")
+
+        # Check if the user already has an active subscription
+        user_subscription_id = current_user.paypal_subscription_id
+        if not user_subscription_id:
+            return jsonify({"status": "error", "message": "User has no active PayPal subscription"}), 400
+        
+        # Cancel the current subscription before creating the new one
+        if cancel_subscription(user_subscription_id, "User changing plan"):
+            print("Old subscription canceled successfully.")
+            
+            # Create a new subscription based on the selected plan
+            new_subscription = create_new_subscription(current_user, new_plan_id)
+            if new_subscription:
+                # Update user's PayPal subscription ID in the database
+                current_user.paypal_subscription_id = new_subscription['id']
+                
+                flash("Subscription updated successfully.", 'success')
+                print(f"New subscription created with ID: {new_subscription['id']}")
+            else:
+                flash("Failed to create new subscription.", "danger")
+                print("Something went wrong with creating new subscription!")
+        else:
+            flash("Failed to cancel the old subscription.", "danger")
+            print("Something went wrong with canceling the old subscription!")
+        
+        return redirect(url_for('main.billing'))
+    
+logging.basicConfig(level=logging.DEBUG)
+
+# Webhook to check the results of the users subscription
+@main.route("/webhook", methods=["POST"])
+@csrf.exempt
+def paypal_webhook():
+    """Handles PayPal webhook events related to user subscriptions and payments."""
+    print("Webhook route hit")
+    print(f"Exempt views: {csrf._exempt_views}")
+    try:
+        if not verify_paypal_webhook(request.json, request.headers):
+            return jsonify({"error": "Invalid webhook signature"}), 400
+
+        data = request.get_json()
+        print(f"Received PayPal webhook event: {data}")  # Or logging.info
+        event_type = data.get('event_type')
+
+        event_handlers = {
+            "PAYMENT.SALE.COMPLETED": handle_payment_success,
+            'BILLING.SUBSCRIPTION.CREATED': handle_subscription_created,
+            "BILLING.SUBSCRIPTION.CANCELLED": handle_subscription_canceled,
+            "BILLING.SUBSCRIPTION.SUSPENDED": handle_subscription_suspended,
+            "BILLING.SUBSCRIPTION.UPDATED": handle_subscription_updated,
+            "PAYMENT.SALE.DENIED": handle_payment_failed,
+        }
+
+        if event_type in event_handlers:
+            event_handlers[event_type](data)
+        else:
+            print(f"Unhandled event type: {event_type}")
+
+        return jsonify({"status": "success"}), 200
+
+    except Exception as e:
+        print(f"Webhook handling error: {str(e)}")
+        return jsonify({"error": "Webhook processing failed"}), 400
 
 # Files where be downloaded
 @main.route('/downloads/<filename>')

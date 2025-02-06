@@ -8,6 +8,7 @@ class User(UserMixin, db.Model):
     
     id = db.Column(Integer, primary_key=True)
     plan_id = db.Column(Integer, ForeignKey('plans.id'), nullable=True)
+    paypal_payer_id = db.Column(String(20), nullable=True)
     email = db.Column(String(255), unique=True, nullable=False)
     password = db.Column(String(255), nullable=False)
     username = db.Column(String(50), unique=True, nullable=False)
@@ -23,12 +24,15 @@ class User(UserMixin, db.Model):
     reset_pswd_token = db.Column(db.String(64), nullable=True)
 
     # Subscription-related fields
+    paypal_subscription_id = db.Column(String(25), unique=True, nullable=True)
     trial_start_date = db.Column(TIMESTAMP, nullable=True)
     trial_end_date = db.Column(TIMESTAMP, nullable=True)
 
     subscription_start_date = db.Column(TIMESTAMP, nullable=True)
-    subscription_end_date = db.Column(TIMESTAMP, nullable=True)
-    subscription_status = db.Column(String(20), nullable=False, default="inactive")
+    next_billing_date = db.Column(TIMESTAMP, nullable=True)
+    subscription_status = db.Column(String(20), nullable=True)
+    fialed_payments = db.Column(Integer, nullable=True)
+    updated_at = db.Column(TIMESTAMP, nullable=True)
     status = db.Column(String(4), nullable=True)
 
     secrets = db.relationship('Secret', back_populates='user', cascade="all, delete-orphan")
@@ -124,13 +128,15 @@ class HistoryPayment(db.Model):
 class Plan(db.Model):
     __tablename__ = "plans"
 
-    id = db.Column(Integer, primary_key=True)
+    id = db.Column(Integer, primary_key=True)  
     plan = db.Column(String(10), unique=True, nullable=False)
     price = db.Column(DECIMAL(10, 2), nullable=False)
     currency = db.Column(String(10), nullable=False)
     description = db.Column(db.JSON, nullable=False)
     billing_cycle = db.Column(String(10), nullable=False) 
     storage_limit = db.Column(Integer, nullable=False)
+    paypal_plan_id = db.Column(db.JSON, nullable=True)
+    product_id = db.Column(String(50), nullable=True)
 
     users = db.relationship('User', back_populates='plan')
     payments = db.relationship('Payment', back_populates='plan')

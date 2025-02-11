@@ -1132,7 +1132,7 @@ def payment():
     if not current_user.is_authenticated:
         return jsonify({"error": "Unauthorized", "message": "Your session has expired. Please log in again."}), 401
     
-    client_id = os.environ.get("PAYPAL_LIVE_CLIENT_ID")
+    client_id = os.environ.get("PAYPAL_CLIENT_ID")
     paypal_plan_id = json.loads(current_user.plan.paypal_plan_id)[0]
 
     if not client_id or not paypal_plan_id:

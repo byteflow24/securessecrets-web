@@ -96,11 +96,11 @@
                                         readonly>
                                 </div>
                                 <div class="col-md-6">
-                                    <label for="plan_expiry" class="form-label">Expiry</label>
+                                    <label for="plan_expiry" class="form-label">Next Billing Date</label>
                                     <input type="text" 
                                         class="form-control bg-light" 
                                         id="plan_expiry" 
-                                        value="{{ current_user.subscription_end_date.strftime('%Y-%m-%d') if current_user.subscription_end_date else 'None'}}" 
+                                        value="{{ current_user.next_billing_date.strftime('%Y-%m-%d') if current_user.next_billing_date else 'None'}}" 
                                         readonly>
                                 </div>
                             </div>

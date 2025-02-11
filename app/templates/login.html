@@ -46,25 +46,27 @@
         .title-container p {
             font-size: 1rem;
             font-weight: 500;
-            color: #555;
+            background: linear-gradient(to right, #888eb1, #14a184);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
             max-width: 600px;
             margin: auto;
         }
 
         .news-section {
-            max-width: 450px;
+            max-width: 420px;
         }
 
         .news-heading {
             font-weight: 700;
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             text-align: center;
             margin-bottom: 15px;
             color: #333;
         }
 
         .news-container {
-            height: 400px;
+            height: 380px;
             overflow-y: auto;
             padding: 15px;
             border-radius: 10px;
@@ -86,7 +88,7 @@
         }
 
         .login-section {
-            max-width: 450px;
+            max-width: 420px;
         }
 
         .news-section, .login-section {
@@ -97,7 +99,7 @@
         }
 
         .form-container {
-            height: 400px;
+            height: 380px;
             padding: 23px;
             background-color: #f9f9f9;
             border: 1px solid #ddd;
@@ -106,11 +108,11 @@
         }
 
         .form-label {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
         }
 
         .form-control {
-            font-size: 0.875rem;
+            font-size: 0.8rem;
             border-radius: 8px;
             border: 1px solid #ccc;
             padding: 8px;
@@ -125,7 +127,7 @@
         }
 
         .btn-link {
-            font-size: 0.9rem;
+            font-size: 0.78rem;
             text-decoration: underline;
             color: #2b52d3;
         }
@@ -170,7 +172,7 @@
                 <a href="{{ url_for('main.login') }}" class="d-inline-flex link-body-emphasis mb-3">
                     <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" style="width: 250px;">
                 </a>
-                <p>Your secrets, your control. Store private messages or a last will, set a timer, and let us handle the rest—whether it's sharing with loved ones or publicly.</p>
+                <p class="mt-2">Your secrets, your control. Store private messages or a last will, set a timer, and let us handle the rest—whether it's sharing with loved ones or publicly.</p>
             </div>
 
             <div class="container-fluid" style="padding-bottom: 100px;">
@@ -207,13 +209,13 @@
                                     <div class="text-danger">{{ error }}</div>
                                 {% endfor %}
                             </div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <button type="submit" class="btn btn-primary" id="submit">{{ form.submit.label }}</button>
-                                <a class="btn btn-link" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal">Forgot my password?</a>
+                            <div class="row-md-1 d-flex justify-content-between align-items-center">
+                                <button type="submit" class="btn btn-primary w-50" id="submit">Login</button>
+                                <a class="btn btn-link w-100" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal">Forgot my password</a>
                             </div>
                         </form>
-                        <div class="d-flex justify-content-between align-items-center mt-3">
-                            <p class="mb-0">Don't have an account? <a href="{{ url_for('main.pricing') }}" class="btn-link">Check out our plans</a></p>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <p class="mb-0" style="font-size: 0.9rem;">Don't have an account? <a href="{{ url_for('main.pricing') }}" class="btn-link">Check out our plans</a></p>
                         </div>
                     </div>
                 </div>         

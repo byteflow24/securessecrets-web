@@ -4,7 +4,7 @@ from flask_wtf.csrf import CSRFError
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, CardDetailsForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, HistoryPayment, PublicSecrets
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, get_access_token, deactivate_plan, create_plan, call_plans, create_charge, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, get_access_token, deactivate_plan, create_plan, call_plans, create_charge, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -12,6 +12,8 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import desc
 from datetime import date, datetime, timedelta, timezone
 import pytz
+import time
+import json
 from dateutil.relativedelta import relativedelta
 import os
 import traceback
@@ -20,6 +22,8 @@ import logging
 
 
 main = Blueprint('main', __name__)
+
+logging.basicConfig(level=logging.DEBUG)
 
 @main.errorhandler(CSRFError)
 def handle_csrf_error(e):
@@ -155,12 +159,12 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
 
-    # get_subscription_details("I-NHYJ4905XGAT")
+    # print(get_subscription_details("I-YM3K8PW3Y4HL"))
     # get_access_token()
     # call_plans()
     # create_plan()
-    # deactivate_plan('P-4W733477VW405671EM6NS3CQ')
-    # cancel_subscription("I-NHYJ4905XGAT", "Testing")
+    # deactivate_plan('P-52H4034244582515FM6UHT7Y')
+    # cancel_subscription("I-M10UXVBHYH55", "Cancel")
 
     form = LoginForm()
     # Get next from both GET and POST
@@ -471,7 +475,7 @@ def dashboard():
     # redirect the new users to the payment page to continue using the account
     if current_user.status == "new":
         return redirect(url_for("main.payment"))
-    
+        
     # counting secrets for each user
     secrets = Secret.query.filter_by(user_id=current_user.id).count()
     last_login = current_user.login_history[-1] if current_user.login_history else None
@@ -565,6 +569,15 @@ def dashboard():
 
         # Append the public secret to the list
         decrypted_secrets.append(public_secret)
+    
+    subscription_approval = get_subscription_details(current_user.paypal_subscription_id)
+    if not subscription_approval:
+        approval_link = "pass"  # or set a default value like "pass"
+    else:
+        if subscription_approval.get("status") == "APPROVAL_PENDING":
+            approval_link = next((link["href"] for link in subscription_approval.get("links", []) if link["rel"] == "approve"), None)
+        else:
+            approval_link = "pass"
 
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -575,10 +588,11 @@ def dashboard():
                                     secrets=secrets, 
                                     last_login=last_login, 
                                     secret_form=secret_form, 
+                                    link=approval_link, 
                                     show_secrets_list=False),
             'title': 'Dashboard - Secures Secrets'
         })
-    return render_template('dashboard.html', current_user=current_user, show_header=True, show_footer=True, show_secrets_list=False, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login, secret_form=secret_form)
+    return render_template('dashboard.html', current_user=current_user, show_header=True, show_footer=True, show_secrets_list=False, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login, secret_form=secret_form, link=approval_link)
 
 # List of all secerts for the user 
 @main.route('/all-secrets', methods=['GET', 'POST'])
@@ -974,6 +988,8 @@ def delete_account(user_id):
         # db.session.query(Post).filter_by(user_id=user.id).delete()
         
         # Delete the user account
+        cancel_subscription(user.paypal_subscription_id, "Deleting my account.") # Will cancel the subscription so user won't keep paying for the subscription
+        time.sleep(5) # Will wait until the subscription beanig canceled
         db.session.delete(user)
         db.session.commit()
         # Log out the user before deletion
@@ -1116,7 +1132,7 @@ def payment():
         return jsonify({"error": "Unauthorized", "message": "Your session has expired. Please log in again."}), 401
     
     client_id = os.environ.get("PAYPAL_SENDBOX_CLIENT_ID")
-    paypal_plan_id = current_user.plan.paypal_plan_id[1]
+    paypal_plan_id = json.loads(current_user.plan.paypal_plan_id)[0]
 
     if not client_id or not paypal_plan_id:
         return jsonify({"status": "error", "message": "Missing data"}), 400
@@ -1147,6 +1163,7 @@ def process_subscription():
         status = subscription_data.get("status", "UNKNOWN")
         start_time = subscription_data.get("start_time")  # When the subscription started
         billing_info = subscription_data.get("billing_info", {})
+        subscriber = subscription_data.get("subscriber", {})
 
         # Get Trial End Date
         trial_end = None
@@ -1162,6 +1179,7 @@ def process_subscription():
 
         # Update User Subscription in DB
         user.paypal_subscription_id = subscription_id
+        user.paypal_payer_id = subscriber.get("payer_id")
         user.subscription_status = status
         user.trial_start_date = start_time  # Subscription start = trial start
         user.trial_end_date = trial_end
@@ -1474,9 +1492,9 @@ def upgrade_plan():
 @subscription_ended()
 def change_plan():
     form = PlanUpgradeForm()
-
     populate_plan_choices(form, current_user)
 
+    # If no plan is selected
     if form.plan_id.data == 0:
         flash("Please select a valid plan to upgrade.", "danger")
         return redirect(url_for('main.billing'))
@@ -1484,41 +1502,81 @@ def change_plan():
     # Check if the form is valid
     if form.validate_on_submit():
         selected_plan_id = form.plan_id.data
-        # Retrieve the selected plan from the database
         plan = db.get_or_404(Plan, selected_plan_id)
         if not plan:
             return jsonify({"status": "error", "message": "No plan specified"}), 400
 
-        new_plan_id = plan.paypal_plan_id[1]  # PayPal Plan ID (e.g., Premium or Basic)
+        # Parse the JSON string to get a list of plan IDs
+        try:
+            plan_ids = json.loads(plan.paypal_plan_id)
+        except json.JSONDecodeError:
+            flash("Error parsing PayPal plan IDs.", "danger")
+            return redirect(url_for('main.billing'))
+
+        # If there are no valid plans or insufficient plans
+        if len(plan_ids) <= 1:
+            flash("Invalid PayPal plan list for this plan.", "danger")
+            return redirect(url_for('main.billing'))
+
+        # Selecting the new plan ID
+        new_plan_id = plan_ids[1]  # Selecting the second plan ID in the list
         print(f"Selected new plan ID: {new_plan_id}")
 
-        # Check if the user already has an active subscription
         user_subscription_id = current_user.paypal_subscription_id
         if not user_subscription_id:
             return jsonify({"status": "error", "message": "User has no active PayPal subscription"}), 400
-        
-        # Cancel the current subscription before creating the new one
-        if cancel_subscription(user_subscription_id, "User changing plan"):
-            print("Old subscription canceled successfully.")
-            
-            # Create a new subscription based on the selected plan
-            new_subscription = create_new_subscription(current_user, new_plan_id)
-            if new_subscription:
-                # Update user's PayPal subscription ID in the database
-                current_user.paypal_subscription_id = new_subscription['id']
-                
-                flash("Subscription updated successfully.", 'success')
-                print(f"New subscription created with ID: {new_subscription['id']}")
-            else:
-                flash("Failed to create new subscription.", "danger")
-                print("Something went wrong with creating new subscription!")
+
+        # Change the subscription to upgrade/ downgrade
+        updated_subscription = change_subscription_plan(user_subscription_id, new_plan_id)
+
+        if updated_subscription:
+            # Update user details immediately (to avoid waiting for webhook)
+            current_user.plan_id = selected_plan_id  # Save new plan in DB
+            current_user.next_billing_date = updated_subscription.get('billing_info', {}).get('next_billing_time')
+
+            # Optionally, you can also update the payment amount if you have that info
+            # current_user.subscription_amount = updated_subscription.get('billing_info', {}).get('last_payment', {}).get('amount', {}).get('value')
+
+            db.session.commit()
+
+            flash("Your subscription plan has been updated successfully!", "success")
         else:
-            flash("Failed to cancel the old subscription.", "danger")
-            print("Something went wrong with canceling the old subscription!")
-        
+            flash("Failed to update subscription plan. Please try again.", "danger")
+            print("Something went wrong with changing your subscription!")
+
+    return redirect(url_for('main.billing'))
+
+@main.route('/paypal-approved')
+def paypal_approval():
+    new_subscription_id = session.get('pending_subscription_id')
+    old_subscription_id = session.get('old_subscription_id')
+
+    if not new_subscription_id:
+        flash("No pending subscription found.", "danger")
         return redirect(url_for('main.billing'))
-    
-logging.basicConfig(level=logging.DEBUG)
+
+    # Update user subscription in the database
+    current_user.paypal_subscription_id = new_subscription_id
+    db.session.commit()
+
+    time.sleep(5)  # Small delay before checking status
+
+    # Verify if new subscription is active
+    subscription_status = get_subscription_details(new_subscription_id)
+    if subscription_status == "ACTIVE":
+        if old_subscription_id:
+            cancel_subscription(old_subscription_id, "User changed plan")
+            print("Old subscription canceled successfully.")
+
+        session.pop('pending_subscription_id', None)
+        session.pop('old_subscription_id', None)
+
+        flash("Your subscription has been updated successfully!", "success")
+    else:
+        flash("Subscription approval failed or was not completed.", "danger")
+
+    return redirect(url_for('main.dashboard'))
+
 
 # Webhook to check the results of the users subscription
 @main.route("/webhook", methods=["POST"])
@@ -1537,7 +1595,8 @@ def paypal_webhook():
 
         event_handlers = {
             "PAYMENT.SALE.COMPLETED": handle_payment_success,
-            'BILLING.SUBSCRIPTION.CREATED': handle_subscription_created,
+            "BILLING.SUBSCRIPTION.CREATED": handle_subscription_created,
+            "BILLING.SUBSCRIPTION.ACTIVATED": handle_subscription_activated,
             "BILLING.SUBSCRIPTION.CANCELLED": handle_subscription_canceled,
             "BILLING.SUBSCRIPTION.SUSPENDED": handle_subscription_suspended,
             "BILLING.SUBSCRIPTION.UPDATED": handle_subscription_updated,

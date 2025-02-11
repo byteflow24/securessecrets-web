@@ -400,7 +400,7 @@ window.addEventListener('DOMContentLoaded', () => {
             if (flashMessage.parentNode) {
                 flashMessage.parentNode.removeChild(flashMessage);
             }
-        }, 5000);
+        }, 9000);
     }
 
     // clears only the currently displayed flash messages when transitioning between pages

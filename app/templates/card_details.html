@@ -86,14 +86,14 @@
         })
         .then(response => response.json())
         .then(data => {
+          alert(data.message);  // Show success or error message
           if (data.status === 'success') {
-            window.location.href = '/dashboard';  // Redirect to the home page after success
-          } else {
-            alert('Subscription failed. Please try again.');
+              window.location.href = '/dashboard';  // Redirect on success
           }
         })
         .catch(error => {
           console.error('Error:', error);
+          alert("An unexpected error occurred. Please try again.");
         });
       }
     }).render('#paypal-button-container');

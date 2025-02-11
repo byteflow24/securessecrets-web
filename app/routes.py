@@ -4,7 +4,7 @@ from flask_wtf.csrf import CSRFError
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, CardDetailsForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, HistoryPayment, PublicSecrets
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, get_access_token, deactivate_plan, create_plan, call_plans, create_charge, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_charge, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -159,6 +159,7 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
 
+    # create_product()
     # print(get_subscription_details("I-YM3K8PW3Y4HL"))
     # get_access_token()
     # call_plans()
@@ -1131,7 +1132,7 @@ def payment():
     if not current_user.is_authenticated:
         return jsonify({"error": "Unauthorized", "message": "Your session has expired. Please log in again."}), 401
     
-    client_id = os.environ.get("PAYPAL_SENDBOX_CLIENT_ID")
+    client_id = os.environ.get("PAYPAL_LIVE_CLIENT_ID")
     paypal_plan_id = json.loads(current_user.plan.paypal_plan_id)[0]
 
     if not client_id or not paypal_plan_id:

@@ -227,11 +227,12 @@ def is_future_time_today(form, field):
 ####################### LIVE ACTION #######################
 PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_LIVE_CLIENT_ID")
 PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_LIVE_CLIENT_SECRET")
+PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_LIVE_WEBHOOK_ID")
 API_URL = "https://api-m.paypal.com/v1"
 ####################### SENDBOX ACTION #######################
 # PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_SENDBOX_CLIENT_ID")
 # PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_SENDBOX_CLIENT_SECRET")
-PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_WEBHOOK_ID")
+# PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_SENDBOX_WEBHOOK_ID") # Webhook ID
 # API_URL = "https://api-m.sandbox.paypal.com/v1"
 # Generating request id
 request_id = uuid.uuid4()
@@ -279,7 +280,7 @@ def create_product():
     response = requests.post(url, headers=headers, data=data)
 
     # Check if request was successful
-    if response.status_code == 201:
+    if response.status_code == 200:
         plan = Plan.query.filter_by(product_id="None").first()
         plan.product_id = response.json()["id"]
         db.session.commit()
@@ -469,7 +470,7 @@ def create_plan():
 
     test_plan = {
         "product_id": plan.product_id,  # Replace with your actual product ID
-        "name": "Test None Trial Plan",
+        "name": "Test Trial Plan",
         "description": "Access to test features with a 1-day trial",
         "status": "ACTIVE",
         "billing_cycles": [
@@ -491,7 +492,7 @@ def create_plan():
             {
                 "frequency": {
                     "interval_unit": "DAY",
-                    "interval_count": 1
+                    "interval_count": 3
                 },
                 "tenure_type": "REGULAR",
                 "sequence": 2,
@@ -517,14 +518,14 @@ def create_plan():
     
     test_non_trial_plan = {
         "product_id": plan.product_id,
-        "name": "Test Plan",
+        "name": "Test (No Trial)",
         "description": "Access to test features without trial",
         "status": "ACTIVE",
         "billing_cycles": [
             {
                 "frequency": {
                     "interval_unit": "DAY",
-                    "interval_count": 1
+                    "interval_count": 3
                 },
                 "tenure_type": "REGULAR",
                 "sequence": 1,
@@ -554,8 +555,8 @@ def create_plan():
     # premium_plan_json = json.dumps(premium_plan_data)
     # basic_non_trial_plan_json = json.dumps(basic_non_trial_plan_data)
     # premium_non_trial_plan_json = json.dumps(premium_non_trial_plan_data)
-    # test_plan_json = json.dumps(test_non_trial_plan)
-    test_plan_json_trial = json.dumps(test_plan)
+    # test_plan_json_trial = json.dumps(test_plan)
+    test_plan_json = json.dumps(test_non_trial_plan)
 
     url = f"{API_URL}/billing/plans"
 
@@ -564,39 +565,79 @@ def create_plan():
     # response_premium = requests.post(url, headers=headers, data=premium_plan_json)
     # response_basic_non_trial = requests.post(url, headers=headers, data=basic_non_trial_plan_json)
     # response_premium_non_trial = requests.post(url, headers=headers, data=premium_non_trial_plan_json)
-    # response_test_plan = requests.post(url, headers=headers, data=test_plan_json)
-    response_test_tial_plan = requests.post(url, headers=headers, data=test_plan_json_trial)
+    response_test_plan = requests.post(url, headers=headers, data=test_plan_json)
+    # response_test_trial_plan = requests.post(url, headers=headers, data=test_plan_json)
 
     # if response_basic.status_code == 201:
     #     basic_plan = Plan.query.filter_by(plan="Basic").first()
-    #     basic_plan.paypal_plan_id = response_basic.json()['id']
-    #     db.session.commit()
-    #     print("Basic Plan Created Successfully!")
-    # else:
-    #     print("Failed to create Basic Plan:", response_basic.json())
+        
+    #     # Check if paypal_plan_id is already a list or a JSON string
+    #     if isinstance(basic_plan.paypal_plan_id, str):
+    #         existing_plan_ids = json.loads(basic_plan.paypal_plan_id)
+    #     elif isinstance(basic_plan.paypal_plan_id, list) or basic_plan.paypal_plan_id is None:
+    #         existing_plan_ids = basic_plan.paypal_plan_id or []
+    #     else:
+    #         raise TypeError("Unexpected type for paypal_plan_id")
 
-    # if response_premium.status_code == 201:
-    #     premium_plan = Plan.query.filter_by(plan="Premium").first()
-    #     premium_plan.paypal_plan_id = response_premium.json()['id']
+    #     # Append the new PayPal Plan ID
+    #     existing_plan_ids.append(response_basic.json()['id'])
+
+    #     # Store back as JSON string
+    #     basic_plan.paypal_plan_id = json.dumps(existing_plan_ids)
     #     db.session.commit()
-    #     print("Premium Plan Created Successfully!")
+
+    #     print("Basic Plan Created Successfully!")
+    #     print(response_basic.json())  # Contains the plan_id for Basic
     # else:
-    #     print("Failed to create Premium Plan:", response_premium.json())
+    #     print("Failed to create Basic Plan.")
+    #     print(response_basic.json())
 
     # if response_basic_non_trial.status_code == 201:
     #     basic_plan = Plan.query.filter_by(plan="Basic").first()
-
-    #     # Check if paypal_plan_id is already a list, if not, initialize it as a list
-    #     if isinstance(basic_plan.paypal_plan_id, list):
-    #         basic_plan.paypal_plan_id.append(response_basic_non_trial.json()['id'])
+        
+    #     # Check if paypal_plan_id is already a list or a JSON string
+    #     if isinstance(basic_plan.paypal_plan_id, str):
+    #         existing_plan_ids = json.loads(basic_plan.paypal_plan_id)
+    #     elif isinstance(basic_plan.paypal_plan_id, list) or basic_plan.paypal_plan_id is None:
+    #         existing_plan_ids = basic_plan.paypal_plan_id or []
     #     else:
-    #         # If it's not a list, just set it to a list with the new plan id
-    #         basic_plan.paypal_plan_id = [response_basic_non_trial.json()['id']]
+    #         raise TypeError("Unexpected type for paypal_plan_id")
 
+    #     # Append the new PayPal Plan ID
+    #     existing_plan_ids.append(response_basic_non_trial.json()['id'])
+
+    #     # Store back as JSON string
+    #     basic_plan.paypal_plan_id = json.dumps(existing_plan_ids)
     #     db.session.commit()
-    #     print("Non-Trial Basic Plan Created Successfully!", response_basic_non_trial.json())
+
+    #     print("Basic None Trial Plan Created Successfully!")
+    #     print(response_basic_non_trial.json())  # Contains the plan_id for Basic
     # else:
-    #     print("Failed to create Non-Trial Basic Plan:", response_basic_non_trial.json())
+    #     print("Failed to create Basic None Trial Plan.")
+    #     print(response_basic_non_trial.json())
+
+    # if response_premium.status_code == 201:
+    #     premium_plan = Plan.query.filter_by(plan="Premium").first()
+    #     # Check if paypal_plan_id is already a list or a JSON string
+    #     if isinstance(premium_plan.paypal_plan_id, str):
+    #         existing_plan_ids = json.loads(premium_plan.paypal_plan_id)
+    #     elif isinstance(premium_plan.paypal_plan_id, list) or premium_plan.paypal_plan_id is None:
+    #         existing_plan_ids = premium_plan.paypal_plan_id or []
+    #     else:
+    #         raise TypeError("Unexpected type for paypal_plan_id")
+
+    #     # Append the new PayPal Plan ID
+    #     existing_plan_ids.append(response_premium.json()['id'])
+
+    #     # Store back as JSON string
+    #     premium_plan.paypal_plan_id = json.dumps(existing_plan_ids)
+    #     db.session.commit()
+
+    #     print("Premium Plan Created Successfully!")
+    #     print(response_premium.json())  # Contains the plan_id for Basic
+    # else:
+    #     print("Failed to create Premium Plan.")
+    #     print(response_premium.json())
 
     # if response_premium_non_trial.status_code == 201:
     #     # Fetch the existing plan
@@ -623,30 +664,30 @@ def create_plan():
     #     print("Failed to create Non-Trial Premium Plan.")
     #     print(response_premium_non_trial.json())
 
-    if response_test_tial_plan.status_code == 201:
-        # Fetch the existing plan
-        test_plan_data = Plan.query.filter_by(plan="Test").first()
+    # if response_test_trial_plan.status_code == 201:
+    #     # Fetch the existing plan
+    #     test_plan_data = Plan.query.filter_by(plan="Test").first()
         
-        # Check if paypal_plan_id is already a list or a JSON string
-        if isinstance(test_plan_data.paypal_plan_id, str):
-            existing_plan_ids = json.loads(test_plan_data.paypal_plan_id)
-        elif isinstance(test_plan_data.paypal_plan_id, list) or test_plan_data.paypal_plan_id is None:
-            existing_plan_ids = test_plan_data.paypal_plan_id or []
-        else:
-            raise TypeError("Unexpected type for paypal_plan_id")
+    #     # Check if paypal_plan_id is already a list or a JSON string
+    #     if isinstance(test_plan_data.paypal_plan_id, str):
+    #         existing_plan_ids = json.loads(test_plan_data.paypal_plan_id)
+    #     elif isinstance(test_plan_data.paypal_plan_id, list) or test_plan_data.paypal_plan_id is None:
+    #         existing_plan_ids = test_plan_data.paypal_plan_id or []
+    #     else:
+    #         raise TypeError("Unexpected type for paypal_plan_id")
 
-        # Append the new PayPal Plan ID
-        existing_plan_ids.append(response_test_tial_plan.json()['id'])
+    #     # Append the new PayPal Plan ID
+    #     existing_plan_ids.append(response_test_trial_plan.json()['id'])
 
-        # Store back as JSON string
-        test_plan_data.paypal_plan_id = json.dumps(existing_plan_ids)
-        db.session.commit()
+    #     # Store back as JSON string
+    #     test_plan_data.paypal_plan_id = json.dumps(existing_plan_ids)
+    #     db.session.commit()
 
-        print("Test Plan Created Successfully!")
-        print(response_test_tial_plan.json())  # Contains the plan_id for Basic
-    else:
-        print("Failed to create Test Plan.")
-        print(response_test_tial_plan.json())
+    #     print("Test Plan Created Successfully!")
+    #     print(response_test_trial_plan.json())  # Contains the plan_id for Basic
+    # else:
+    #     print("Failed to create Test Plan.")
+    #     print(response_test_trial_plan.json())
 
     # if response_test_plan.status_code == 201:
     #     # Fetch the existing plan
@@ -828,10 +869,10 @@ def call_plans():
     response = requests.get(url, headers=headers, params=params)
 
     if response.status_code == 200:
-        print("Premium Plan Created Successfully!")
+        print("Successfully retrieved plans.")
         print(response.json())
     else:
-        print("Failed to retrieve Plans.")
+        print("Failed to retrieve Plans!")
         print(response.json())
 
 # Get user subscription details

@@ -87,56 +87,12 @@
                 <div class="col-md-12">
                     <div class="text-center mb-4">
                         <p class="text-warning">Your bill has not been paid yet. You can pay it now by clicking the button below.</p>
-                        <button type="button" class="btn btn-danger btn-lg" data-bs-toggle="modal" data-bs-target="#payNowModal">
+                        <a type="button" href="{{ url_for('main.payment') }}" class="btn btn-danger btn-lg">
                             Pay Now
-                        </button>
+                        </a>
                     </div>
                 </div>
                 {% endif %}
-                <!-- Pay Now Modal -->
-                <div class="modal fade" id="payNowModal" tabindex="-1" aria-labelledby="payNowModalLabel" aria-hidden="true">
-                    <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content">
-                            <div class="modal-header bg-primary text-white">
-                                <h5 class="modal-title" id="payNowModalLabel"><i class="bi bi-credit-card"></i> Payment Options</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                            </div>
-                            <div class="modal-body">
-                                <form method="POST" action="{{ url_for('main.pay_now') }}">
-                                    {{ form.hidden_tag() }}
-                                    
-                                    <!-- Saved Cards Section -->
-                                    <p>Your saved card:</p>
-                                    {% for payment in payments %}
-                                    <div class="form-check payment-option rounded-card my-3 p-3">
-                                        <input class="form-check-input" type="radio" name="payment_method" id="savedCard{{ loop.index }}" value="saved_card" {% if loop.first %}checked{% endif %}>
-                                        <label class="form-check-label d-flex align-items-center" for="savedCard{{ loop.index }}">
-                                            <i class="bi bi-{{ payment.card_brand | lower }} me-2"></i> 
-                                            {{ payment.card_brand | upper }} xxxx-{{ payment.card_last_four }}
-                                        </label>
-                                    </div>
-                                    {% endfor %}
-                                    
-                                    <hr>
-                                    
-                                    <!-- New Card Option -->
-                                    <div class="form-check payment-option rounded-card my-3 p-3">
-                                        <input class="form-check-input" type="radio" name="payment_method" id="newCard" value="new_card">
-                                        <label class="form-check-label d-flex align-items-center" for="newCard">
-                                            <i class="bi bi-plus-circle me-2"></i> Pay with a different card
-                                        </label>
-                                    </div>
-                                    
-                                    <!-- Modal Footer with Buttons -->
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                                        <button type="submit" class="btn btn-primary">Proceed to Pay</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
                 <!-- Payment History Table -->
                 <div class="col-md-12">
                     <div class="card shadow-sm mb-4">

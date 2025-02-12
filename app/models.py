@@ -34,6 +34,7 @@ class User(UserMixin, db.Model):
     fialed_payments = db.Column(Integer, nullable=True)
     updated_at = db.Column(TIMESTAMP, nullable=True)
     status = db.Column(String(4), nullable=True)
+    time_zone = db.Column(db.String(50), nullable=True)
 
     secrets = db.relationship('Secret', back_populates='user', cascade="all, delete-orphan")
     payments = db.relationship('Payment', back_populates='user', cascade="all, delete-orphan")

@@ -86,7 +86,10 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     
     // Function to load content via AJAX
+    let isLoading = false;
     function loadContent(url) {
+        if (isLoading) return;
+        isLoading = true;
         fetch(url, {
             method: 'GET',
             headers: {
@@ -125,6 +128,7 @@ window.addEventListener('DOMContentLoaded', () => {
             document.getElementById('content-container').focus();
             document.body.scrollTop = 0; // For Safari
             document.documentElement.scrollTop = 0; // For Chrome, Firefox, IE, and Opera
+            isLoading = false;
         })
         .catch(error => console.error('Error loading page:', error));
     }
@@ -147,36 +151,47 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Initialize a variable to track the last loaded URL
+    let lastLoadedUrl = location.href;
+
     // Handle back/forward browser buttons
     window.addEventListener('popstate', function () {
-        fetch(location.href, {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                console.error(`Failed to load: ${response.status}`);
-                return null;
-            }
-            return response.json(); // Parse response as JSON
-        })
-        .then(data => {
-            if (!data) return; // Exit if no data is returned
+        // Check if the current URL is different from the last loaded URL
+        if (location.href !== lastLoadedUrl) {
+            // Update the last loaded URL to the current URL
+            lastLoadedUrl = location.href;
 
-            // Update the main content
-            document.getElementById('content-container').innerHTML = data.html;
+            // Fetch the new content
+            fetch(location.href, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest', // Ensure it's an AJAX request
+                    'X-CSRFToken': csrfToken,
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    console.error(`Failed to load: ${response.status}`);
+                    return null;
+                }
+                return response.json(); // Parse response as JSON
+            })
+            .then(data => {
+                if (!data) return; // Exit if no data is returned
 
-            // Update the page title
-            if (data.title) {
-                document.title = data.title;
-            }
+                // Update the main content
+                document.getElementById('content-container').innerHTML = data.html;
 
-            // Reinitialize components
-            reinitializeAllComponents();
-        })
-        .catch(error => console.error('Error handling popstate:', error));
+                // Update the page title
+                if (data.title) {
+                    document.title = data.title;
+                }
+
+                // Reinitialize components
+                reinitializeAllComponents();
+            })
+            .catch(error => console.error('Error handling popstate:', error));
+        }
     });
 
     // Initializes the Navbar
@@ -221,6 +236,21 @@ window.addEventListener('DOMContentLoaded', () => {
         // Update active tab on initialization
         updateActiveTab();
     }
+
+    // Getting user time zone
+    let userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    // Send to backend to update database
+    fetch('/update-timezone', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({
+            time_zone: userTimeZone
+        })
+    });
 
     // Initialize secret links
     function initializeSecretLinks() {

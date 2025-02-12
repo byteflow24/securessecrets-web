@@ -21,6 +21,7 @@ from email.header import Header
 import logging
 import uuid
 import json
+import pytz
 
 
 logger = logging.getLogger(__name__)
@@ -222,6 +223,29 @@ def is_future_time_today(form, field):
         if selected_time < current_time:
             raise ValidationError("The selected time cannot be in the future.")
 
+# Converting time to user time
+def convert_utc_to_local(utc_time, user_time_zone):
+    print(f"Converting time: {utc_time} to {user_time_zone}")  # Debug print
+
+    if not user_time_zone:  # Ensure time zone exists
+        user_time_zone = "UTC"
+
+    try:
+        local_tz = pytz.timezone(user_time_zone)  # Get the timezone object
+    except pytz.UnknownTimeZoneError:
+        print("Invalid timezone detected! Falling back to UTC.")  # Debug print
+        local_tz = pytz.utc  # If time zone is invalid, fallback to UTC
+
+    if isinstance(utc_time, str):  # Convert string to datetime if needed
+        print("utc_time is a string, converting to datetime object.")  # Debug print
+        utc_time = datetime.strptime(utc_time, "%Y-%m-%d %H:%M:%S")  
+
+    utc_time = utc_time.replace(tzinfo=pytz.utc)  # Ensure it's UTC
+    local_time = utc_time.astimezone(local_tz)  # Convert to local timezone
+
+    print(f"Final local time: {local_time}")  # Debug print
+    return local_time.strftime("%Y-%m-%d %H:%M:%S")  # Return as string
+
 # Configures PayPal Payment Gateway
 # TAP_PROD_SECRET_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
 ####################### LIVE ACTION #######################
@@ -237,7 +261,6 @@ API_URL = "https://api-m.paypal.com/v1"
 # Generating request id
 request_id = uuid.uuid4()
 API_KEY = "sk_test_XKokBfNWv6FIYuTMg5sLPjhJ"
-
 
 # Get the access token
 def get_access_token():
@@ -1120,6 +1143,7 @@ def handle_payment_success(data):
         payment_amount = resource.get('amount', {}).get('total', "0.00")
         currency = resource.get('amount', {}).get('currency', "USD")
         transaction_id = resource.get('id')
+        status = resource.get('state')
         payment_time = resource.get('create_time', datetime.now(timezone.utc).isoformat())
         subscriber = resource.get("subscriber", {})
 
@@ -1154,7 +1178,12 @@ def handle_payment_success(data):
             payment_date=datetime.fromisoformat(payment_time.replace("Z", "+00:00")),  # Convert PayPal time format
             plan_id=user.plan_id,
             ip_address=user_ip,
-            user_agent=user_agent
+            user_agent=user_agent,
+            payment_status = {
+                "completed": "Paid",
+                "pending": "Pending",
+                "failed": "Failed"
+            }.get(status.lower(), None) if status else None
         )
         db.session.add(new_payment)
 
@@ -1205,7 +1234,7 @@ def handle_subscription_created(data):
     if user:
         user.paypal_subscription_id = subscription_id
         user.plan_id = matching_plan.id
-        user.subscription_start_time = start_time
+        user.subscription_start_date = start_time
         user.subscription_status = status
         db.session.commit()
         print(f"User {user.id} subscription updated to {status}")

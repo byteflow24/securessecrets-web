@@ -115,7 +115,7 @@
                                             <td>{{ payment.payment_date.strftime('%Y-%m-%d %H:%M') }}</td>
                                             <td>{{ payment.amount }} {{ payment.currency }}</td>
                                             <td>
-                                                <span class="badge {% if payment.payment_status == 'captured' %}badge-success{% else %}badge-warning{% endif %} text-black">
+                                                <span class="badge{% if payment.payment_status == 'Paid' %}badge-success text-primary{% else %}badge-warning text-danger{% endif %}">
                                                     {{ payment.payment_status }}
                                                 </span>
                                             </td>

@@ -47,7 +47,11 @@
 <body>
   <!-- Text message above the PayPal button -->
   <div class="payment-message">
-    <p>Please enter your card details to complete the subscription. You will receive a 14-day free trial before any charges are made.</p>
+    {% if not current_user.next_billing_date %}
+      <p>Please enter your card details to complete the subscription. You will receive a 14-day free trial before any charges are made.</p>
+    {% else %}
+      <P>Please enter your card details to complete the subscription.</P>
+    {% endif %}
   </div>
 
   <!-- PayPal button script -->

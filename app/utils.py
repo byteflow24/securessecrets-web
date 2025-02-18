@@ -161,7 +161,7 @@ def populate_plan_choices(form, user):
     plans = Plan.query.order_by(Plan.price).all()
 
     # Populate the choices of the SelectField based on available plans
-    available_plans = [(0, "---Select a Plan---")] + [
+    available_plans = [
         (plan.id, f"{plan.plan} - {plan.price} {plan.currency} ({plan.storage_limit / (1024 * 1024):.0f} MB)")
         for plan in plans if plan.id > user.plan_id
     ] + [
@@ -224,27 +224,39 @@ def is_future_time_today(form, field):
             raise ValidationError("The selected time cannot be in the future.")
 
 # Converting time to user time
-def convert_utc_to_local(utc_time, user_time_zone):
-    print(f"Converting time: {utc_time} to {user_time_zone}")  # Debug print
-
-    if not user_time_zone:  # Ensure time zone exists
-        user_time_zone = "UTC"
+def convert_utc_to_local(utc_time, time_zone):
+    if not time_zone:
+        time_zone = "UTC"
 
     try:
-        local_tz = pytz.timezone(user_time_zone)  # Get the timezone object
+        local_tz = pytz.timezone(time_zone)
     except pytz.UnknownTimeZoneError:
-        print("Invalid timezone detected! Falling back to UTC.")  # Debug print
-        local_tz = pytz.utc  # If time zone is invalid, fallback to UTC
+        print("Invalid timezone! Falling back to UTC.")
+        local_tz = pytz.utc
 
-    if isinstance(utc_time, str):  # Convert string to datetime if needed
-        print("utc_time is a string, converting to datetime object.")  # Debug print
-        utc_time = datetime.strptime(utc_time, "%Y-%m-%d %H:%M:%S")  
+    if isinstance(utc_time, str):
+        # Check if the time is in ISO 8601 format (with 'Z')
+        if utc_time.endswith('Z'):
+            try:
+                # Handle ISO 8601 format (2025-02-13T10:00:00Z)
+                utc_time = datetime.strptime(utc_time, "%Y-%m-%dT%H:%M:%SZ")
+            except ValueError:
+                print("Unexpected datetime format:", utc_time)
+                return "Invalid Format"
+        else:
+            try:
+                # Handle normal format (2025-02-13 10:00:00)
+                utc_time = datetime.strptime(utc_time, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                print("Unexpected datetime format:", utc_time)
+                return "Invalid Format"
 
-    utc_time = utc_time.replace(tzinfo=pytz.utc)  # Ensure it's UTC
-    local_time = utc_time.astimezone(local_tz)  # Convert to local timezone
+    # **Force UTC Time to be correct**
+    utc_time = utc_time.replace(tzinfo=pytz.utc)
+    local_time = utc_time.astimezone(local_tz)
 
-    print(f"Final local time: {local_time}")  # Debug print
-    return local_time.strftime("%Y-%m-%d %H:%M:%S")  # Return as string
+    return local_time.strftime("%Y-%m-%d %H:%M:%S")
+
 
 # Configures PayPal Payment Gateway
 # TAP_PROD_SECRET_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
@@ -1165,6 +1177,7 @@ def handle_payment_success(data):
 
         # Convert amount to Decimal (good practice for monetary values)
         payment_amount = float(payment_amount)
+        payment_time = convert_utc_to_local(payment_time, user.time_zone)
 
         user_ip = get_ip()
         user_agent = get_user_agent()
@@ -1175,7 +1188,7 @@ def handle_payment_success(data):
             amount=payment_amount,
             currency=currency,
             transaction_id=transaction_id,
-            payment_date=datetime.fromisoformat(payment_time.replace("Z", "+00:00")),  # Convert PayPal time format
+            payment_date=payment_time,  # Convert PayPal time format
             plan_id=user.plan_id,
             ip_address=user_ip,
             user_agent=user_agent,
@@ -1191,12 +1204,13 @@ def handle_payment_success(data):
         subscription_data = get_subscription_details(subscription_id)
         billing_info = subscription_data.get("billing_info", {})
 
-        next_billing = billing_info.get("next_billing_time")
+        next_billing = convert_utc_to_local(billing_info.get("next_billing_time"), user.time_zone)
         if next_billing and user.next_billing_date != next_billing:
-            user.next_billing_date = datetime.fromisoformat(next_billing.replace("Z", "+00:00"))
+            user.next_billing_date = next_billing
 
         # Fix: Use .get() to safely access subscriber details
         user.paypal_payer_id = subscriber.get("payer_id", user.paypal_payer_id)  # Keep existing payer_id if missing
+        user.updated_at = payment_time
 
         db.session.commit()
         print(f"Payment recorded successfully for User {user.id}, Amount: {payment_amount} {currency}")
@@ -1231,6 +1245,9 @@ def handle_subscription_created(data):
 
     # Assuming you have the user record, update their subscription info
     user = User.query.filter_by(paypal_subscription_id=subscription_id).first()
+    if user.status == "ACTIVE":
+        status = "ACTIVE"
+
     if user:
         user.paypal_subscription_id = subscription_id
         user.plan_id = matching_plan.id
@@ -1339,21 +1356,21 @@ def handle_subscription_updated(data):
 def initiate_recurring_payment():
     logger.info("Executing recurring payment logic.")
     current_date = datetime.now(timezone.utc).date()
-    users = User.query.filter(User.subscription_end_date <= current_date).all()
+    users = User.query.filter(User.next_billing_date <= current_date).all()
     for user in users:
 
         payment_method = Payment.query.filter_by(user_id=user.id).first()
-        # Ensure subscription_end_date is timezone-aware (assumed UTC)
-        if user.subscription_end_date:
-            if user.subscription_end_date.tzinfo is None:
-                subscription_end_date = user.subscription_end_date.replace(tzinfo=timezone.utc)
+        # Ensure next_billing_date is timezone-aware (assumed UTC)
+        if user.next_billing_date:
+            if user.next_billing_date.tzinfo is None:
+                next_billing_date = user.next_billing_date.replace(tzinfo=timezone.utc)
             else:
-                subscription_end_date = user.subscription_end_date
+                next_billing_date = user.next_billing_date
 
-            # Get only the date part of subscription_end_date (ignore time)
-            subscription_end_date = subscription_end_date.date()
+            # Get only the date part of next_billing_date (ignore time)
+            next_billing_date = next_billing_date.date()
 
-            if current_date > subscription_end_date:
+            if current_date > next_billing_date:
                 user_plan = db.get_or_404(Plan, user.plan_id)
                 print(user_plan)
                 customer_id = user.customer_id
@@ -1385,7 +1402,7 @@ def initiate_recurring_payment():
                         # Update the subscription end date (monthly/yearly)
                         if user_plan.billing_cycle == 'monthly':
                             user.subscription_start_date = current_date
-                            user.subscription_end_date = current_date + timedelta(days=29)
+                            user.next_billing_date = current_date + timedelta(days=29)
                             user.subscription_status = "active"
 
                         send_payment_email(user.email, user.username, user_plan.plan, amount, current_date, "renewal", payment_method.card_brand, payment_method.card_last_four)
@@ -1449,7 +1466,7 @@ def trial_end_reminder():
 def not_paied_reminder():
     logger.info("Sending not paid reminder.")
     current_date = datetime.now(timezone.utc).date()
-    users = User.query.filter(User.subscription_end_date <= current_date).all()
+    users = User.query.filter(User.next_billing_date <= current_date).all()
 
     for user in users:
 
@@ -1457,22 +1474,22 @@ def not_paied_reminder():
             continue  # Skip processing for admin user
 
         plan = Plan.query.filter_by(id=user.plan_id).first()
-        if user.subscription_end_date:
-            if user.subscription_end_date.tzinfo is None:
-                subscription_end_date = user.subscription_end_date.replace(tzinfo=timezone.utc)
+        if user.next_billing_date:
+            if user.next_billing_date.tzinfo is None:
+                next_billing_date = user.next_billing_date.replace(tzinfo=timezone.utc)
             else:
-                subscription_end_date = user.subscription_end_date
+                next_billing_date = user.next_billing_date
             
-            # Get only the date part of subscription_end_date (ignore time)
-            subscription_end_date = subscription_end_date.date()
+            # Get only the date part of next_billing_date (ignore time)
+            next_billing_date = next_billing_date.date()
 
             # will make the user inactive if the subscription ended
-            if subscription_end_date > current_date:
+            if next_billing_date > current_date:
                 user.subscription_status = "inactive"
                 db.session.commit()
 
             # Calculate the difference in days
-            days_left = (subscription_end_date - current_date).days
+            days_left = (next_billing_date - current_date).days
 
             if days_left in [-5, -3, -7]:
                 days_left = abs(days_left)
@@ -1486,37 +1503,6 @@ def not_paied_reminder():
                 if days_left == 1:
                     db.session.delete(user)
                     db.session.commit()
-
-
-# When user pay his own plan manualy
-def pay_plan_now():
-    current_date = datetime.now(timezone.utc)
-    if current_user:
-        user_plan = db.get_or_404(Plan, current_user.plan_id)
-        customer_id = current_user.customer_id
-        card_id = current_user.card_id
-        user_ip = get_ip()
-        payment_agreement_id = current_user.payment_agreement_id
-        amount = user_plan.price
-        currency = user_plan.currency
-        description = f"Paying for {user_plan.plan}"
-
-        try:
-            payment_response = recurring_payment(customer_id, card_id, user_ip, payment_agreement_id, amount, currency, description)
-
-            if payment_response['status'] == 'CAPTURED':
-                print("Recurring payment successful!")
-                flash("Payment was successful!", "success")
-
-                if user_plan.billing_cycle == 'monthly':
-                    current_user.subscription_end_date = current_date + timedelta(days=30)
-                    current_user.subscription_status = "active"
-                send_payment_email(current_user, current_user.username, user_plan.plan, amount, current_date, "renewal", payment_response['card']['brand'], payment_response['card']['last_four'])
-                db.session.commit()
-            else:
-                print("Recurring payment failed.")
-        except Exception as e:
-            print(str(e))
 
 
 # Generating a token

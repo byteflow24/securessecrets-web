@@ -29,8 +29,27 @@
             </p>
         </div>
     </div>
-
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <!-- Bootstrap JS and dependencies -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute("content");
+    
+            fetch('/update-timezone?user={{ user }}', {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrfToken  // Include CSRF token
+                },
+                body: JSON.stringify({ time_zone: timeZone })
+            })
+            .then(response => response.json())
+            .then(data => console.log(data.message))
+            .catch(error => console.error("Error updating time zone:", error));
+        });
+    </script>
 </body>
 </html>

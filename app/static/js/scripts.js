@@ -5,6 +5,7 @@ window.dataLayer = window.dataLayer || [];
 
         gtag('config', 'G-VV6NCJ0407');
 
+
 window.addEventListener('DOMContentLoaded', () => {
     initializeSearchForm();
     initializeSecretLinks();
@@ -198,15 +199,11 @@ window.addEventListener('DOMContentLoaded', () => {
     function initializeNavbar() {
         const tabLinks = document.querySelectorAll('.dynamic-link'); // Target dynamic links in the navbar
     
-        // Function to update the active state based on the current URL
+        // Active state management (this is fine, no conflict)
         function updateActiveTab() {
             const currentPath = window.location.pathname;
-    
             tabLinks.forEach(link => {
-                // Remove active class from all links
                 link.classList.remove('active');
-    
-                // Add active class if the link's `data-url` matches the current path
                 const linkPath = new URL(link.dataset.url || link.href, window.location.origin).pathname;
                 if (linkPath === currentPath) {
                     link.classList.add('active');
@@ -214,43 +211,17 @@ window.addEventListener('DOMContentLoaded', () => {
             });
         }
     
-        // Attach click listeners to update the active state dynamically
         tabLinks.forEach(link => {
             link.addEventListener('click', function (event) {
-                // Prevent default navigation for dynamic links
                 event.preventDefault();
-    
-                // Load the content via AJAX
                 const url = this.dataset.url || this.href;
                 loadContent(url);
-    
-                // Manually update the active state
-                tabLinks.forEach(tab => tab.classList.remove('active'));
-                this.classList.add('active');
+                updateActiveTab();
             });
         });
     
-        // Update active state when navigating via back/forward buttons
-        window.addEventListener('popstate', updateActiveTab);
-    
-        // Update active tab on initialization
         updateActiveTab();
-    }
-
-    // Getting user time zone
-    let userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    // Send to backend to update database
-    fetch('/update-timezone', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken,
-        },
-        body: JSON.stringify({
-            time_zone: userTimeZone
-        })
-    });
+    }        
 
     // Initialize secret links
     function initializeSecretLinks() {

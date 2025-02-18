@@ -160,7 +160,14 @@ def login():
         return redirect(url_for('main.dashboard'))
 
     # create_product()
-    # print(get_subscription_details("I-0EWAM0ENERVL"))
+    # print(get_subscription_details("I-YM3K8PW3Y4HL"))
+    # subscription_details = get_subscription_details("I-YM3K8PW3Y4HL")
+    # # Use `.get()` to avoid KeyError
+    # billing_info = subscription_details.get('billing_info', {})
+
+    # next_billing_time = billing_info.get('next_billing_time', 'Not Available')
+
+    # print(f"Next Billing Time: {convert_utc_to_local(next_billing_time, 'Asia/Qatar')}")
     # get_access_token()
     # call_plans()
     # create_plan()
@@ -303,14 +310,20 @@ def logout():
 @main.route('/update-timezone', methods=['POST'])
 def update_timezone():
     data = request.get_json()
+    
+    user_id = request.args.get("user")  # Get user ID from URL parameters
+    user = User.query.get(user_id)  # Retrieve user from the database
 
-    time_zone = data['time_zone']
-    
-    # Update the user's time zone in the database
-    user = User.query.get(current_user.id) # Retrieve user from the database
+    if not user:
+        return {"error": "User not found"}, 404
+
+    time_zone = data.get("time_zone")
+    if not time_zone:
+        return {"error": "Time zone not provided"}, 400
+
     user.time_zone = time_zone
-    db.session.commit()  # Save to the database
-    
+    db.session.commit()
+
     return {"message": "Time zone updated successfully"}
 
 # confirmation email to change user password when he press forgot password
@@ -1176,7 +1189,8 @@ def process_subscription():
 
         # Extract relevant details
         status = subscription_data.get("status", "UNKNOWN")
-        start_time = subscription_data.get("start_time")  # When the subscription started
+        # When the subscription started
+        start_time = convert_utc_to_local(subscription_data.get("start_time"), user.time_zone)  # Convert the date to user current date
         billing_info = subscription_data.get("billing_info", {})
         subscriber = subscription_data.get("subscriber", {})
 
@@ -1197,11 +1211,11 @@ def process_subscription():
         user.paypal_payer_id = subscriber.get("payer_id")
         user.subscription_status = status
         user.trial_start_date = start_time  # Subscription start = trial start
-        user.trial_end_date = trial_end
+        user.trial_end_date = convert_utc_to_local(trial_end, user.time_zone)
         user.subscription_start_date = start_time
-        user.next_billing_date = next_billing_date  # Next billing date
+        user.next_billing_date = convert_utc_to_local(next_billing_date, user.time_zone)  # Next billing date
         user.fialed_payments = failed_payments
-        user.updated_at = datetime.now()
+        user.updated_at = convert_utc_to_local(datetime.now(), user.time_zone)
         user.status = None
 
         db.session.commit()
@@ -1210,7 +1224,7 @@ def process_subscription():
             "status": "success",
             "message": "Subscription processed",
             "subscription_status": status,
-            "trial_end_date": trial_end,
+            "trial_end_date": convert_utc_to_local(trial_end, user.time_zone),
             "next_billing_date": next_billing_date
         }), 200
 
@@ -1376,6 +1390,7 @@ def billing():
 
     if current_user.is_authenticated and not current_user.is_confirmed:
         return redirect(url_for('main.confirmation_pending'))
+    
     user = User.query.get(current_user.id)
     history_payment = Payment.query.filter_by(user_id=user.id).order_by(Payment.payment_date.desc()).all()
     plans = Plan.query.order_by(Plan.price).all()

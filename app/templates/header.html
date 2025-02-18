@@ -13,41 +13,80 @@
             {% endif %}
 
             <!-- Navbar Toggler for Mobile View -->
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
+            <div class="dropdown d-lg-none">
+                <button class="btn btn-light" type="button" id="mobileNavDropdown" data-bs-toggle="dropdown">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="mobileNavDropdown">
+                    <!-- Account Section (Fixed Behavior) -->
+                    {% if not current_user.is_authenticated %}
+                        <li><a class="dropdown-item" href="{{ url_for('main.login') }}">Login</a></li>
+                    {% else %}
+                        <li class="dropdown">
+                            <a class="dropdown-item dropdown-toggle" href="#" id="mobileAccountDropdown" data-bs-toggle="dropdown">
+                                <i class="fas fa-user-circle"></i> {{ current_user.username | lower }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end small" aria-labelledby="mobileAccountDropdown">
+                                <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.update_profile' %}active{% endif %}" href="#" data-url="{{ url_for('main.update_profile') }}">Profile</a></li>
+                                <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.billing' %}active{% endif %}" href="#" data-url="{{ url_for('main.billing') }}">Billing</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}" href="#" data-url="{{ url_for('main.about') }}">About Us</a></li>
+                                <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.contact' %}active{% endif %}" href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.logout' %}active{% endif %}" href="{{ url_for('main.logout') }}">Logout</a></li>
+                            </ul>
+                        </li>
+                    {% endif %}
+                        <li><hr class="dropdown-divider"></li>
+                    {% if not current_user.is_authenticated %}
+                        <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}" href="#" data-url="{{ url_for('main.pricing') }}">Pricing</a></li>
+                        <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}" href="#" data-url="{{ url_for('main.about') }}">About Us</a></li>
+                        <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.contact' %}active{% endif %}" href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a></li>
+                    {% else %}
+                        
+                        <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" href="#" data-url="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+                        <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.all_secrets' %}active{% endif %}" href="#" data-url="{{ url_for('main.all_secrets') }}">My Secrets</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a href="#" class="link-dark px-2 py-2 small fw-bold" style="font-size: 0.89rem; margin-right:10px;" data-bs-toggle="modal" data-bs-target="#newSecretModal">
+                                <i class="bi bi-plus-square"></i> New Secret
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
 
-            <div class="collapse navbar-collapse justify-content-between" id="navbarResponsive">
+
+            <div class="collapse navbar-collapse" id="navbarResponsive">
                 <!-- Navbar Links Section -->
                 <div class="navbar-links mx-auto align-items-center">
                     <ul class="navbar-nav primary-links">
                         {% if not current_user.is_authenticated %}
                             <!-- Guest Links -->
                             <li class="nav-item mx-1">
-                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}" 
+                                <a class="btn btn-outline-light px-2 py-2 dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}" 
                                    href="#" data-url="{{ url_for('main.pricing') }}">Pricing</a>
                             </li>
                             <li class="nav-item mx-1">
-                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}" 
+                                <a class="btn btn-outline-light px-2 py-2 dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}" 
                                    href="#" data-url="{{ url_for('main.about') }}">About Us</a>
                             </li>
                             <li class="nav-item mx-1">
-                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link {% if request.endpoint == 'main.contact' %}active{% endif %}" 
+                                <a class="btn btn-outline-light px-2 py-2 dynamic-link {% if request.endpoint == 'main.contact' %}active{% endif %}" 
                                    href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a>
                             </li>
                         {% else %}
                             <!-- Authenticated User Links -->
                             <li class="nav-item mx-1">
-                                <a href="#" class="btn btn-light px-2 py-2" data-bs-toggle="modal" data-bs-target="#newSecretModal">
+                                <a href="#" class="link-light px-2 py-2 small fw-bold" style="font-size: 0.89rem; margin-right:10px;" data-bs-toggle="modal" data-bs-target="#newSecretModal">
                                     <i class="bi bi-plus-square"></i> New Secret
                                 </a>
                             </li>
                             <li class="nav-item mx-1">
-                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" 
+                                <a class="btn btn-outline-light px-2 py-2 dynamic-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" 
                                    href="#" data-url="{{ url_for('main.dashboard') }}">Dashboard</a>
                             </li>
                             <li class="nav-item">
-                                <a class="btn btn-outline-secondary px-2 py-2 dynamic-link {% if request.endpoint == 'main.all_secrets' %}active{% endif %}" 
+                                <a class="btn btn-outline-light px-2 py-2 dynamic-link {% if request.endpoint == 'main.all_secrets' %}active{% endif %}" 
                                    href="#" data-url="{{ url_for('main.all_secrets') }}">My Secrets</a>
                             </li>
                         {% endif %}
@@ -60,12 +99,12 @@
                         {% if not current_user.is_authenticated %}
                             <!-- Login Button for Guests -->
                             <li class="nav-item">
-                                <a class="btn btn-secondary px-2 py-2" href="{{ url_for('main.login') }}">Login</a>
+                                <a class="btn btn-light px-2 py-2" href="{{ url_for('main.login') }}">Login</a>
                             </li>
                         {% else %}
                             <!-- Dropdown Menu for Authenticated Users -->
                             <li class="nav-item dropdown">
-                                <a href="#" class="nav-link dropdown-toggle text-secondary px-2 py-2" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
+                                <a href="#" class="nav-link dropdown-toggle text-light px-2 py-2" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i> {{ current_user.username | lower }}
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end stylish-dropdown" aria-labelledby="userMenu">
@@ -89,3 +128,13 @@
         </div>
     </nav>
 </div>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        let accountDropdown = document.getElementById("mobileAccountDropdown");
+        
+        // Prevent clicking inside the account dropdown from closing the whole menu
+        accountDropdown.addEventListener("click", function(event) {
+            event.stopPropagation(); // Stops Bootstrap from closing the parent menu
+        });
+    });
+    </script>

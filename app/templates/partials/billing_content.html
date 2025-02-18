@@ -46,12 +46,12 @@
                             <form id="upgrade-form" method="post" action="{{ url_for('main.change_plan') }}">
                                 {{ form.hidden_tag() }}
                                 <div class="form-group mb-3 mt-3">
-                                    {{ form.plan_id.label }}
-                                    {{ form.plan_id(class="form-control") }}
+                                    {{ form.plan_id.label(class="mb-1") }}
+                                    {{ form.plan_id(class="form-select") }}
                                 </div>
                                 <div class="d-flex justify-content-center">
                                     <button type="button" class="btn btn-primary btn-block" data-bs-toggle="modal" data-bs-target="#confirmUpgradeModal">
-                                        Update Plan Now
+                                        Change Plan Now
                                     </button>
                                 </div>
                             </form>

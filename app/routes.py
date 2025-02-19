@@ -178,15 +178,22 @@ def login():
     # Get next from both GET and POST
     next_page = request.args.get('next') or request.form.get('next')
 
+    # Prepopulate form data from session if it exists
+    if 'form_data' in session:
+        form.user.data = session['form_data'].get('user', '')
+        session.pop('form_data')  # Remove after use
+    
     if form.validate_on_submit():
         password = form.password.data
-        user = db.session.execute(db.select(User).where(User.email == form.user.data or User.username == form.user.data)).scalar()
+        print(form.user.data)
+        user = db.session.execute(db.select(User).where((User.email == form.user.data) | (User.username == form.user.data))).scalar()
         
         if not user:
             flash("That email/ username does not exist, please try again.", "danger")
             return redirect(url_for('main.login'))
         
         elif not check_password_hash(user.password, password):
+            session['form_data'] = {'user': form.user.data}  # Store entered user
             flash('Password incorrect, please try again.', "danger")
             return redirect(url_for('main.login'))
         
@@ -235,7 +242,7 @@ def login():
         date_time = None
 
         # If a recent login exists and it's more recent than the current last_login
-        if latest_login and (not secret.last_login and latest_login > secret.last_login):
+        if latest_login and (secret.last_login is None or latest_login > secret.last_login):
             # Update the last_login to the latest login date
             secret.last_login = latest_login
 
@@ -533,7 +540,7 @@ def dashboard():
         date_time = None
 
         # If a recent login exists and it's more recent than the current last_login
-        if latest_login and (not secret.last_login and latest_login > secret.last_login):
+        if latest_login and (secret.last_login is None or latest_login > secret.last_login):
             # Update the last_login to the latest login date
             secret.last_login = latest_login
 
@@ -642,7 +649,7 @@ def all_secrets():
 
     # Fetch all secrets for the user
     query = db.select(Secret).where(Secret.user_id == current_user.id)
-    user_secrets = db.session.execute(query).scalars().all()
+    user_secrets = db.session.execute(query.order_by(Secret.date.desc())).scalars().all()
 
     if not user_secrets:
         current_user.storage_used = 0
@@ -784,7 +791,6 @@ def upload_file():
         # Update storage usage
         current_user.storage_used += file_size
         db.session.commit()
-        print("filename:",filename)
         return jsonify(message = 'File successfully uploaded', filename = filename), 200
     except Exception as e:
         return jsonify(error = str(e)), 500
@@ -808,17 +814,17 @@ def share():
 
     # Default variable initialization
     sharing_type = None
-    email, public, token, time_period, date, time, last_login = None, False, None, None, None, None, None
+    email, public, token, time_period, date, time, last_login, date_time_combined = None, False, None, None, None, None, None, None
 
     if form.validate_on_submit():
-        print("Form submission data:", form.data)
+        # print("Form submission data:", form.data)
         # Determine sharing type
         login_emails = [email.strip() for email in form.email_login.data.split(',') if email.strip()]
         scheduled_emails = [email.strip() for email in form.email_scheduled.data.split(',') if email.strip()]
         if form.date_period.data:
             sharing_type = "last_login"
             if not login_emails and not form.public_login.data:
-                return jsonify({"success": False, "message": "Email or Public must be selected for Last Login Check."}), 400
+                return jsonify({"success": False, "message": "Email or Public must be selected for Last Login Check"}), 400
 
             email = login_emails
             public = form.public_login.data
@@ -834,32 +840,41 @@ def share():
             last_login = user_last_login.login_time if user_last_login else None
 
             if not last_login:
-                return jsonify({"success": False, "message": "Last login time not found."}), 400
+                return jsonify({"success": False, "message": "Last login time not found"}), 400
 
             # Calculate the time period
             if date_period:
                 time_period = last_login + timedelta(days=int(date_period))
-                message = f"Your secret will be shared after {date_period} day/s from the last login."
+                message = f"Your secret will be shared after {date_period} day/s from the last login"
         elif form.date.data and form.time.data:
             sharing_type = "scheduled"
             if not scheduled_emails and not form.public_scheduled.data:
-                return jsonify({"success": False, "message": "Email or Public must be selected for Scheduled Sharing."}), 400
+                return jsonify({"success": False, "message": "Email or Public must be selected for Scheduled Sharing"}), 400
 
             date = form.date.data
             time = form.time.data
-            if isinstance(time, str):  # Handle if time is submitted as a string
+            if isinstance(time, str):  # Convert string time to time object
                 time = datetime.strptime(time, "%H:%M").time()
-            time_str = time.strftime("%H:%M")
 
             email = scheduled_emails
             public = form.public_scheduled.data
-            message = f"Your secret is scheduled for {date} at {time_str}."
+            
+            # Ensure 'time' is a datetime.time object before combining
+            if isinstance(time, datetime):
+                time = time.time()
+
+            # Convert the date/ time to user current UTC and split them to save them in DB
+            date_time_combined = convert_utc_to_local(datetime.combine(date, time), current_user.time_zone)
+            date_str, time_str = str(date_time_combined).split()
+
+            message = f"Your secret is scheduled for {date_str} at {time_str}"
         else:
             return jsonify({"success": False, "message": "Invalid sharing type or missing fields!"}), 400
 
         # Create and save the shared secret
         try:
-            token = generate_token()
+            if email:
+                token = generate_token()
             secret = Secret.query.filter_by(id=request.args.get("secret_id")).first()
 
             # Add the new shared secret first
@@ -873,7 +888,7 @@ def share():
                 time_period=time_period if sharing_type == "last_login" else None,
                 public_delete_confirm=form.public_confirm_deletion.data if sharing_type == "last_login" else False,
                 token=token,
-                date_to_send=date if sharing_type == "scheduled" else None,
+                date_to_send=date_str if sharing_type == "scheduled" else None,
                 time_to_send=time_str if sharing_type == "scheduled" else None,
                 received=False,
                 schedule_delete_confirm=form.scheduled_confirm_deletion.data if sharing_type == "scheduled" else False,
@@ -890,7 +905,7 @@ def share():
                     file=secret.file,
                     share_date=(
                         time_period if sharing_type == "last_login"
-                        else datetime.combine(date, time.time()) if sharing_type == "scheduled"
+                        else date_time_combined if sharing_type == "scheduled"
                         else None
                     )
                 )
@@ -904,11 +919,11 @@ def share():
             error_message = str(e)
             print(f"Error occurred: {error_message}")  # Log the error for debugging
             flash(f"Error occurred: {error_message}")
-            return jsonify(success= False, message= "An error occurred while sharing the secret.", error= error_message), 500
+            return jsonify(success= False, message= "An error occurred while sharing the secret", error= error_message), 500
 
     # Log validation errors
     print("Validation errors:", form.errors)
-    flash("Please fix the errors in the form.", "danger")
+    flash("Please fix the errors in the form", "danger")
     errors = {field: error for field, error in form.errors.items()}
     return jsonify(success=False, errors=errors), 400
 

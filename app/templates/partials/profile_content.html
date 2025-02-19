@@ -7,8 +7,15 @@
         .form-control {
             font-size: 0.91rem;
         }
+        .card {
+            border: none; /* To remove any unwanted card borders */
+        }
+        .card-title {
+            font-weight: bold;
+        }
     </style>
 {% endblock %}
+
 <div class="container my-5">
     <div class="text-center mb-5">
         <h2 class="mt-3 text-primary">Manage Your Profile</h2>
@@ -16,20 +23,22 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <div id="flash-messages">
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                {% endfor %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
                 </div>
             {% endif %}
         {% endwith %}
     </div>
+
     <!-- Adding new secret modal -->
     {% include "partials/new_secret_modal.html" %}
+
     <!-- Last Login Info -->
-    <div class="text-center">
+    <div class="text-center mb-4">
         <p class="text-muted" style="margin-bottom: 0;">Last Login: {{ last_login.login_time }}</p>
         <a href="#" data-bs-toggle="modal" data-bs-target="#loginHistoryModal" class="btn link-primary">View login history</a>
     </div>
@@ -63,11 +72,10 @@
         </div>
     </div>
 
-
     <div class="row">
         <div class="row align-items-stretch">
             <!-- Profile Info Section -->
-            <div class="col-md-8">
+            <div class="col-md-8 col-12 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-body small">
                         <h5 class="card-title text-center pb-3">Profile Information</h5>
@@ -90,18 +98,18 @@
                                 <div class="col-md-6">
                                     <label for="plan" class="form-label">Plan</label>
                                     <input type="text" 
-                                        class="form-control bg-light" 
-                                        id="plan" 
-                                        value="{{ current_user.plan.plan }}" 
-                                        readonly>
+                                           class="form-control bg-light" 
+                                           id="plan" 
+                                           value="{{ current_user.plan.plan }}" 
+                                           readonly>
                                 </div>
                                 <div class="col-md-6">
                                     <label for="plan_expiry" class="form-label">Next Billing Date</label>
                                     <input type="text" 
-                                        class="form-control bg-light" 
-                                        id="plan_expiry" 
-                                        value="{{ current_user.next_billing_date.strftime('%Y-%m-%d') if current_user.next_billing_date else 'None'}}" 
-                                        readonly>
+                                           class="form-control bg-light" 
+                                           id="plan_expiry" 
+                                           value="{{ current_user.next_billing_date.strftime('%Y-%m-%d') if current_user.next_billing_date else 'None'}}" 
+                                           readonly>
                                 </div>
                             </div>
                             <hr style="border: 1px solid #cccc; margin: 10px 0;">
@@ -119,7 +127,7 @@
                         
                             <!-- Submit Button -->
                             <div class="text-center">
-                                {{ pr_form.submit(class="btn btn-primary w-50 py-2", id="submit_profile") }}
+                                {{ pr_form.submit(class="btn btn-primary py-2", id="submit_profile") }}
                             </div>
                         </form>
                     </div>
@@ -127,7 +135,7 @@
             </div>
         
             <!-- Change Password Section -->
-            <div class="col-md-4">
+            <div class="col-md-4 col-12 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-body small">
                         <h5 class="card-title text-center pb-3">Change Password</h5>
@@ -156,7 +164,7 @@
                             </div>
                             
                             <div class="text-center">
-                                {{ ps_form.submit(class="btn btn-danger w-50 py-2", id="submit_password") }}
+                                {{ ps_form.submit(class="btn btn-primary w-50 py-2", id="submit_password") }}
                             </div>
                         </form>                    
                     </div>

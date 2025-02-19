@@ -834,7 +834,6 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    
 
     // Initialize share forms
     function initializeShareButtons() {

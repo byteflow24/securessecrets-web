@@ -161,7 +161,7 @@ class SharedSecret(db.Model):
     received = db.Column(db.Boolean, default=False)
     schedule_delete_confirm = db.Column(db.Boolean, default=False)
     public_delete_confirm = db.Column(db.Boolean, default=False)
-    received_time = db.Column(TIMESTAMP, nullable=True, default=func.now())
+    received_time = db.Column(TIMESTAMP, nullable=True)
     delete_at = db.Column(TIMESTAMP, nullable=True)
 
     user = db.relationship('User', back_populates='shared_secrets')

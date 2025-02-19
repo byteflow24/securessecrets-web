@@ -1,29 +1,29 @@
-<form id="searchForm" method="POST" action="{{ url_for('main.search_secrets') }}" class="row justify-content-center align-items-center p-1 my-2" style="display: flex; flex-wrap: nowrap;">
+<form id="searchForm" method="POST" action="{{ url_for('main.search_secrets') }}" class="row justify-content-center align-items-center p-1 my-1" style="display: flex; flex-wrap: nowrap;">
     {{ form.hidden_tag() }}
     
     <!-- Search Input -->
-    <div class="col-12 col-md-4 mb-2" style="flex: 1;">
+    <div class="col-12 col-md-4 mb-1" style="flex: 1;">
         <div class="input-group">
             <span class="input-group-text bg-primary text-white">
                 <i class="bi bi-search"></i>
             </span>
-            {{ form.search }}
+            {{ form.search(style="padding: 0.5rem; font-size:0.845rem;") }}
         </div>
     </div>
     
     <!-- Date Filter -->
-    <div class="col-12 col-md-4 mb-2" style="flex: 1;">
+    <div class="col-12 col-md-4 mb-1" style="flex: 1;">
         <div class="input-group">
             <span class="input-group-text bg-primary text-white">
                 <i class="bi bi-calendar"></i>
             </span>
-            {{ form.date_filter }}
+            {{ form.date_filter(style="padding: 0.5rem; font-size:0.845rem;") }}
         </div>
     </div>
 
     <!-- Filter Button -->
-    <div class="col-12 col-md-3 text-center mb-2" style="flex: 1;">
-        <button type="submit" name="filter_submit" class="btn btn-primary w-100 small" style="padding: 0.5rem;">
+    <div class="col-12 col-md-3 text-center mb-1" style="flex: 1;">
+        <button type="submit" name="filter_submit" class="btn btn-primary w-100" style="padding: 0.5rem; font-size:0.845rem;">
             <i class="bi bi-funnel"></i> Filter
         </button>
     </div>

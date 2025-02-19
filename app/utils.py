@@ -4,7 +4,7 @@ from functools import wraps
 from urllib.parse import urlparse, urljoin
 from . import db, login_manager
 from .models import User, Secret, Plan, Payment, HistoryPayment
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from cryptography.fernet import Fernet
 from wtforms.validators import DataRequired, Email, Regexp, ValidationError
 import base64
@@ -201,7 +201,7 @@ def validate_period(form, field):
         raise ValidationError("The period must contain only numbers.")
     value = int(field.data)
     if value < 1 or value > 360:
-        raise ValidationError("Period must be number/s from 1 to 360.")
+        raise ValidationError("Period must be number/s from 1 to 360 dayes.")
 
 # Ensure the date is today or in future
 def is_future_date_or_today(form, field):
@@ -214,14 +214,28 @@ def is_future_date_or_today(form, field):
 
 # Ensure the time is today and in future
 def is_future_time_today(form, field):
-    """Validator to check if the selected time is today but not in the future."""
+    """Validator to check if the selected time is today but in the past."""
     if field.data:
-        selected_time = field.data.time().replace(second=0, microsecond=0)  # Remove seconds and microseconds
-        current_time = datetime.now().time().replace(second=0, microsecond=0)  # Remove seconds and microseconds # Get only the time part (ignore the date)
+        selected_time = field.data.time()  # Extract time (without date)
+        current_time = datetime.now().time().replace(second=0, microsecond=0)  # Get current time
         
-        # Check if the selected time is in the future compared to the current time
-        if selected_time < current_time:
-            raise ValidationError("The selected time cannot be in the future.")
+        # Get the selected date from the form
+        selected_date_field = form.date.data  # Access the DateField from the form
+
+        if selected_date_field:
+            selected_date = selected_date_field  # Use the selected date
+        else:
+            selected_date = date.today()  # Default to today if no date is selected
+
+        # Combine selected date and time
+        selected_datetime = datetime.combine(selected_date, selected_time)
+
+        # Get current full datetime
+        current_datetime = datetime.now()
+
+        # Validation: If the date is today, ensure the selected time is in the future
+        if selected_date == current_datetime.date() and selected_time < current_time:
+            raise ValidationError("The selected time cannot be in the past.")
 
 # Converting time to user time
 def convert_utc_to_local(utc_time, time_zone):

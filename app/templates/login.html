@@ -167,7 +167,7 @@
 {% block content %}
     <div class="container-fluid">
         <div class="row h-100 justify-content-center align-items-center">
-            <!-- Centered Title Section -->
+            <!-- Title Section -->
             <div class="col-12 title-container pb-3">
                 <a href="{{ url_for('main.login') }}" class="d-inline-flex link-body-emphasis mb-3">
                     <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" style="width: 250px;">
@@ -175,92 +175,93 @@
                 <p class="mt-2">Your secrets, your control. Store private messages or a last will, set a timer, and let us handle the rest—whether it's sharing with loved ones or publicly.</p>
             </div>
 
+            <!-- Main Content Section -->
             <div class="container-fluid" style="padding-bottom: 100px;">
-              <div class="row centered-row h-100 align-items-center">
-                <div id="flash-messages">
-                    {% with messages = get_flashed_messages(with_categories=true) %}
-                        {% if messages %}
-                            {% for category, message in messages %}
-                            <div class="alert alert-{{ category }} text-center mt-3 alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                <div class="row centered-row h-100 align-items-center">
+                    <div id="flash-messages">
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} text-center mt-3 alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+                    </div>
+                    <!-- Left Login Section -->
+                    <div class="col-md-6 col-12 login-section">
+                        <h2 class="news-heading mb-4">Log In</h2>
+                        <div class="form-container">
+                            <form method="POST" action="{{ url_for('main.login', next=request.args.get('next')) }}" novalidate>
+                                <input type="hidden" name="csrf_token" id="login_csrf_token" value="{{ form.csrf_token._value() }}">
+                                <div class="mb-3">
+                                    <label for="user" class="form-label">Email/ Username</label>
+                                    {{ form.user(class="form-control", id="user", placeholder="Email or username") }}
+                                    {% for error in form.user.errors %}
+                                        <div class="text-danger">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="mb-3">
+                                    <label for="password" class="form-label">Password</label>
+                                    {{ form.password(class="form-control", id="password", placeholder="Password") }}
+                                    {% for error in form.password.errors %}
+                                        <div class="text-danger">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="row-md-1 d-flex justify-content-between align-items-center">
+                                    <button type="submit" class="btn btn-primary w-50" id="submit">Login</button>
+                                    <a class="btn btn-link w-100" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal">Forgot my password</a>
+                                </div>
+                            </form>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <p class="mb-0 text-muted" style="font-size: 0.9rem;">
+                                    Don't have an account? <a href="{{ url_for('main.pricing') }}" class="fw-bold text-decoration-none">Sign Up Now</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Public Section -->
+                    <div class="col-md-6 col-12 news-section">
+                        <div class="news-heading">Public Secrets</div>
+                        <div class="news-container">
+                            {% for public in public_secrets %}
+                            <div class="news-content">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <p class="text-secondary"><strong>@{{ public.username or 'Anonymous' }}</strong></p>
+                                    <p style="font-size: 0.75rem;">{{ public.display_time }}</p>
+                                </div>
+                                <div class="secret-wrapper clickable" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; cursor: pointer;">
+                                    <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.secret|safe }}</p>
+                                    {% if public.file %}
+                                        {% if public.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
+                                            <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="File Preview" style="max-width: 40%; height: auto;">
+                                        {% elif public.file.endswith('.pdf') %}
+                                            <iframe src="{{ url_for('main.download_file', filename=public.file) }}" 
+                                                    style="max-width: 50%; height: auto; border: none;" frameborder="0"></iframe>
+                                        {% elif public.file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) %}
+                                            <iframe src="https://docs.google.com/viewer?url={{ url_for('main.download_file', filename=public.file, _external=True) }}&embedded=true" 
+                                                    style="width: 50%; height: auto; border: none;" frameborder="0"></iframe>
+                                        {% else %}
+                                            <p style="font-size: small;">No preview available for this file type.</p>
+                                        {% endif %}
+                                        <!-- Download link -->
+                                        <p><strong>Download Attachment:</strong>
+                                            <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
+                                                <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
+                                            </a>
+                                        </p>
+                                    {% endif %}
+                                </div>
+                                <hr>
                             </div>
                             {% endfor %}
-                        {% endif %} 
-                    {% endwith %}
-                </div>
-                <!-- Left Login Section -->
-                <div class="col-md-6 d login-section">
-                    <h2 class="news-heading mb-4">Log In</h2>
-                    <div class="form-container">
-                        <form method="POST" action="{{ url_for('main.login', next=request.args.get('next')) }}" novalidate>
-                            <input type="hidden" name="csrf_token" id="login_csrf_token" value="{{ form.csrf_token._value() }}">
-                            <div class="mb-3">
-                                <label for="user" class="form-label">Email/ Username</label>
-                                {{ form.user(class="form-control", id="user", placeholder="Email or username") }}
-                                {% for error in form.user.errors %}
-                                    <div class="text-danger">{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                            <div class="mb-3">
-                                <label for="password" class="form-label">Password</label>
-                                {{ form.password(class="form-control", id="password", placeholder="Password") }}
-                                {% for error in form.password.errors %}
-                                    <div class="text-danger">{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                            <div class="row-md-1 d-flex justify-content-between align-items-center">
-                                <button type="submit" class="btn btn-primary w-50" id="submit">Login</button>
-                                <a class="btn btn-link w-100" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal">Forgot my password</a>
-                            </div>
-                        </form>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <p class="mb-0 text-muted" style="font-size: 0.9rem;">
-                                Don't have an account? <a href="{{ url_for('main.pricing') }}" class="fw-bold text-decoration-none">Sign Up Now</a>
-                            </p>
-                            
                         </div>
                     </div>
-                </div>         
-                <!-- Right Public Section -->
-                <div class="col-md-6 news-section">
-                    <div class="news-heading">Public Secrets</div>
-                    <div class="news-container">
-                        {% for public in public_secrets %}
-                        <div class="news-content">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <p class="text-secondary"><strong>@{{ public.username or 'Anonymous' }}</strong></p>
-                                <p style="font-size: 0.75rem;">{{ public.display_time }}</p>
-                            </div>
-                            <div class="secret-wrapper clickable" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; cursor: pointer;">
-                                <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.secret|safe }}</p>
-                                {% if public.file %}
-                                    {% if public.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
-                                        <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="File Preview" style="max-width: 40%; height: auto;">
-                                    {% elif public.file.endswith('.pdf') %}
-                                        <iframe src="{{ url_for('main.download_file', filename=public.file) }}" 
-                                                style="max-width: 50%; height: auto; border: none;" frameborder="0"></iframe>
-                                    {% elif public.file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) %}
-                                        <iframe src="https://docs.google.com/viewer?url={{ url_for('main.download_file', filename=public.file, _external=True) }}&embedded=true" 
-                                                style="width: 50%; height: auto; border: none;" frameborder="0"></iframe>
-                                    {% else %}
-                                        <p style="font-size: small;">No preview available for this file type.</p>
-                                    {% endif %}
-                                    <!-- Download link -->
-                                    <p><strong>Download Attachment:</strong>
-                                        <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
-                                            <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
-                                        </a>
-                                    </p>
-                                {% endif %}
-                            </div>
-                            <hr>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
+                </div>          
             </div>
-          </div>          
         </div>
     </div>
 

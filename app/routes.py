@@ -185,7 +185,7 @@ def login():
     
     if form.validate_on_submit():
         password = form.password.data
-        print(form.user.data)
+        # print(form.user.data)
         user = db.session.execute(db.select(User).where((User.email == form.user.data) | (User.username == form.user.data))).scalar()
         
         if not user:
@@ -658,17 +658,40 @@ def all_secrets():
     # Decrypt secrets
     decrypted_secrets = decrypt_secrets(user_secrets)
 
+    # Fetch shared secrets for the current user
+    shared_secrets = db.session.execute(
+        db.select(SharedSecret)
+        .options(db.joinedload(SharedSecret.secret), db.joinedload(SharedSecret.public_secret))
+        .where(SharedSecret.user_id == current_user.id)  # assuming shared via email
+        .order_by(SharedSecret.date_to_send.desc())  # or any date field you prefer
+    ).scalars().all()
+
+    # Decrypt shared and public secrets after fetching them
+    for shared in shared_secrets:
+        # Check if public_secret is encrypted and decrypt it if necessary
+        if shared.public_secret:
+            if is_encrypted(shared.public_secret.secret):
+                shared.public_secret.secret = decrypt_secret(shared.public_secret.secret)
+
+    for shared in shared_secrets:
+        if shared.date_to_send and shared.time_to_send:
+            combined = datetime.combine(shared.date_to_send, shared.time_to_send)
+            shared.status = 'shared' if combined <= datetime.now() else 'pending'
+        else:
+            shared.status = 'shared' if shared.received else 'pending'
+
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
             'html': render_template('partials/all_secrets_content.html',
                                     user_secrets=decrypted_secrets,
+                                    shared_secrets=shared_secrets,
                                     current_user=current_user,
                                     share_form=share_form,
                                     form=form,
                                     secret_form=secret_form),
             'title': 'All Secrets - Secures Secrets'
         })
-    return render_template('all_secrets.html', user_secrets=decrypted_secrets, current_user=current_user, form=form, share_form=share_form, secret_form=secret_form, show_header=True, show_footer=True, show_secrets_list=True)
+    return render_template('all_secrets.html', user_secrets=decrypted_secrets, shared_secrets=shared_secrets, current_user=current_user, form=form, share_form=share_form, secret_form=secret_form, show_header=True, show_footer=True, show_secrets_list=True)
 
 # Search and Filter
 @main.route('/search-secrets', methods=['POST'])
@@ -1728,7 +1751,7 @@ def about():
             })
     return render_template('about.html', secret_form=secret_form, show_header=True, show_footer=True)
 
-@main.route('/contact-us', methods=['GET' ,'POST'])
+@main.route('/contact', methods=['GET' ,'POST'])
 def contact():
     secret_form = SecretForm()
     form = ContactUsForm()

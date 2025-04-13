@@ -223,76 +223,109 @@ window.addEventListener('DOMContentLoaded', () => {
         updateActiveTab();
     }        
 
-    // Initialize secret links
     function initializeSecretLinks() {
-        const secretLinks = document.querySelectorAll(".secret-link");
-        const secretDetails = document.querySelectorAll(".secret-details");
+        // User secret elements
+        const userSecretLinks = document.querySelectorAll(".secret-link");
+        const userSecretDetails = document.querySelectorAll(".secret-details.user");
+        
+        // Shared secret elements
+        const sharedSecretLinks = document.querySelectorAll(".shared-secret-link");
+        const sharedSecretDetails = document.querySelectorAll(".secret-details.shared");
+    
         const noSecretAlert = document.getElementById("noSecretAlert");
-        const secretsList = document.getElementById("accordionSecretsList");
-
-        // Function to hide all secret details
+    
+        // Hide all secret details
         function hideAllSecrets() {
-            secretDetails.forEach(secret => {
-                secret.style.display = "none";
-            });
+            userSecretDetails.forEach(secret => secret.style.display = "none");
+            sharedSecretDetails.forEach(secret => secret.style.display = "none");
         }
-
-        // Function to check if any secret is visible and toggle the alert
+    
+        // Check if any secret is visible
         function checkSelection() {
-            const anyVisible = Array.from(secretDetails).some(secret => secret.style.display === "block");
-
-            // if (!secretsList) {
-            //     console.error("Secrets list container not found.");
-            //     return;
-            // }
-
+            const anyVisible = 
+                Array.from(userSecretDetails).some(secret => secret.style.display === "block") ||
+                Array.from(sharedSecretDetails).some(secret => secret.style.display === "block");
+    
             if (noSecretAlert) {
                 noSecretAlert.style.display = anyVisible ? "none" : "block";
             }
         }
-
-        // Attach click event listener to each secret link
-        secretLinks.forEach(link => {
+    
+        // Attach click handler for user secrets
+        userSecretLinks.forEach(link => {
             link.addEventListener("click", e => {
-                e.preventDefault(); // Prevent default anchor behavior
+                e.preventDefault();
                 const targetId = link.getAttribute("data-target");
                 const targetElement = document.querySelector(targetId);
-
+    
                 if (!targetElement) {
-                    console.error(`No element found with selector: ${targetId}`);
+                    console.error(`No user secret element found with selector: ${targetId}`);
                     return;
                 }
-
-                hideAllSecrets(); // Hide all secrets
-                targetElement.style.display = "block"; // Show selected secret
-
-                // Check if any secret is visible after the update
+    
+                hideAllSecrets();
+                targetElement.style.display = "block";
                 checkSelection();
             });
         });
-
-        // Initial check to ensure the alert is accurate on page load
-        checkSelection();
+    
+        // Attach click handler for shared secrets
+        sharedSecretLinks.forEach(link => {
+            link.addEventListener("click", e => {
+                e.preventDefault();
+                const targetId = link.getAttribute("data-target");
+                const targetElement = document.querySelector(targetId);
+    
+                if (!targetElement) {
+                    console.error(`No shared secret element found with selector: ${targetId}`);
+                    return;
+                }
+    
+                hideAllSecrets();
+                targetElement.style.display = "block";
+                checkSelection();
+            });
+        });
+    
+        checkSelection(); // Initial check
     }
+    
     
     // Search area
     function initializeSearchForm() {
         const searchForm = document.getElementById('searchForm');
         const secretsList = document.getElementById('accordionSecretsList');
+        const sharedSecretList = document.getElementById('accordionSharedSecretsList');
     
         if (searchForm) {
             searchForm.addEventListener('submit', function (event) {
                 event.preventDefault();
                 console.log("Search form submitted");
+    
                 const formData = new FormData(searchForm);
                 const url = searchForm.action;
     
-                // Show a loading spinner
-                secretsList.innerHTML = `
-                    <div class="text-center py-4">
-                        <span class="spinner-border text-primary" role="status"></span> Loading...
-                    </div>
-                `;
+                // Show loading spinners //
+                
+                // Determine which tab is active
+                const secretsTabActive = document.getElementById('secrets-tab')?.classList.contains('active');
+                const sharedTabActive = document.getElementById('shared-tab')?.classList.contains('active');
+
+                // Show loading spinner only on active tab
+                if (secretsTabActive && secretsList) {
+                    secretsList.innerHTML = `
+                        <div class="text-center py-4">
+                            <span class="spinner-border text-primary" role="status"></span> Loading...
+                        </div>
+                    `;
+                }
+                if (sharedTabActive && sharedSecretList) {
+                    sharedSecretList.innerHTML = `
+                        <div class="text-center py-4">
+                            <span class="spinner-border text-primary" role="status"></span> Loading...
+                        </div>
+                    `;
+                }
     
                 fetch(url, {
                     method: 'POST',
@@ -311,26 +344,34 @@ window.addEventListener('DOMContentLoaded', () => {
                     })
                     .then(data => {
                         console.log("Response data:", data);
+    
+                        // Determine which tab is active
+                        const secretsTabActive = document.getElementById('secrets-tab')?.classList.contains('active');
+                        const sharedTabActive = document.getElementById('shared-tab')?.classList.contains('active');
+    
                         if (data.html) {
-                            secretsList.innerHTML = data.html;
-                            console.log("Secrets updated successfully");
-    
-                            // Update URL parameters for state
-                            const url = new URL(window.location);
-                            url.searchParams.set('search', formData.get('search') || '');
-                            url.searchParams.set('date_filter', formData.get('date_filter') || '');
-                            url.searchParams.set('alpha_filter', formData.get('alpha_filter') || '');
-                            history.pushState(null, '', url);
-    
-                            // Reinitialize dynamic components
-                            reinitializeAllComponents();
+                            if (secretsTabActive && secretsList) {
+                                secretsList.innerHTML = data.html;
+                                console.log("Secrets updated successfully");
+                                reinitializeAllComponents();
+                            } else if (sharedTabActive && sharedSecretList) {
+                                sharedSecretList.innerHTML = data.html;
+                                console.log("Shared Secrets updated successfully");
+                                reinitializeAllComponents();
+                            }
                         } else if (data.error) {
-                            secretsList.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                            if (secretsTabActive && secretsList) {
+                                secretsList.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                            } else if (sharedTabActive && sharedSecretList) {
+                                sharedSecretList.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                            }
                         }
                     })
                     .catch(error => {
                         console.error("Error during AJAX request:", error);
-                        secretsList.innerHTML = `<div class="alert alert-danger">An error occurred: ${error.message}</div>`;
+                        if (secretsList) {
+                            secretsList.innerHTML = `<div class="alert alert-danger">An error occurred: ${error.message}</div>`;
+                        }
                     });
             });
         }

@@ -149,7 +149,7 @@ class SharedSecret(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    secret_id = db.Column(db.Integer, db.ForeignKey('secrets.id', ondelete='CASCADE'), nullable=False)
+    secret_id = db.Column(db.Integer, db.ForeignKey('secrets.id', ondelete='SET NULL'), nullable=True)
     email = db.Column(db.String(255), nullable=True)
     public = db.Column(db.Boolean, nullable=True, default=False)
     last_login = db.Column(TIMESTAMP, nullable=True)
@@ -173,7 +173,7 @@ class PublicSecrets(db.Model):
     __tablename__ = 'public_secrets'
 
     id = db.Column(db.Integer, primary_key=True)
-    shared_secret_id = db.Column(db.Integer, db.ForeignKey('shared_secrets.id', ondelete='SET NULL'), nullable=True)
+    shared_secret_id = db.Column(db.Integer, db.ForeignKey('shared_secrets.id', ondelete='CASCADE'), nullable=False)
     username = db.Column(String(50), nullable=True)
     title = db.Column(String(100), nullable=True)
     secret = db.Column(String, nullable=True)

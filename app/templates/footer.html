@@ -26,11 +26,16 @@
             <div class="col-lg-3 col-md-3 col-sm-12">
                 <h5 style="font-size: 0.9rem;">Contact Us</h5>
                 <p style="font-size: 0.75rem;">Email: <a href="mailto:support@securessecrets.com" class="text-white" aria-label="Send email to support">support@securessecrets.com</a></p>
-                <p style="font-size: 0.75rem;">&copy; All rights reserved to ByteFlow Digital</p>
+                <p style="font-size: 0.75rem;">&copy; <span id="year"></span> <a href="https://www.byteflowdigital.com" class="text-white link-offset-3-hover link-underline link-underline-opacity-0 link-underline-opacity-75-hover">ByteFlow Digital</a>. All rights reserved.</p>
             </div>
         </div>
     </div>
 </footer>
+
+<!-- This script for updating the year automatically for the copyright -->
+<script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+</script>
 
 <!-- Include Bootstrap's JavaScript and Popper.js -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer

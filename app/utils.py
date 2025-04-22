@@ -499,6 +499,56 @@ def create_plan():
         },
     }
 
+    ############################################ Premium Plan (Trial + Regular Billing Cycle + Annual) ############################################
+
+    annual_premium_plan_data = {
+        "product_id": plan.product_id,  # Replace with your actual product ID
+        "name": "Annual Premium Plan",
+        "description": "Access to premium features with a 14-day trial",
+        "status": "ACTIVE",
+        "billing_cycles": [
+            {
+                "frequency": {
+                    "interval_unit": "DAY",
+                    "interval_count": 14
+                },
+                "tenure_type": "TRIAL",
+                "sequence": 1,
+                "total_cycles": 1,
+                "pricing_scheme": {
+                    "fixed_price": {
+                    "value": "0",
+                    "currency_code": "USD"
+                    }
+                }
+            },
+            {
+                "frequency": {
+                    "interval_unit": "YEAR",
+                    "interval_count": 1
+                },
+                "tenure_type": "REGULAR",
+                "sequence": 2,
+                "total_cycles": 0,  # 0 means the subscription is indefinite
+                "pricing_scheme": {
+                    "fixed_price": {
+                        "value": "21.49",  # Yearly price
+                        "currency_code": "USD"
+                    }
+                }
+            }
+        ],
+        "payment_preferences": {
+            "auto_bill_outstanding": True,
+            "setup_fee": {
+                "value": "0",
+                "currency_code": "USD"
+            },
+            "setup_fee_failure_action": "CONTINUE",
+            "payment_failure_threshold": 3
+        },
+    }
+
     ############################################ Non-Trial Basic Plan ############################################
     basic_non_trial_plan_data = {
         "product_id": plan.product_id,
@@ -656,7 +706,8 @@ def create_plan():
     # premium_non_trial_plan_json = json.dumps(premium_non_trial_plan_data)
     # test_plan_json_trial = json.dumps(test_plan)
     # test_plan_json = json.dumps(test_non_trial_plan)
-    annual_basic_plan_json = json.dumps(annual_basic_plan_data)
+    # annual_basic_plan_json = json.dumps(annual_basic_plan_data)
+    annual_premium_plan_json = json.dumps(annual_premium_plan_data)
 
     url = f"{API_URL}/billing/plans"
 
@@ -667,8 +718,43 @@ def create_plan():
     # response_premium_non_trial = requests.post(url, headers=headers, data=premium_non_trial_plan_json)
     # response_test_plan = requests.post(url, headers=headers, data=test_plan_json)
     # response_test_trial_plan = requests.post(url, headers=headers, data=test_plan_json)
-    response_annual_basic_plan = requests.post(url, headers=headers, data=annual_basic_plan_json)
+    # response_annual_basic_plan = requests.post(url, headers=headers, data=annual_basic_plan_json)
+    response_annual_premium_plan = requests.post(url, headers=headers, data=annual_premium_plan_json)
 
+    ###################################################################
+
+    if response_annual_premium_plan.status_code == 201:
+        # Fetch the Basic-Yearly plan
+        annual_plan_data = Plan.query.filter(
+            and_(Plan.plan == "Premium", Plan.billing_cycle == "yearly")
+        ).first()
+
+        if not annual_plan_data:
+            print("Annual Premium plan not found in the database.")
+            return
+        
+        # Check if paypal_plan_id is already a list or a JSON string
+        if isinstance(annual_plan_data.paypal_plan_id, str):
+            existing_plan_ids = json.loads(annual_plan_data.paypal_plan_id)
+        elif isinstance(annual_plan_data.paypal_plan_id, list) or annual_plan_data.paypal_plan_id is None:
+            existing_plan_ids = annual_plan_data.paypal_plan_id or []
+        else:
+            raise TypeError("Unexpected type for paypal_plan_id")
+
+        # Append the new PayPal Plan ID
+        existing_plan_ids.append(response_annual_premium_plan.json()['id'])
+
+        # Store back as JSON string
+        annual_plan_data.paypal_plan_id = json.dumps(existing_plan_ids)
+        db.session.commit()
+
+        print("Annual Premium Plan Created Successfully!")
+        print(response_annual_premium_plan.json())  # Contains the plan_id for Basic
+    else:
+        print("Failed to create Annual Premium Plan.")
+        print(response_annual_premium_plan.json())
+
+    ###################################################################
 
     # if response_basic.status_code == 201:
     #     basic_plan = Plan.query.filter_by(plan="Basic").first()
@@ -828,36 +914,36 @@ def create_plan():
 
     ##############################################################################
 
-    if response_annual_basic_plan.status_code == 201:
-        # Fetch the Basic-Yearly plan
-        annual_plan_data = Plan.query.filter(
-            and_(Plan.plan == "Basic", Plan.billing_cycle == "yearly")
-        ).first()
+    # if response_annual_basic_plan.status_code == 201:
+    #     # Fetch the Basic-Yearly plan
+    #     annual_plan_data = Plan.query.filter(
+    #         and_(Plan.plan == "Basic", Plan.billing_cycle == "yearly")
+    #     ).first()
 
-        if not annual_plan_data:
-            print("Annual Basic plan not found in the database.")
-            return
+    #     if not annual_plan_data:
+    #         print("Annual Basic plan not found in the database.")
+    #         return
         
-        # Check if paypal_plan_id is already a list or a JSON string
-        if isinstance(annual_plan_data.paypal_plan_id, str):
-            existing_plan_ids = json.loads(annual_plan_data.paypal_plan_id)
-        elif isinstance(annual_plan_data.paypal_plan_id, list) or annual_plan_data.paypal_plan_id is None:
-            existing_plan_ids = annual_plan_data.paypal_plan_id or []
-        else:
-            raise TypeError("Unexpected type for paypal_plan_id")
+    #     # Check if paypal_plan_id is already a list or a JSON string
+    #     if isinstance(annual_plan_data.paypal_plan_id, str):
+    #         existing_plan_ids = json.loads(annual_plan_data.paypal_plan_id)
+    #     elif isinstance(annual_plan_data.paypal_plan_id, list) or annual_plan_data.paypal_plan_id is None:
+    #         existing_plan_ids = annual_plan_data.paypal_plan_id or []
+    #     else:
+    #         raise TypeError("Unexpected type for paypal_plan_id")
 
-        # Append the new PayPal Plan ID
-        existing_plan_ids.append(response_annual_basic_plan.json()['id'])
+    #     # Append the new PayPal Plan ID
+    #     existing_plan_ids.append(response_annual_basic_plan.json()['id'])
 
-        # Store back as JSON string
-        annual_plan_data.paypal_plan_id = json.dumps(existing_plan_ids)
-        db.session.commit()
+    #     # Store back as JSON string
+    #     annual_plan_data.paypal_plan_id = json.dumps(existing_plan_ids)
+    #     db.session.commit()
 
-        print("Test Plan Created Successfully!")
-        print(response_annual_basic_plan.json())  # Contains the plan_id for Basic
-    else:
-        print("Failed to create Test Plan.")
-        print(response_annual_basic_plan.json())
+    #     print("Test Plan Created Successfully!")
+    #     print(response_annual_basic_plan.json())  # Contains the plan_id for Basic
+    # else:
+    #     print("Failed to create Test Plan.")
+    #     print(response_annual_basic_plan.json())
 
 # Create new subscription
 def create_new_subscription(user, new_plan_id):

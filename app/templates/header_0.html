@@ -1,0 +1,72 @@
+<div class="container" style="margin-bottom: 100px;">
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm border-bottom fixed-top custom-navbar" id="mainNav">
+        <div class="container-fluid px-4">
+            <!-- Logo -->
+            <a href="#" class="navbar-brand d-inline-flex align-items-center dynamic-link" id="logo-link" data-url="{{ url_for('main.home') }}">
+                <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" alt="Logo" style="height: 40px; padding-left: 15px;">
+            </a>
+
+            <!-- Navbar Toggler for Mobile View -->
+            <div class="dropdown d-lg-none">
+                <button class="btn btn-light" type="button" id="mobileNavDropdown" data-bs-toggle="dropdown">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="mobileNavDropdown">
+                    <li><a class="dropdown-item" href="{{ url_for('main.login') }}">Login</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}" href="#" data-url="{{ url_for('main.pricing') }}">Pricing</a></li>
+                        <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}" href="#" data-url="{{ url_for('main.about') }}">About Us</a></li>
+                        <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.contact' %}active{% endif %}" href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a></li>
+                        </li>
+                </ul>
+            </div>
+
+            <div class="collapse navbar-collapse" id="navbarResponsive">
+                <!-- Navbar Links Section -->
+                <div class="navbar-links mx-auto align-items-center">
+                    <ul class="navbar-nav">
+                        <!-- Guest Links -->
+                        <li class="nav-item mx-1">
+                            <a class="nav-link link-dark px-2 py-2 dynamic-link {% if request.endpoint == 'main.how_works' %}active{% endif %}" 
+                                href="#" data-url="{{ url_for('main.how_works') }}">How it Works?</a>
+                        </li>
+                        <li class="nav-item mx-1">
+                            <a class="nav-link link-dark px-2 py-2 dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}" 
+                                href="#" data-url="{{ url_for('main.pricing') }}">Pricing</a>
+                        </li>
+                        <li class="nav-item mx-1">
+                            <a class="nav-link link-dark px-2 py-2 dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}" 
+                                href="#" data-url="{{ url_for('main.about') }}">About Us</a>
+                        </li>
+                        <li class="nav-item mx-1">
+                            <a class="nav-link link-dark px-2 py-2 dynamic-link {% if request.endpoint == 'main.contact' %}active{% endif %}" 
+                                href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Account Section -->
+                <div class="navbar-account">
+                    <ul class="navbar-nav account-links">
+                        <!-- Login Button for Guests -->
+                        <li class="nav-item">
+                            <a class="btn btn-outlin-primary px-2 py-2" href="{{ url_for('main.login') }}">Login</a>
+                            <a class="btn btn-primary text-white px-2 py-2 dynamic-link"
+                                href="#" data-url="{{ url_for('main.pricing') }}">Join now for FREE</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+</div>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        let accountDropdown = document.getElementById("mobileAccountDropdown");
+        
+        // Prevent clicking inside the account dropdown from closing the whole menu
+        accountDropdown.addEventListener("click", function(event) {
+            event.stopPropagation(); // Stops Bootstrap from closing the parent menu
+        });
+    });
+    </script>

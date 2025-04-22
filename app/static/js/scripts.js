@@ -7,6 +7,7 @@ window.dataLayer = window.dataLayer || [];
 
 
 window.addEventListener('DOMContentLoaded', () => {
+    
     initializeSearchForm();
     initializeSecretLinks();
     initializeNewSecretForm();
@@ -14,7 +15,9 @@ window.addEventListener('DOMContentLoaded', () => {
     initializeUpdateSecretForm();
 
     initializeReadSecret();
-    initializeLastLoginHistory()
+    initializeLastLoginHistory();
+    initializeUpdatePricing();
+    
     // Scroll handling for the main navigation
     let scrollPos = 0;
     const mainNav = document.getElementById('mainNav');
@@ -81,9 +84,10 @@ window.addEventListener('DOMContentLoaded', () => {
         initializeSearchForm();
         initializeUpdateSecretForm();
         clearFlashMessages();
+        initializeUpdatePricing();
 
         initializeReadSecret();
-        initializeLastLoginHistory()
+        initializeLastLoginHistory();
     }
     
     // Function to load content via AJAX
@@ -375,7 +379,46 @@ window.addEventListener('DOMContentLoaded', () => {
                     });
             });
         }
-    }    
+    }
+
+    // Updating price toggle
+    function initializeUpdatePricing() {
+        const toggle = document.getElementById('billingToggle');
+        if (!toggle) {
+            return;
+        }
+
+        const prices = document.querySelectorAll('.price');
+        const billingPeriods = document.querySelectorAll('.billing-period');
+        const buttons = document.querySelectorAll('.plan-button');
+
+        function updatePricing() {
+            const isYearly = toggle.checked;
+            prices.forEach(price => {
+                const monthlyPrice = parseFloat(price.getAttribute('data-monthly'));
+                const yearlyPrice = parseFloat(price.getAttribute('data-yearly'));
+                if (!isNaN(monthlyPrice) && !isNaN(yearlyPrice)) {
+                    price.textContent = isYearly ? yearlyPrice.toFixed(2) : monthlyPrice.toFixed(2);
+                } else {
+                    console.error('Invalid price data:', { monthlyPrice, yearlyPrice });
+                }
+            });
+            billingPeriods.forEach(period => {
+                period.textContent = isYearly ? '/yr' : '/mo';
+            });
+            buttons.forEach(button => {
+                const monthlyId = button.getAttribute('data-monthly-id');
+                const yearlyId = button.getAttribute('data-yearly-id');
+                const baseUrl = button.href.split('plan_id=')[0];
+                button.href = isYearly ? `${baseUrl}plan_id=${yearlyId}` : `${baseUrl}plan_id=${monthlyId}`;
+            });
+        }
+
+        updatePricing(); // Run immediately to set initial state
+        toggle.addEventListener('change', updatePricing);
+    }
+
+
 
     // Initialize Pin and Star buttons
     function initializePinStarButtons() {

@@ -30,7 +30,7 @@
           <!-- Contact Form Card -->
           <div class="card shadow-lg border-0 rounded-4 mb-4">
             <div class="card-body p-5">
-              <form id="contactForm" action="{{ url_for('main.contact') }}" method="post" novalidate>
+              <form id="contactForm" action="{{ request.path }}" method="post" novalidate>
                 {{ form.hidden_tag() }}
                 <!-- Name Input -->
                 <div class="form-floating mb-3">

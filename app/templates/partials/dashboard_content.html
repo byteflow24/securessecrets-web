@@ -212,35 +212,72 @@
                     <h2 class="news-heading">Public Secrets</h2>
                     <div class="news-container">
                         {% for public in public_secrets %}
-                        <div class="news-content">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <p class="text-secondary"><strong>@{{ public.username or 'Anonymous' }}</strong></p>
-                                <p style="font-size: 0.75rem;">{{ public.display_time }}</p>
-                            </div>
-                            <div class="secret-wrapper clickable" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; cursor: pointer;">
-                                <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.secret|safe }}</p>
-                                {% if public.file %}
-                                    {% if public.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
-                                        <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="File Preview" style="max-width: 40%; height: auto;">
-                                    {% elif public.file.endswith('.pdf') %}
-                                        <iframe src="{{ url_for('main.download_file', filename=public.file) }}" 
-                                                style="max-width: 50%; height: auto; border: none;" frameborder="0"></iframe>
-                                    {% elif public.file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) %}
-                                        <iframe src="https://docs.google.com/viewer?url={{ url_for('main.download_file', filename=public.file, _external=True) }}&embedded=true" 
-                                                style="width: 50%; height: auto; border: none;" frameborder="0"></iframe>
-                                    {% else %}
-                                        <p style="font-size: small;">No preview available for this file type.</p>
+                            <div class="news-content">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <p class="text-secondary"><strong>@{{ public.username or 'Anonymous' }}</strong></p>
+                                    <p style="font-size: 0.75rem;">{{ public.display_time }}</p>
+                                </div>
+                                <div class="secret-wrapper clickable" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; cursor: pointer;">
+                                    <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.secret|safe }}</p>
+                                    {% if public.file %}
+                                        {% if public.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
+                                            <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="File Preview" style="max-width: 40%; height: auto;">
+                                        {% elif public.file.endswith('.pdf') %}
+                                            <iframe src="{{ url_for('main.download_file', filename=public.file) }}" 
+                                                    style="max-width: 50%; height: auto; border: none;" frameborder="0"></iframe>
+                                        {% elif public.file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) %}
+                                            <iframe src="https://docs.google.com/viewer?url={{ url_for('main.download_file', filename=public.file, _external=True) }}&embedded=true" 
+                                                    style="width: 50%; height: auto; border: none;" frameborder="0"></iframe>
+                                        {% else %}
+                                            <p style="font-size: small;">No preview available for this file type.</p>
+                                        {% endif %}
+                                        <!-- Download link -->
+                                        <p><strong>Download Attachment:</strong>
+                                            <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
+                                                <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
+                                            </a>
+                                        </p>
                                     {% endif %}
-                                    <!-- Download link -->
-                                    <p><strong>Download Attachment:</strong>
-                                        <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
-                                            <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
-                                        </a>
-                                    </p>
-                                {% endif %}
+                                    <!-- Action links -->
+                                    <div class="mt-2 d-flex justify-content-end gap-3">
+                                        <a class="text-danger report-btn" data-bs-toggle="modal" data-bs-target="#reportSecretModel" data-id="{{ public.id }}" data-secret="{{ public.secret }}" data-file="{{ public.file }}" style="font-size: 0.85rem;">Report</a>
+                                        {% if current_user.username == "admin" %}
+                                            <a href="{{ url_for('main.delete_published_secret', pb_secret_id=public.id) }}" class="text-muted" style="font-size: 0.85rem;">Delete</a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <hr>
                             </div>
-                            <hr>
-                        </div>
+                            <!-- Report Modal -->
+                            <div class="modal fade small" id="reportSecretModel" tabindex="-1" aria-labelledby="reportSecretModelLabel" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content small">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="reportSecretModelLabel">Report</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <form method="POST" action="{{ request.path }}" class="needs-validation" novalidate>
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <input type="hidden" id="modal-secret-id" name="secret_id">
+                                                <input type="hidden" id="modal-secret" name="secret">
+                                                <input type="hidden" id="modal-secret-file" name="secret_file">
+                                                <div class="mb-3">
+                                                    <label for="details" class="form-label">Reason for report</label>
+                                                    <textarea class="form-control" id="details" name="details" rows="3" placeholder="Add more context if needed..." required></textarea>
+                                                    <div class="invalid-feedback">
+                                                        Please provide a reason for your report.
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <button type="submit" class="btn btn-danger">Submit Report</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -248,3 +285,24 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const reportButtons = document.querySelectorAll('.report-btn');
+        const secretIdInput = document.getElementById('modal-secret-id');
+        const secretInput = document.getElementById('modal-secret');
+        const fileInput = document.getElementById('modal-secret-file');
+
+        reportButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const secretId = button.getAttribute('data-id');
+                const secret = button.getAttribute('data-secret');
+                const file = button.getAttribute('data-file');
+
+                secretIdInput.value = secretId;
+                secretInput.value = secret;
+                fileInput.value = file || '';
+            });
+        });
+    });
+</script>

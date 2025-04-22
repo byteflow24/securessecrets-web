@@ -1,40 +1,16 @@
-<footer class="bg-light text-dark" style="background: linear-gradient(to right, #141E30, #141E30); padding-top: 1rem; padding-bottom: 1rem;">
-    <div class="container" style="color: #ffffff;">
-        <div class="row">
-            <div class="col-lg-3 col-md-3 col-sm-12 mt-1">
-                <a href="{{ url_for('main.login') }}" class="d-inline-flex link-body-emphasis">
-                    <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" style="width: 7rem;">
-                </a>
-                <p class="mt-1" style="font-size: 0.75rem;">Safeguard your most valuable information with top-tier encryption.</p>
-            </div>
-            <div class="col-lg-3 col-md-3 col-sm-12">
-                <h5 style="font-size: 0.9rem;">Quick Links</h5>
-                <ul class="list-unstyled" style="font-size: 0.75rem; line-height: 2;">
-                    <li><a href="{{ url_for('main.about') }}" class="text-white">About Us</a></li>
-                    <li><a href="{{ url_for('main.contact') }}" class="text-white">Contact Us</a></li>
-                    <li><a href="{{ url_for('main.privacy') }}" class="text-white">Privacy Policy</a></li>
-                    <li><a href="{{ url_for('main.terms') }}" class="text-white">Terms of Service</a></li>
-                    <li><a href="{{ url_for('main.cookie') }}" class="text-white">Cookie Policy</a></li>
-                </ul>
-            </div>
-            <div class="col-lg-3 col-md-3 col-sm-12">
-                <h5 style="font-size: 0.9rem;">Follow Us</h5>
-                <a href="#" class="text-white me-2" style="font-size: 0.75rem;"><i class="fab fa-facebook-f"></i></a>
-                <a href="#" class="text-white me-2" style="font-size: 0.75rem;"><i class="fab fa-twitter"></i></a>
-                <a href="#" class="text-white me-2" style="font-size: 0.75rem;"><i class="fab fa-linkedin-in"></i></a>
-            </div>
-            <div class="col-lg-3 col-md-3 col-sm-12">
-                <h5 style="font-size: 0.9rem;">Contact Us</h5>
-                <p style="font-size: 0.75rem;">Email: <a href="mailto:support@securessecrets.com" class="text-white" aria-label="Send email to support">support@securessecrets.com</a></p>
-                <p style="font-size: 0.75rem;">&copy; <span id="year"></span> <a href="https://www.byteflowdigital.com" class="text-white link-offset-3-hover link-underline link-underline-opacity-0 link-underline-opacity-75-hover">ByteFlow Digital</a>. All rights reserved.</p>
-            </div>
-        </div>
+<footer class="bg-light text-dark" style="background: linear-gradient(to right, #141E30, #141E30); padding: 0.25rem 0;">
+    <div class="container d-flex justify-content-center align-items-center" style="color: #ffffff; min-height: 2.5rem;">
+      <p class="mb-0 text-center" style="font-size: 0.75rem; line-height: 1.2; margin-top:5px;">
+        © <span id="year"></span>
+        <a href="https://www.byteflowdigital.com" class="text-white link-offset-3-hover link-underline link-underline-opacity-0 link-underline-opacity-75-hover">ByteFlow Digital</a>. All rights reserved.
+      </p>
     </div>
 </footer>
+  
 
 <!-- This script for updating the year automatically for the copyright -->
 <script>
-    document.getElementById("year").textContent = new Date().getFullYear();
+    document.getElementById("year").textContent = new Date().getFullYear();s
 </script>
 
 <!-- Include Bootstrap's JavaScript and Popper.js -->

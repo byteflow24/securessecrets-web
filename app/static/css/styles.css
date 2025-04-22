@@ -172,7 +172,8 @@
 body {
   margin: 0;
   padding: 0;
-  height: 100vh;
+  height: 100%;
+  margin: 0;
   font-family: var(--bs-body-font-family);
   font-size: var(--bs-body-font-size);
   font-weight: var(--bs-body-font-weight);
@@ -183,6 +184,20 @@ body {
   background-repeat: no-repeat;  /* Prevents the background image from repeating */
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+}
+
+.nav-link.active {
+  text-decoration: underline;
+}
+
+.page-wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1; /* this makes the main content take up available space */
 }
 
 .rounded-card {

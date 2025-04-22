@@ -3,7 +3,7 @@
         <div class="container-fluid px-4">
             <!-- Logo -->
             {% if not current_user.is_authenticated %}
-                <a href="{{ url_for('main.login') }}" class="navbar-brand d-inline-flex align-items-center">
+                <a href="{{ url_for('main.home') }}" class="navbar-brand d-inline-flex align-items-center">
                     <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" alt="Logo" style="height: 40px; padding-left: 15px;">
                 </a>
             {% else %}
@@ -30,20 +30,12 @@
                                 <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.update_profile' %}active{% endif %}" href="#" data-url="{{ url_for('main.update_profile') }}">Profile</a></li>
                                 <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.billing' %}active{% endif %}" href="#" data-url="{{ url_for('main.billing') }}">Billing</a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}" href="#" data-url="{{ url_for('main.about') }}">About Us</a></li>
                                 <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.contact' %}active{% endif %}" href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{{ url_for('main.logout') }}">Logout</a></li>
                             </ul>
                         </li>
-                    {% endif %}
                         <li><hr class="dropdown-divider"></li>
-                    {% if not current_user.is_authenticated %}
-                        <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}" href="#" data-url="{{ url_for('main.pricing') }}">Pricing</a></li>
-                        <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}" href="#" data-url="{{ url_for('main.about') }}">About Us</a></li>
-                        <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.contact' %}active{% endif %}" href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a></li>
-                    {% else %}
-                        
                         <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" href="#" data-url="{{ url_for('main.dashboard') }}">Dashboard</a></li>
                         <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.all_secrets' %}active{% endif %}" href="#" data-url="{{ url_for('main.all_secrets') }}">My Secrets</a></li>
                         <li><hr class="dropdown-divider"></li>
@@ -60,21 +52,7 @@
                 <!-- Navbar Links Section -->
                 <div class="navbar-links mx-auto align-items-center">
                     <ul class="navbar-nav primary-links">
-                        {% if not current_user.is_authenticated %}
-                            <!-- Guest Links -->
-                            <li class="nav-item mx-1">
-                                <a class="btn btn-outline-light px-2 py-2 dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}" 
-                                   href="#" data-url="{{ url_for('main.pricing') }}">Pricing</a>
-                            </li>
-                            <li class="nav-item mx-1">
-                                <a class="btn btn-outline-light px-2 py-2 dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}" 
-                                   href="#" data-url="{{ url_for('main.about') }}">About Us</a>
-                            </li>
-                            <li class="nav-item mx-1">
-                                <a class="btn btn-outline-light px-2 py-2 dynamic-link {% if request.endpoint == 'main.contact' %}active{% endif %}" 
-                                   href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a>
-                            </li>
-                        {% else %}
+                        {% if current_user.is_authenticated %}
                             <!-- Authenticated User Links -->
                             <li class="nav-item mx-1">
                                 <a href="#" class="link-light px-2 py-2 small fw-bold" style="font-size: 0.89rem; margin-right:10px;" data-bs-toggle="modal" data-bs-target="#newSecretModal">
@@ -83,11 +61,11 @@
                             </li>
                             <li class="nav-item mx-1">
                                 <a class="btn btn-outline-light px-2 py-2 dynamic-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" 
-                                   href="#" data-url="{{ url_for('main.dashboard') }}">Dashboard</a>
+                                href="#" data-url="{{ url_for('main.dashboard') }}">Dashboard</a>
                             </li>
                             <li class="nav-item">
                                 <a class="btn btn-outline-light px-2 py-2 dynamic-link {% if request.endpoint == 'main.all_secrets' %}active{% endif %}" 
-                                   href="#" data-url="{{ url_for('main.all_secrets') }}">My Secrets</a>
+                                href="#" data-url="{{ url_for('main.all_secrets') }}">My Secrets</a>
                             </li>
                         {% endif %}
                     </ul>
@@ -113,8 +91,6 @@
                                     <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.billing' %}active{% endif %}"
                                         href="#" data-url="{{ url_for('main.billing') }}">Billing</a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}"
-                                        href="#" data-url="{{ url_for('main.about') }}">About Us</a></li>
                                     <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.contact' %}active{% endif %}"
                                         href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a></li>
                                     <li><hr class="dropdown-divider"></li>

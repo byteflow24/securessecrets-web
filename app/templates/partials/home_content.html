@@ -1,0 +1,286 @@
+{% block style %}
+<style>
+    .custom-font {
+        font-weight: 100;
+    }
+
+    .news-container {
+        height: 380px;
+        overflow-y: auto;
+        padding: 15px;
+        border-radius: 10px;
+        background-color: #f9f9f9;
+        border: 1px solid #ddd;
+        box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .news-content p {
+        margin-top: 2px;
+        margin-bottom: 2px;
+        font-size: 0.8rem;
+    }
+
+    .news-content hr {
+        border-top: 1px solid #ddd;
+        margin-top: 2px;
+        margin-bottom: 0px;
+    }
+
+    @media (max-width: 768px) {
+        .news-section {
+            width: 100%;
+            margin-bottom: 30px;
+        }
+    }
+
+    @media (min-width: 769px) {
+        .news-section {
+            width: 40%;
+        }
+    }
+
+    .news-section {
+        background-color: rgba(255, 255, 255, 0.9);
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.1);
+    }
+</style>
+{% endblock %}
+
+<!-- Hero Section -->
+<div class="container px-4 py-5" style="background-image: url('{{ url_for('static', filename='assets/images/bg_home.png') }}'); background-size: cover; background-position: center; border-radius: 15px;">
+    <div class="row align-items-center g-5 py-5">
+        <div class="col-lg-6 text-white">
+            <h1 class="display-2 fw-bold lh-1 mb-3">
+                <span class="custom-font">Your</span> Secrets, <span class="custom-font">Your</span> Control.
+            </h1>
+            <p class="lead" style="font-size: 1rem; max-width: 370px;">Store private messages or a last will, set a timer, and let us handle the rest—whether it's sharing with loved ones or publicly.</p>
+            <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                <a href="{{ url_for('main.how_works') }}" class="btn btn-primary px-4">Learn More</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="b-example-divider"></div>
+
+<!-- Public Secrets Section -->
+<div class="container px-4 py-5">
+    <!-- Flash message -->
+    <div class="mb2" id="flash_message">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div id="flash-messages">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+    <div class="row align-items-start g-5 py-5">
+        <!-- Discover Section - always on the left -->
+        <div class="col-lg-6 order-1 me-5">
+            <h2 class="display-6 fw-bold text-body-emphasis lh-1 mb-3">Discover Public Secrets</h2>
+            <p class="small">Real secrets from real people — unfiltered, unexpected, and sometimes emotional. 
+                Dive into confessions, memories, and whispers the world has never heard.
+            </p>
+            <p class="small">Want to share your own? Join the community and let your voice be heard.</p>
+            <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                <a href="{{ url_for('main.pricing') }}" class="btn btn-primary mt-4 px-4">
+                    ✍️ Share Your Secret — Join Now
+                </a>
+            </div>
+        </div>
+
+        <!-- Public Secret List - always on the right -->
+        <div class="col-lg-6 order-2 news-section mt-4 mt-lg-0">
+            <div class="news-container">
+                {% for public in public_secrets %}
+                <div class="news-content">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <p class="text-secondary"><strong>@{{ public.username }}</strong></p>
+                        <p style="font-size: 0.75rem;">{{ public.display_time }}</p>
+                    </div>
+                    <div class="secret-wrapper clickable" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; cursor: pointer;">
+                        <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.secret|safe }}</p>
+                        {% if public.file %}
+                            {% if public.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
+                                <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="File Preview" style="max-width: 50%; height: auto;">
+                            {% elif public.file.endswith('.pdf') %}
+                                <iframe src="{{ url_for('main.download_file', filename=public.file) }}" style="width: 50%; height: auto; border: none;"></iframe>
+                            {% elif public.file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) %}
+                                <iframe src="https://docs.google.com/viewer?url={{ url_for('main.download_file', filename=public.file, _external=True) }}&embedded=true" style="width: 50%; height: auto; border: none;"></iframe>
+                            {% else %}
+                                <p style="font-size: small;">No preview available for this file type.</p>
+                            {% endif %}
+                            <p><strong>Download Attachment:</strong>
+                                <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
+                                    <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
+                                </a>
+                            </p>
+                        {% endif %}
+                        <div class="mt-2 d-flex justify-content-end gap-3">
+                            <a class="text-danger report-btn" data-bs-toggle="modal" data-bs-target="#reportSecretModel" data-id="{{ public.id }}" data-secret="{{ public.secret }}" data-file="{{ public.file }}" style="font-size: 0.85rem;">Report</a>
+                        </div>
+                    </div>
+                    <hr>
+                </div>
+                <!-- Report Modal -->
+                <div class="modal fade small" id="reportSecretModel" tabindex="-1" aria-labelledby="reportSecretModelLabel" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content small">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="reportSecretModelLabel">Report</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <form method="POST" action="{{ request.path }}" class="needs-validation" novalidate>
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" id="modal-secret-id" name="secret_id">
+                                    <input type="hidden" id="modal-secret" name="secret">
+                                    <input type="hidden" id="modal-secret-file" name="secret_file">
+                                    <div class="mb-3">
+                                        <label for="details" class="form-label">Reason for report</label>
+                                        <textarea class="form-control" id="details" name="details" rows="3" placeholder="Add more context if needed..." required></textarea>
+                                        <div class="invalid-feedback">
+                                            Please provide a reason for your report.
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                        <button type="submit" class="btn btn-danger">Submit Report</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="b-example-divider"></div>
+
+<!-- How it Works Section -->
+<div class="container px-4 py-5" style="background-color: #14a184; border-radius: 15px;">
+    <div class="row align-items-center g-5 py-5">
+        <!-- Text/List - always on the left -->
+        <div class="col-lg-6 text-light order-1">
+            <h4 class="display-6 fw-bold lh-1 mb-3">How it works?</h4>
+            <ul class="small">
+                <li>First you have to login/signup</li>
+                <li>Create your secret</li>
+                <li>Set a date to reveal your secret</li>
+                <li>Choose who you want to share your secret with</li>
+                <li>Choose if you want to reveal your secret publicly</li>
+            </ul>
+            <div class="d-grid gap-2 d-md-flex justify-content-md-start mt-4">
+                <a href="{{ url_for('main.how_works') }}" class="btn btn-light px-4">Know More</a>
+            </div>
+        </div>
+
+        <!-- Image - always on the right -->
+        <div class="col-12 col-sm-8 col-lg-6 order-2 mt-4 mt-lg-0">
+            <img src="static/assets/images/works.png" class="d-block mx-lg-auto img-fluid" alt="How it Works" width="300" height="300" loading="lazy" style="border-radius: 5%;">
+        </div>
+    </div>
+</div>
+
+<div class="b-example-divider"></div>
+
+<!-- How it Works Section -->
+<div class="container px-4 py-5">
+    <div class="row align-items-center g-5 py-5">
+        <!-- Text/List - always on the left -->
+        <div class="col-lg-6 text-light order-1">
+            <!-- Introduction -->
+            <div class="text-center mb-3">
+                <h2 class="text-center text-primary mb-3">Get in Touch</h2>
+                <p class="text-center text-secondary" style="font-size: 1.2rem;">
+                    Fill out the form below, and we'll respond as soon as possible!
+                </p>
+            </div>
+            <!-- Contact Form Card -->
+            <div class="card shadow-lg border-0 rounded-4 mb-4">
+                <div class="card-body p-5">
+                    <form id="contactForm" action="{{ request.path }}" method="post" novalidate>
+                        {{ form.hidden_tag() }}
+                        <!-- Name Input -->
+                        <div class="form-floating mb-3">
+                            {{ form.name(class_="form-control rounded-3 shadow-sm", id="name", placeholder="Enter your name...") }}
+                            <label for="name" class="text-muted" style="font-size: 1rem;">Your Name</label>
+                            {% for error in form.name.errors %}
+                                <div class="text-danger samll" style="font-size: 0.89rem;">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Email Input -->
+                        <div class="form-floating mb-3">
+                            {{ form.email(class_="form-control rounded-3 shadow-sm", id="email", placeholder="Enter your email...") }}
+                            <label for="email" class="text-muted" style="font-size: 1rem;">Email Address</label>
+                            {% for error in form.email.errors %}
+                                <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Phone Input -->
+                        <div class="form-floating mb-3">
+                            {{ form.phone(class_="form-control rounded-3 shadow-sm", id="phone", placeholder="Enter your phone number...") }}
+                            <label for="phone" class="text-muted" style="font-size: 1rem;">Phone Number</label>
+                            {% for error in form.phone.errors %}
+                                <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Message Input -->
+                        <div class="form-floating mb-3">
+                            {{ form.message(class_="form-control rounded-3 shadow-sm", id="message", placeholder="Enter your message...", style="height: 10rem;") }}
+                            <label for="message" class="text-muted" style="font-size: 1rem;">Message</label>
+                            {% for error in form.message.errors %}
+                                <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Submit Button -->
+                        <div class="d-grid">
+                            {{ form.submit(class="btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold", style="font-size: 1rem;", id="submitButton") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Image - always on the right -->
+        <div class="col-12 col-sm-8 col-lg-6 order-2 mt-4 mt-lg-0">
+            <img src="static/assets/images/contact.png" class="d-block mx-lg-auto img-fluid" alt="How it Works" width="70%" loading="lazy" style="border-radius: 5%;">
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const reportButtons = document.querySelectorAll('.report-btn');
+        const secretIdInput = document.getElementById('modal-secret-id');
+        const secretInput = document.getElementById('modal-secret');
+        const fileInput = document.getElementById('modal-secret-file');
+
+        reportButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const secretId = button.getAttribute('data-id');
+                const secret = button.getAttribute('data-secret');
+                const file = button.getAttribute('data-file');
+
+                secretIdInput.value = secretId;
+                secretInput.value = secret;
+                fileInput.value = file || '';
+            });
+        });
+    });
+</script>

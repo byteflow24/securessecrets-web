@@ -4,6 +4,7 @@ from functools import wraps
 from urllib.parse import urlparse, urljoin
 from . import db, login_manager
 from .models import User, Secret, Plan, Payment, HistoryPayment
+from sqlalchemy import and_
 from datetime import datetime, timezone, timedelta, date
 from cryptography.fernet import Fernet
 from wtforms.validators import DataRequired, Email, Regexp, ValidationError
@@ -282,7 +283,7 @@ API_URL = "https://api-m.paypal.com/v1"
 ####################### SENDBOX ACTION #######################
 # PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_SENDBOX_CLIENT_ID")
 # PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_SENDBOX_CLIENT_SECRET")
-# PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_SENDBOX_WEBHOOK_ID") # Webhook ID
+# PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_WEBHOOK_ID") # Webhook ID
 # API_URL = "https://api-m.sandbox.paypal.com/v1"
 # Generating request id
 request_id = uuid.uuid4()
@@ -400,6 +401,55 @@ def create_plan():
         }
     }
     
+    ############################################ Basic Plan (Trial + Regular Billing Cycle + Annual) ############################################
+    annual_basic_plan_data = {
+        "product_id": plan.product_id,
+        "name": "Basic",
+        "description": "Access to basic features with a 14-day trial",
+        "status": "ACTIVE",
+        "billing_cycles": [
+            {
+                "frequency": {
+                    "interval_unit": "DAY",
+                    "interval_count": 14
+                },
+                "tenure_type": "TRIAL",
+                "sequence": 1,
+                "total_cycles": 1,
+                "pricing_scheme": {
+                    "fixed_price": {
+                    "value": "0",
+                    "currency_code": "USD"
+                    }
+                }
+            },
+            {
+                "frequency": {
+                    "interval_unit": "YEAR",
+                    "interval_count": 1
+                },
+                "tenure_type": "REGULAR",
+                "sequence": 2,
+                "total_cycles": 0,  # 0 means the subscription is indefinite
+                "pricing_scheme": {
+                    "fixed_price": {
+                        "value": "10.69",  # Yearly price
+                        "currency_code": "USD"
+                    }
+                }
+            }
+        ],
+        "payment_preferences": {
+            "auto_bill_outstanding": True,
+            "setup_fee": {
+                "value": "0",
+                "currency_code": "USD"
+            },
+            "setup_fee_failure_action": "CONTINUE",
+            "payment_failure_threshold": 3
+        }
+    }
+
     ############################################ Premium Plan (Trial + Regular Billing Cycle) ############################################
     premium_plan_data = {
         "product_id": plan.product_id,  # Replace with your actual product ID
@@ -605,7 +655,8 @@ def create_plan():
     # basic_non_trial_plan_json = json.dumps(basic_non_trial_plan_data)
     # premium_non_trial_plan_json = json.dumps(premium_non_trial_plan_data)
     # test_plan_json_trial = json.dumps(test_plan)
-    test_plan_json = json.dumps(test_non_trial_plan)
+    # test_plan_json = json.dumps(test_non_trial_plan)
+    annual_basic_plan_json = json.dumps(annual_basic_plan_data)
 
     url = f"{API_URL}/billing/plans"
 
@@ -614,8 +665,10 @@ def create_plan():
     # response_premium = requests.post(url, headers=headers, data=premium_plan_json)
     # response_basic_non_trial = requests.post(url, headers=headers, data=basic_non_trial_plan_json)
     # response_premium_non_trial = requests.post(url, headers=headers, data=premium_non_trial_plan_json)
-    response_test_plan = requests.post(url, headers=headers, data=test_plan_json)
+    # response_test_plan = requests.post(url, headers=headers, data=test_plan_json)
     # response_test_trial_plan = requests.post(url, headers=headers, data=test_plan_json)
+    response_annual_basic_plan = requests.post(url, headers=headers, data=annual_basic_plan_json)
+
 
     # if response_basic.status_code == 201:
     #     basic_plan = Plan.query.filter_by(plan="Basic").first()
@@ -641,6 +694,8 @@ def create_plan():
     #     print("Failed to create Basic Plan.")
     #     print(response_basic.json())
 
+    ##############################################################################
+
     # if response_basic_non_trial.status_code == 201:
     #     basic_plan = Plan.query.filter_by(plan="Basic").first()
         
@@ -665,6 +720,8 @@ def create_plan():
     #     print("Failed to create Basic None Trial Plan.")
     #     print(response_basic_non_trial.json())
 
+    ##############################################################################
+
     # if response_premium.status_code == 201:
     #     premium_plan = Plan.query.filter_by(plan="Premium").first()
     #     # Check if paypal_plan_id is already a list or a JSON string
@@ -687,6 +744,8 @@ def create_plan():
     # else:
     #     print("Failed to create Premium Plan.")
     #     print(response_premium.json())
+
+    ##############################################################################
 
     # if response_premium_non_trial.status_code == 201:
     #     # Fetch the existing plan
@@ -713,6 +772,8 @@ def create_plan():
     #     print("Failed to create Non-Trial Premium Plan.")
     #     print(response_premium_non_trial.json())
 
+    ##############################################################################
+
     # if response_test_trial_plan.status_code == 201:
     #     # Fetch the existing plan
     #     test_plan_data = Plan.query.filter_by(plan="Test").first()
@@ -738,6 +799,8 @@ def create_plan():
     #     print("Failed to create Test Plan.")
     #     print(response_test_trial_plan.json())
 
+    ##############################################################################
+
     # if response_test_plan.status_code == 201:
     #     # Fetch the existing plan
     #     test_plan_data = Plan.query.filter_by(plan="Test").first()
@@ -762,6 +825,39 @@ def create_plan():
     # else:
     #     print("Failed to create Test Plan.")
     #     print(response_test_plan.json())
+
+    ##############################################################################
+
+    if response_annual_basic_plan.status_code == 201:
+        # Fetch the Basic-Yearly plan
+        annual_plan_data = Plan.query.filter(
+            and_(Plan.plan == "Basic", Plan.billing_cycle == "yearly")
+        ).first()
+
+        if not annual_plan_data:
+            print("Annual Basic plan not found in the database.")
+            return
+        
+        # Check if paypal_plan_id is already a list or a JSON string
+        if isinstance(annual_plan_data.paypal_plan_id, str):
+            existing_plan_ids = json.loads(annual_plan_data.paypal_plan_id)
+        elif isinstance(annual_plan_data.paypal_plan_id, list) or annual_plan_data.paypal_plan_id is None:
+            existing_plan_ids = annual_plan_data.paypal_plan_id or []
+        else:
+            raise TypeError("Unexpected type for paypal_plan_id")
+
+        # Append the new PayPal Plan ID
+        existing_plan_ids.append(response_annual_basic_plan.json()['id'])
+
+        # Store back as JSON string
+        annual_plan_data.paypal_plan_id = json.dumps(existing_plan_ids)
+        db.session.commit()
+
+        print("Test Plan Created Successfully!")
+        print(response_annual_basic_plan.json())  # Contains the plan_id for Basic
+    else:
+        print("Failed to create Test Plan.")
+        print(response_annual_basic_plan.json())
 
 # Create new subscription
 def create_new_subscription(user, new_plan_id):
@@ -1530,6 +1626,8 @@ PSWD = os.environ.get("EMAIL_PSWD")
 SERVER = 'smtp.titan.email'
 PORT = 587
 
+# def send_report()
+
 def reset_password_email(email, username, token):
 
     reset_url = url_for('main.reset_password', token=token, _external=True)
@@ -2003,3 +2101,65 @@ def contact_email(name, email, phone, message):
     except Exception as e:
         print(f"An unexpected error occurred while sending emails: {str(e)}")
 
+def send_report_email(secret_id, secret, secret_file, report_details):
+    msg = MIMEMultipart("related")
+    msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
+    msg['To'] = EMAIL
+    msg['Subject'] = Header('New Secret Report Submitted', 'utf-8')
+
+    # Build HTML content in parts
+    body = (
+        f"<html>"
+        f"<body>"
+        f"<p>Hi Team,</p>"
+        f"<p>A public secret has been reported by a user.</p>"
+        f"<p><strong>Secret ID:</strong> {secret_id}</p>"
+        f"<p><strong>Reason:</strong></p>"
+        f"<blockquote style='background:#f8f9fa;padding:10px;border-left:3px solid #dc3545;'>"
+        f"{report_details}</blockquote>"
+        f"<p><strong>Secret:</strong> {secret}</p>"
+    )
+
+    # Include file only if it exists
+    if secret_file:
+        if secret_file.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            file_url = f"{url_for('main.download_file', filename=secret_file, _external=True)}"  # Replace with your file route
+            body += f'<img src="{file_url}" alt="File Preview" style="max-width: 50%; height: auto;">'
+        elif secret_file.endswith('.pdf'):
+            body += f'<iframe src="{file_url}" style="width: 50%; height: auto; border: none;"></iframe>'
+        elif secret_file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')):
+            body += f'<iframe src="https://docs.google.com/viewer?url={file_url}&embedded=true" style="width: 50%; height: auto; border: none;"></iframe>'
+        else:
+            body += f'<p><strong>Download Attachment:</strong>\
+                <a href="{file_url}" class="link-primary" download><i class="bi bi-file-earmark-arrow-down">\
+                    </i> {secret_file}</a></p>'
+    # Finish HTML
+    body += (
+        f"<p>Best regards,<br>SecuresSecrets Report System</p>"
+        f"<img src='cid:logo_image' style='width:150px; height:auto; margin-top:10px;' alt='SecuresSecrets Logo'>"
+        f"</body>"
+        f"</html>"
+    )
+
+    msg.attach(MIMEText(body, 'html'))
+
+    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.png')
+    try:
+        with open(logo_path, "rb") as img:
+            image = MIMEImage(img.read(), name=os.path.basename(logo_path))
+            image.add_header('Content-ID', '<logo_image>')
+            msg.attach(image)
+    except FileNotFoundError:
+        print(f"Logo image not found at path: {logo_path}")
+
+    try:
+        with smtplib.SMTP(SERVER, PORT) as connection:
+            connection.starttls()
+            connection.login(EMAIL, PSWD)
+            connection.send_message(msg)
+    except smtplib.SMTPException as e:
+        print(f"SMTP error: {str(e)}")
+        raise
+    except Exception as e:
+        print(f"Unexpected error sending report email: {str(e)}")
+        raise

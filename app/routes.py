@@ -4,13 +4,14 @@ from flask_wtf.csrf import CSRFError
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, CardDetailsForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, HistoryPayment, PublicSecrets
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_charge, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_charge, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, populate_plan_choices, get_charge_details, get_ip, get_user_agent, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, recurring_payment, reset_password_email, send_report_email, contact_email
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc
 from datetime import date, datetime, timedelta, timezone
+from twilio.rest import Client
 import pytz
 import time
 import json
@@ -80,6 +81,153 @@ def make_session_permanent():
     session['last_activity'] = datetime.now()
 
 
+@main.route('/', methods=['GET', 'POST'])
+def home():
+    form = ContactUsForm()
+    # Fetch the public shared secrets, eager-load user and secret relationships
+    shared_secret = db.session.execute(
+        db.select(SharedSecret)
+        .where(SharedSecret.public == True, 
+            (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None))
+        .options(joinedload(SharedSecret.user), joinedload(SharedSecret.secret))
+    ).scalars().all()
+
+    current_date = datetime.now().date()
+    current_time = datetime.now().time()
+
+    # Check if the user logged in recently and update the time period or scheduled date
+    for secret in shared_secret:
+        # Get the most recent login date for the user
+        latest_login = db.session.execute(
+            db.select(LoginHistory.login_time)
+            .where(LoginHistory.user_id == secret.user_id)
+            .order_by(desc(LoginHistory.login_time))
+            .limit(1)
+        ).scalar_one_or_none()
+
+        # Initialize date_time with None for cases when no scheduled date is set
+        date_time = None
+
+        # If a recent login exists and it's more recent than the current last_login
+        if latest_login and (secret.last_login is None or latest_login > secret.last_login):
+            # Update the last_login to the latest login date
+            secret.last_login = latest_login
+
+            # Handle `period` and calculate `time_period` if `period` is present
+            if secret.period:
+                try:
+                    # Calculate the new time period based on the period (e.g., days)
+                    time_period = latest_login + timedelta(days=int(secret.period))
+                    secret.time_period = time_period
+                except ValueError:
+                    # Skip this secret if `period` is invalid but do not raise an error
+                    continue
+
+        # Handle the scenario when `date_to_send` and `time_to_send` are used
+        if secret.date_to_send == current_date and secret.time_to_send == current_time:
+            # Combine date_to_send and time_to_send if they exist and match the current time
+            date_time = datetime.combine(secret.date_to_send, secret.time_to_send)
+
+        # Update the associated PublicSecrets share_date if available
+        public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
+        if public_secret:
+            # Update share_date based on valid `time_period` or `date_time`
+            if secret.time_period:
+                public_secret.share_date = secret.time_period
+            elif date_time:
+                public_secret.share_date = date_time
+
+    # Commit changes to the database
+    db.session.commit()
+
+    # Fetch all public shared secrets with eligible share_date, sorted by share_date (newest first)
+    public_secrets = PublicSecrets.query.filter(
+        PublicSecrets.share_date <= datetime.now()
+    ).order_by(PublicSecrets.share_date.desc()).all()
+
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+
+    # Check if files exist; delete secrets with missing files
+    for public_secret in public_secrets[:]:
+        if public_secret.file:  # If there's a file associated
+            file_path = os.path.join(upload_folder, public_secret.file)
+            if not os.path.exists(file_path):  # File is missing
+                # Delete the secret from PublicSecrets
+                db.session.delete(public_secret)
+                public_secrets.remove(public_secret)
+
+    # Decrypt and prepare public secrets for display
+    decrypted_secrets = []
+    for public_secret in public_secrets:
+        public_secret.display_time = ''
+        
+         # Always format the share_date time
+        public_secret.display_time = public_secret.share_date.strftime('%H:%M') if public_secret.share_date else ''
+
+        # Decrypt the secret if it's encrypted
+        if is_encrypted(public_secret.secret):
+            public_secret.secret = decrypt_secret(public_secret.secret)
+
+        # Append the public secret to the list
+        decrypted_secrets.append(public_secret)
+
+    # Report submission
+    if request.method == "POST":
+        try:
+            secret_id = int(request.form.get('secret_id'))
+        except (ValueError, TypeError):
+            flash('Invalid secret ID.', 'danger')
+            return redirect(request.path)
+
+        report_details = request.form.get('details', '').strip()
+        secret = request.form.get('secret')
+        secret_file = request.form.get('secret_file')
+
+        if not report_details:
+            flash('You must provide a reason for the report.', 'danger')
+            return redirect(request.path)
+
+        public_secret = PublicSecrets.query.filter_by(id=secret_id).first()
+        if not public_secret:
+            flash('The secret you are reporting does not exist.', 'danger')
+            return redirect(request.path)
+
+    # Contact form submission
+    if form.validate_on_submit():
+        data = form.data
+        print("Home Form submitted successfully:", data)
+
+        try:
+            contact_email(data["name"], data["email"], data["phone"], data["message"])
+            flash('Your message has been sent successfully!', 'success')
+            return redirect(url_for('main.home'))  # Redirect back to home
+        except Exception as e:
+            print(f"Error sending email from home: {e}")
+            flash('An error occurred while sending your message. Please try again.', 'danger')
+    
+    # No need for the Session timeout in this page
+    session.permanent = False
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({
+            'html': render_template('partials/home_content.html',
+                                    public_secrets=decrypted_secrets, form=form),
+            'title': 'Home - Secures Secrets'
+        })
+    return render_template('home.html', show_header=True, show_footer=True, public_secrets=decrypted_secrets, form=form)
+
+@main.route('/how-it-works', methods=['GET'])
+def how_works():
+    # No need for the Session timeout in this page
+    session.permanent = True
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({
+                'html': render_template('partials/how_content.html'),
+                'title': 'Home - Secures Secrets'
+            })
+    return render_template('how.html', show_header=True, show_footer=True)
+
+
 # Registeration server @sign-up
 @main.route('/register', methods=['GET', 'POST'])
 @require_pricing_session()
@@ -95,8 +243,8 @@ def register():
     if form.validate_on_submit():
         if form.confirm_password.data != form.password.data:
             session['form_data'] = {
-                'username': form.username.data,
-                'email': form.email.data,
+                'username': form.username.data.lower(),
+                'email': form.email.data.lower().strip(),
                 'code': form.code.data,
                 'phone': form.phone.data
             }
@@ -154,7 +302,7 @@ def register():
     return render_template('register.html', form=form, current_user=current_user, show_header=False, show_footer=True)
 
 # Log in server
-@main.route('/', methods=['GET', 'POST'])
+@main.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
@@ -170,7 +318,7 @@ def login():
     # print(f"Next Billing Time: {convert_utc_to_local(next_billing_time, 'Asia/Qatar')}")
     # get_access_token()
     # call_plans()
-    # create_plan()
+    create_plan()
     # deactivate_plan('P-52H4034244582515FM6UHT7Y')
     # cancel_subscription("I-M10UXVBHYH55", "Cancel")
 
@@ -186,15 +334,15 @@ def login():
     if form.validate_on_submit():
         password = form.password.data
         # print(form.user.data)
-        user = db.session.execute(db.select(User).where((User.email == form.user.data) | (User.username == form.user.data))).scalar()
+        user = db.session.execute(db.select(User).where((User.email == form.user.data.lower().strip()) | (User.username == form.user.data.lower()))).scalar()
         
         if not user:
-            flash("That email/ username does not exist, please try again.", "danger")
+            flash("Email/ username does not exist.", "danger")
             return redirect(url_for('main.login'))
         
         elif not check_password_hash(user.password, password):
             session['form_data'] = {'user': form.user.data}  # Store entered user
-            flash('Password incorrect, please try again.', "danger")
+            flash('Password incorrect.', "danger")
             return redirect(url_for('main.login'))
         
         else:
@@ -303,6 +451,9 @@ def login():
 
         # Append the public secret to the list
         decrypted_secrets.append(public_secret)
+    
+    # No need for the Session timeout in this page
+    session.permanent = True
     
     return render_template('login.html', form=form, current_user=current_user, show_header=False, show_footer=True, public_secrets=decrypted_secrets)
 
@@ -615,6 +766,30 @@ def dashboard():
             approval_link = "pass"
 
     
+    # Report submission
+    if request.method == "POST":
+        try:
+            secret_id = int(request.form.get('secret_id'))
+        except (ValueError, TypeError):
+            flash('Invalid secret ID.', 'danger')
+            return redirect(request.path)
+
+        report_details = request.form.get('details', '').strip()
+        secret = request.form.get('secret')
+        secret_file = request.form.get('secret_file')
+
+        if not report_details:
+            flash('You must provide a reason for the report.', 'danger')
+            return redirect(request.path)
+
+        public_secret = PublicSecrets.query.filter_by(id=secret_id).first()
+        if not public_secret:
+            flash('The secret you are reporting does not exist.', 'danger')
+            return redirect(request.path)
+
+        send_report_email(secret_id, secret, secret_file, report_details)
+        flash('Report submitted successfully.', 'success')
+
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
             'html': render_template('partials/dashboard_content.html', 
@@ -1032,8 +1207,9 @@ def delete_secret(sec_id):
         flash('Secret has been deleted successfully.', 'success')
         return redirect(url_for('main.all_secrets'))
 
-    except IntegrityError:
+    except IntegrityError as e:
         db.session.rollback()
+        print(e)
         # Handle error (e.g., notify the user, log the error, etc.)
         return "An error occurred while deleting the secret.", 500
     
@@ -1069,6 +1245,27 @@ def delete_account(user_id):
         flash("An error occurred while deleting your account. Please try again.", "danger")
         print(e)
         return redirect(url_for('main.update_profile'))
+    
+# Admin can delete published secrets
+@main.route('/delete-pubsecret/<int:pb_secret_id>', methods=['GET', 'POST'])
+@login_required
+def delete_published_secret(pb_secret_id):
+
+    if not current_user.username == "admin":
+        flash('You are not authorized to delete the secret', 'danger')
+        return redirect(url_for('main.dashboard'))
+    else:
+        secret = PublicSecrets.query.get(pb_secret_id)
+        db.session.delete(secret)
+        db.session.commit()
+        flash('Secret has been deleted successfully.', 'success')
+        return redirect(url_for('main.dashboard'))
+
+# Report of public secret (user)
+@main.route('/report-secret/<int:pb_secret_id>', methods=['POST'])
+def report_secret(pb_secret_id):
+    details = request.form.get('details', '').strip()
+    secret = PublicSecrets.query.get_or_404(pb_secret_id)
 
 
 # Editing secret
@@ -1447,114 +1644,6 @@ def billing():
         })
     return render_template('billing.html', user=user, payments=history_payment, form=form, plan=plans, secret_form=secret_form, show_header=True, show_footer=True)
 
-# to pay the plan if still not paid
-@main.route('/pay_now', methods=['POST'])
-@subscription_ended()
-def pay_now():
-    payment_method = request.form.get('payment_method')
-    current_date = datetime.now(timezone.utc)
-
-    if current_user.subscription_status != "ACTIVE":
-        user_plan = db.get_or_404(Plan, current_user.plan_id)
-        amount = user_plan.price
-        currency = user_plan.currency
-        description = current_user.status if current_user.status == "new" else "renewal"
-
-        try:
-            if payment_method == 'saved_card':
-                card_id = current_user.card_id
-                payment_response = recurring_payment(
-                    current_user.customer_id, card_id, get_ip(), 
-                    current_user.payment_agreement_id, amount, currency, description
-                )
-                history = HistoryPayment(
-                        user_id=current_user.id,
-                        plan_id=user_plan.id,
-                        amount=payment_response['amount'],
-                        currency=payment_response['currency'],
-                        payment_method=payment_response['source']['payment_type'],
-                        payment_status=payment_response['status'],
-                        transaction_id=payment_response['id'],
-                        card_brand=payment_response['card']['brand'],
-                        card_last_four=payment_response['card']['last_four'],
-                        authorization_id=payment_response['transaction']['authorization_id']
-                    )
-            else:
-                # Redirect user to payment page for new card payment
-                return redirect(url_for('main.payment')) # Redirecting to the TAP payment page
-
-            if payment_response['status'] == 'CAPTURED':
-                flash("Payment was successful!", "success")
-                current_user.subscription_start_date = current_date
-                current_user.next_billing_date = current_date + timedelta(days=29) if user_plan.billing_cycle == 'monthly' else current_user.next_billing_date
-                current_user.subscription_status = "active"
-                if current_user.status == "new":
-                    current_user.status = None
-                db.session.add(history)
-                db.session.commit()
-                send_payment_email(current_user.email, current_user.username, user_plan.plan, amount, current_user.subscription_start_date, 'renewal', payment_response['card']['brand'],payment_response['card']['last_four'])
-            else:
-                flash("Payment failed. Please try again.", "danger")
-        except Exception as e:
-            flash(str(e), "danger")
-
-        return redirect(url_for('main.billing'))
-
-# Upgrading plan
-@main.route('/upgrade-plan', methods=['POST'])
-@subscription_ended()
-def upgrade_plan():
-    form = PlanUpgradeForm()
-    current_date = datetime.now(timezone.utc)
-    # Populate form choices using the helper function
-    populate_plan_choices(form, current_user)
-
-    if form.plan_id.data == 0:
-        flash("Please select a valid plan to upgrade.", "danger")
-        return redirect(url_for('main.billing'))
-    
-    # Check if from datas exists
-    if form.validate_on_submit():
-        selected_plan_id = form.plan_id.data
-        plan = db.get_or_404(Plan, selected_plan_id)
-        amount = plan.price
-        currency = plan.currency
-        description = "upgrade"
-
-        try:
-            card_id = current_user.card_id
-            payment_response = recurring_payment(
-                current_user.customer_id, card_id, get_ip(), 
-                current_user.payment_agreement_id, amount, currency, description
-            )
-            if payment_response['status'] == 'CAPTURED':
-                flash(f"Plan changed to {plan.plan} successfully!", "success")
-                current_user.subscription_start_date = current_date
-                current_user.next_billing_date = current_date + timedelta(days=30) if plan.billing_cycle == 'monthly' else current_user.next_billing_date
-                current_user.subscription_status = "active"
-                current_user.plan_id = plan.id
-                history = HistoryPayment(
-                        user_id=current_user.id,
-                        plan_id=plan.id,
-                        amount=payment_response['amount'],
-                        currency=payment_response['currency'],
-                        payment_method=payment_response['source']['payment_type'],
-                        payment_status=payment_response['status'],
-                        transaction_id=payment_response['id'],
-                        card_brand=payment_response['card']['brand'],
-                        card_last_four=payment_response['card']['last_four'],
-                        authorization_id=payment_response['transaction']['authorization_id']
-                    )
-                db.session.add(history)
-                db.session.commit()
-                send_payment_email(current_user.email, current_user.username, plan.plan, amount, current_user.subscription_start_date, 'upgrade', payment_response['card']['brand'],payment_response['card']['last_four'])
-            else:
-                flash("Payment failed. Please try again.", "danger")
-        except Exception as e:
-            flash(str(e), "danger")
-
-        return redirect(url_for('main.billing'))
-
 # Upgrade/ Downgrade plan
 @main.route('/change-plan', methods=['POST'])
 @subscription_ended()
@@ -1737,11 +1826,19 @@ def download_file(filename):
 
 @main.route('/terms-of-services')
 def terms():
+
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+    
     secret_form = SecretForm()
     return render_template('terms.html', secret_form=secret_form, show_header=True, show_footer=True)
 
 @main.route('/about-us')
 def about():
+
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+    
     secret_form = SecretForm()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
@@ -1759,28 +1856,42 @@ def contact():
         data = form.data
         print("Form submitted successfully:", data)
         try:
-            # contact_email(data["name"], data["email"], data["phone"], data["message"])
+            contact_email(data["name"], data["email"], data["phone"], data["message"])
             flash('Your message has been sent successfully!', 'success')
             return redirect(url_for('main.contact'))
         except Exception as e:
             print(f"Error sending email: {e}")
             flash('An error occurred while sending your message. Please try again.', 'danger')
+    
+    if current_user.is_authenticated:
+        base_template = 'base.html'
+    else:
+        base_template = 'base_0.html'
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
                     'html': render_template('partials/contact_content.html',
                                             form=form,
-                                            secret_form=secret_form),
+                                            secret_form=secret_form,
+                                            base_template=base_template),
                     'title': 'Contact Us - Secures Secrets'
                 })
-    return render_template('contact.html', form=form, secret_form=secret_form, show_header=True, show_footer=True)
+    return render_template('contact.html', form=form, secret_form=secret_form, base_template=base_template, show_header=True, show_footer=True)
 
 @main.route('/privacy-policy')
 def privacy():
+
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+    
     secret_form = SecretForm()
     return render_template('privacy.html', secret_form=secret_form, show_header=True, show_footer=True)
 
 @main.route('/cookie-policy')
 def cookie():
+
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+    
     secret_form = SecretForm()
     return render_template('cookie.html', secret_form=secret_form, show_header=True, show_footer=True)

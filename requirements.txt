@@ -74,7 +74,7 @@ requests-futures==1.0.2
 six==1.16.0
 SQLAlchemy==2.0.32
 tap-sdk==0.0.1a0
-tornado==6.4.1
+tornado==6.4.2
 twilio==9.5.2
 typing_extensions==4.12.2
 tzdata==2024.1

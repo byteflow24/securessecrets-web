@@ -43,7 +43,7 @@ flower==2.0.1
 foreman==0.9.7
 frozenlist==1.6.0
 greenlet==3.0.3
-gunicorn==21.2.0
+gunicorn==23.0.0
 honcho==2.0.0
 humanize==4.10.0
 idna==3.8

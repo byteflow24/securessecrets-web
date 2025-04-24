@@ -264,13 +264,12 @@ PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_LIVE_CLIENT_SECRET")
 PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_LIVE_WEBHOOK_ID")
 API_URL = "https://api-m.paypal.com/v1"
 ####################### SENDBOX ACTION #######################
-# PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_SENDBOX_CLIENT_ID")
-# PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_SENDBOX_CLIENT_SECRET")
-# PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_WEBHOOK_ID") # Webhook ID
-# API_URL = "https://api-m.sandbox.paypal.com/v1"
+PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_SENDBOX_CLIENT_ID")
+PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_SENDBOX_CLIENT_SECRET")
+PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_WEBHOOK_ID") # Webhook ID
+API_URL = "https://api-m.sandbox.paypal.com/v1"
 # Generating request id
 request_id = uuid.uuid4()
-API_KEY = "sk_test_XKokBfNWv6FIYuTMg5sLPjhJ"
 
 # Get the access token
 def get_access_token():

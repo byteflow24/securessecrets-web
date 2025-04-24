@@ -23,7 +23,7 @@ click==8.1.7
 click-didyoumean==0.3.1
 click-plugins==1.1.1
 click-repl==0.3.0
-cryptography==43.0.1
+cryptography==44.0.1
 db==0.1.1
 dnspython==2.6.1
 dominate==2.9.1

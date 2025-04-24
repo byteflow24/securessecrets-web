@@ -198,8 +198,8 @@ class DeleteAccountForm(FlaskForm):
 
 # Upgrading plan
 class PlanUpgradeForm(FlaskForm):
-    plan_id = SelectField('Choose a Plan:', coerce=int)
-    submit = SubmitField('Upgrade Now')
+    plan_id = HiddenField('Plan ID')
+    
     
 # Payment Form
 class CardDetailsForm(FlaskForm):

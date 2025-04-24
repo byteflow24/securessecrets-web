@@ -157,23 +157,6 @@ def is_encrypted(data):
         return False
 
 
-# Helper function to the billing page and upgrading plan
-def populate_plan_choices(form, user):
-    plans = Plan.query.order_by(Plan.price).all()
-
-    # Populate the choices of the SelectField based on available plans
-    available_plans = [
-        (plan.id, f"{plan.plan} - {plan.price} {plan.currency} ({plan.storage_limit / (1024 * 1024):.0f} MB)")
-        for plan in plans if plan.id > user.plan_id
-    ] + [
-        (plan.id, f"{plan.plan} - {plan.price} {plan.currency} ({plan.storage_limit / (1024 * 1024):.0f} MB)")
-        for plan in plans if plan.id < user.plan_id
-    ]
-    
-    if available_plans:
-        form.plan_id.choices = available_plans
-
-
 # Comprehensive list of common email domains and TLDs
 def email_domain_validator(form, field):
     """
@@ -778,7 +761,7 @@ def create_plan():
     # annual_basic_plan_json = json.dumps(annual_basic_plan_data)
     # annual_premium_plan_json = json.dumps(annual_premium_plan_data)
     # Annual_basic_non_trial_plan_json = json.dumps(Annual_basic_non_trial_plan_data)
-    Annual_premium_non_trial_plan_json = json.dumps(Annual_premium_non_trial_plan_data)
+    # Annual_premium_non_trial_plan_json = json.dumps(Annual_premium_non_trial_plan_data)
 
     url = f"{API_URL}/billing/plans"
 
@@ -792,40 +775,40 @@ def create_plan():
     # response_annual_basic_plan = requests.post(url, headers=headers, data=annual_basic_plan_json)
     # response_annual_premium_plan = requests.post(url, headers=headers, data=annual_premium_plan_json)
     # Annual_basic_non_trial_plan = requests.post(url, headers=headers, data=Annual_basic_non_trial_plan_json)
-    Annual_premium_non_trial_plan = requests.post(url, headers=headers, data=Annual_premium_non_trial_plan_json)
+    # Annual_premium_non_trial_plan = requests.post(url, headers=headers, data=Annual_premium_non_trial_plan_json)
 
     ###################################################################
 
-    if Annual_premium_non_trial_plan.status_code == 201:
-        # Fetch the Basic-Yearly plan
-        annual_plan_data = Plan.query.filter(
-            and_(Plan.plan == "Premium", Plan.billing_cycle == "yearly")
-        ).first()
+    # if Annual_premium_non_trial_plan.status_code == 201:
+    #     # Fetch the Basic-Yearly plan
+    #     annual_plan_data = Plan.query.filter(
+    #         and_(Plan.plan == "Premium", Plan.billing_cycle == "yearly")
+    #     ).first()
 
-        if not annual_plan_data:
-            print("Annual Premium plan not found in the database.")
-            return
+    #     if not annual_plan_data:
+    #         print("Annual Premium plan not found in the database.")
+    #         return
         
-        # Check if paypal_plan_id is already a list or a JSON string
-        if isinstance(annual_plan_data.paypal_plan_id, str):
-            existing_plan_ids = json.loads(annual_plan_data.paypal_plan_id)
-        elif isinstance(annual_plan_data.paypal_plan_id, list) or annual_plan_data.paypal_plan_id is None:
-            existing_plan_ids = annual_plan_data.paypal_plan_id or []
-        else:
-            raise TypeError("Unexpected type for paypal_plan_id")
+    #     # Check if paypal_plan_id is already a list or a JSON string
+    #     if isinstance(annual_plan_data.paypal_plan_id, str):
+    #         existing_plan_ids = json.loads(annual_plan_data.paypal_plan_id)
+    #     elif isinstance(annual_plan_data.paypal_plan_id, list) or annual_plan_data.paypal_plan_id is None:
+    #         existing_plan_ids = annual_plan_data.paypal_plan_id or []
+    #     else:
+    #         raise TypeError("Unexpected type for paypal_plan_id")
 
-        # Append the new PayPal Plan ID
-        existing_plan_ids.append(Annual_premium_non_trial_plan.json()['id'])
+    #     # Append the new PayPal Plan ID
+    #     existing_plan_ids.append(Annual_premium_non_trial_plan.json()['id'])
 
-        # Store back as JSON string
-        annual_plan_data.paypal_plan_id = json.dumps(existing_plan_ids)
-        db.session.commit()
+    #     # Store back as JSON string
+    #     annual_plan_data.paypal_plan_id = json.dumps(existing_plan_ids)
+    #     db.session.commit()
 
-        print("Annual Premium Plan Created Successfully!")
-        print(Annual_premium_non_trial_plan.json())  # Contains the plan_id for Basic
-    else:
-        print("Failed to create Annual Premium Plan.")
-        print(Annual_premium_non_trial_plan.json())
+    #     print("Annual Premium Plan Created Successfully!")
+    #     print(Annual_premium_non_trial_plan.json())  # Contains the plan_id for Basic
+    # else:
+    #     print("Failed to create Annual Premium Plan.")
+    #     print(Annual_premium_non_trial_plan.json())
 
     ###################################################################
 
@@ -1292,182 +1275,6 @@ def verify_paypal_webhook(data, request_headers):
         return True
     return False
 
-# Creating a charge and redirecting to Tap's hosted payment page, handling 3D Secure if needed
-def create_charge(amount, currency, description, email, phone_country_code, phone_number, first_name, plan_id, source_id):
-    headers = {
-        'Authorization': f'Bearer {API_KEY}',
-        'Content-Type': 'application/json',
-    }
-
-    data = {
-        'amount': float(amount),
-        'currency': currency,
-        "save_card": True,
-        'description': description,
-        'customer': {
-            'email': email,
-            'phone': {
-                'country_code': phone_country_code,
-                'number': phone_number
-            },
-            'first_name': first_name
-        },
-        'source': {
-            'id': source_id, 
-        },
-        'redirect': {
-            'url': url_for('main.payment_complete', _external=True, plan_id=plan_id)
-        }
-    }
-
-    response = requests.post(f"{API_URL}/charges", headers=headers, json=data)
-    
-    if response.status_code == 200:
-        charge_response = response.json()
-
-        # Handle 3D Secure if required
-        if charge_response.get('status') == 'INITIATED':
-            if charge_response.get('threeDSecure', False):
-                # If 3D Secure is required, redirect to the 3D Secure authentication page
-                payment_url = charge_response.get('transaction', {}).get('url')
-                if payment_url:
-                    return payment_url  # Return URL for redirection to 3D Secure
-                else:
-                    raise Exception("Failed to retrieve 3D Secure redirection URL.")
-            else:
-                return charge_response  # If no 3D Secure is needed, return the charge response
-
-        raise Exception(f"Payment initiation failed: {charge_response.get('response', {}).get('message', 'Unknown error')}")
-
-    else:
-        error_details = response.json()
-        print(error_details)
-        description = error_details.get('response', {}).get('message', 'Unknown error occurred')
-        raise Exception(f"Charge creation failed: {description}")
-
-# Getting Charge Details by charge_id
-def get_charge_details(charge_id):
-    headers = {
-        'Authorization': f'Bearer {API_KEY}',
-        'Content-Type': 'application/json',
-    }
-
-    url = f"{API_URL}/charges/{charge_id}"
-    response = requests.get(url, headers=headers)
-    print(response.json())
-
-    if response.status_code == 200:
-        return response.json()
-    else:
-        error_details = response.json()
-        raise Exception(f"Failed to fetch charge details {error_details}")
-    
-
-#  Retrieving card details
-def retrieve_cards_details(customer_id, card_id):
-    headers = {
-        'Authorization': f'Bearer {API_KEY}',
-        'Content-Type': 'application/json',
-    }
-    url = f"{API_URL}/card/{customer_id}/{card_id}"
-    response = requests.get(url, headers=headers)
-
-    if response.status_code == 200:
-        return response.json()
-    else:
-        raise Exception("Failed to fetch card details")
-
-# Savig card token before the end of the trial
-def tokenize_card(card, ex_month, ex_year, cvc, name):
-    headers = {
-        "Authorization": f'Bearer {API_KEY}',
-        "Content-Type": "application/json"
-    }
-    print(card, ex_month, ex_year, cvc, name)
-    payload = {
-        "card": {
-            "number": card,
-            "exp_month": ex_month,
-            "exp_year": ex_year,
-            "cvc": cvc,
-            "name": name
-        }
-    }
-    url = f"{API_URL}/tokens"
-    response = requests.post(url, headers=headers, json=payload)
-    if response.status_code == 200:
-            return response.json()
-    else:
-        error_details = response.json()  # Get detailed error message from the response
-        print("Error Status Code:", response.status_code)
-        print("Error Response:", error_details)
-        error_message = error_details.get('response', {}).get('message', 'Unknown error occurred')
-        raise Exception(f"Failed to fetch card token: {error_message}")
-    
-
-# Creating a token (saved card)
-def generate_card_token(customer_id, card_id, client_ip):
-
-    payload = {
-        "saved_card": {
-            "card_id": card_id,
-            "customer_id": customer_id
-        },
-        "client_ip": client_ip
-    }
-
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "Authorization": f'Bearer {API_KEY}'
-    }
-
-    url = f"{API_URL}/tokens"
-    response = requests.post(url, json=payload, headers=headers)
-    print(response.json())
-    if response.status_code == 200:
-            return response.json()
-    else:
-        raise Exception("Failed to fetch saved card token")
-    
-
-# Initiating recurring payment 'SUBSCRIPTION PAYMENT'
-def recurring_payment(customer_id, card_id, client_ip, payment_agreement_id, amount, currency, description):
-    headers = {
-        'Authorization': f'Bearer {API_KEY}',
-        'Content-Type': 'application/json',
-    }
-
-    # Use the generated token from the saved card
-    token = generate_card_token(customer_id, card_id, client_ip)
-
-    data = {
-        'amount': float(amount),
-        'currency': currency,
-        'customer': {
-            'id': customer_id
-        },
-        'source': {
-            'id': token['id']  # Use the token generated from the saved card
-        },
-        'save_card': False,  # Since the card is already saved, no need to save again
-        'description': description,
-        'payment_agreement': {
-            'id': payment_agreement_id
-        },
-        'customer_initiated': False  # Mark as merchant-initiated transaction
-    }
-
-    response = requests.post(f"{API_URL}/charges", headers=headers, json=data)
-    
-    if response.status_code == 200:
-        return response.json()
-    else:
-        error_details = response.json()
-        print(error_details)
-        raise Exception(f"Recurring payment initiation failed: {error_details.get('response', {}).get('message', 'Unknown error')}")
-        
-
 # Get user IP
 def get_ip():
     if request.headers.get('X-Forwarded-For'):
@@ -1475,7 +1282,6 @@ def get_ip():
     else:
         ip = request.remote_addr
     return ip
-
 
 # Get user agent
 def get_user_agent():
@@ -1686,74 +1492,6 @@ def handle_subscription_updated(data):
 
     print(f"User {user.id} updated their subscription to Plan: {new_plan_id}")
     print(f"Updated subscription details: {get_subscription_details(subscription_id)}")
-
-# Recurring payment process
-def initiate_recurring_payment():
-    logger.info("Executing recurring payment logic.")
-    current_date = datetime.now(timezone.utc).date()
-    users = User.query.filter(User.next_billing_date <= current_date).all()
-    for user in users:
-
-        payment_method = Payment.query.filter_by(user_id=user.id).first()
-        # Ensure next_billing_date is timezone-aware (assumed UTC)
-        if user.next_billing_date:
-            if user.next_billing_date.tzinfo is None:
-                next_billing_date = user.next_billing_date.replace(tzinfo=timezone.utc)
-            else:
-                next_billing_date = user.next_billing_date
-
-            # Get only the date part of next_billing_date (ignore time)
-            next_billing_date = next_billing_date.date()
-
-            if current_date > next_billing_date:
-                user_plan = db.get_or_404(Plan, user.plan_id)
-                print(user_plan)
-                customer_id = user.customer_id
-                card_id = user.card_id
-                user_ip = payment_method.ip_address
-                payment_agreement_id = user.payment_agreement_id
-                amount = user_plan.price
-                currency = user_plan.currency
-                description = f"Recurring Payment {user_plan.plan}"
-
-                try:
-                    payment_response = recurring_payment(customer_id, card_id, user_ip, payment_agreement_id, amount, currency, description)
-
-                    if payment_response['status'] == 'CAPTURED':
-
-                        history = HistoryPayment(
-                            user_id=user.id,
-                            plan_id=user.plan_id,
-                            amount=payment_response['amount'],
-                            currency=payment_response['currency'],
-                            payment_method=payment_response['source']['payment_type'],
-                            payment_status=payment_response['status'],
-                            transaction_id=payment_response['id'],
-                            card_brand=payment_response['card']['brand'],
-                            card_last_four=payment_response['card']['last_four'],
-                            authorization_id=payment_response['transaction']['authorization_id']
-                        )
-
-                        # Update the subscription end date (monthly/yearly)
-                        if user_plan.billing_cycle == 'monthly':
-                            user.subscription_start_date = current_date
-                            user.next_billing_date = current_date + timedelta(days=29)
-                            user.subscription_status = "active"
-
-                        send_payment_email(user.email, user.username, user_plan.plan, amount, current_date, "renewal", payment_method.card_brand, payment_method.card_last_four)
-                        
-                        db.session.add(history)
-                        db.session.commit()
-
-                        print("Recurring payment successful!")
-                    elif payment_response['status'] in ['FAILED', 'DECLINED']:
-                        # Send failure email
-                        send_payment_failed_email(user.email, user.username, payment_response['status'], user_plan.plan, payment_method.card_brand, payment_method.card_last_four)
-
-                        print("Recurring payment failed due to card issue.")
-                except Exception as e:
-                    print(str(e))
-
 
 # Sends reminder emails to users whose trial periods are nearing their end
 def trial_end_reminder():

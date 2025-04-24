@@ -14,6 +14,7 @@
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="mobileNavDropdown">
                     <li><a class="dropdown-item" href="{{ url_for('main.login') }}">Login</a></li>
                         <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}" href="#" data-url="{{ url_for('main.how_works') }}">How it Works?</a></li>
                         <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}" href="#" data-url="{{ url_for('main.pricing') }}">Pricing</a></li>
                         <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}" href="#" data-url="{{ url_for('main.about') }}">About Us</a></li>
                         <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.contact' %}active{% endif %}" href="#" data-url="{{ url_for('main.contact') }}">Contact Us</a></li>

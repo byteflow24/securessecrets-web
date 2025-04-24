@@ -13,6 +13,7 @@ window.addEventListener('DOMContentLoaded', () => {
     initializeNewSecretForm();
     initializeShareButtons();
     initializeUpdateSecretForm();
+    initializePlanChangeModal();
 
     initializeReadSecret();
     initializeLastLoginHistory();
@@ -85,6 +86,7 @@ window.addEventListener('DOMContentLoaded', () => {
         initializeUpdateSecretForm();
         clearFlashMessages();
         initializeUpdatePricing();
+        initializePlanChangeModal();
 
         initializeReadSecret();
         initializeLastLoginHistory();
@@ -381,44 +383,105 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Updating price toggle
+    // Initialize pricing toggle functionality
     function initializeUpdatePricing() {
-        const toggle = document.getElementById('billingToggle');
-        if (!toggle) {
+        const billingToggle = document.querySelector('#billingToggle');
+        if (!billingToggle) {
+            // console.log('Billing toggle not found');
             return;
         }
 
-        const prices = document.querySelectorAll('.price');
-        const billingPeriods = document.querySelectorAll('.billing-period');
-        const buttons = document.querySelectorAll('.plan-button');
+        const updatePricing = () => {
+            const isYearly = billingToggle.checked;
+            const priceElements = document.querySelectorAll('.price');
+            const periodElements = document.querySelectorAll('.billing-period');
+            const buttons = document.querySelectorAll('.plan-button');
+            const planCards = document.querySelectorAll('.plan-card');
 
-        function updatePricing() {
-            const isYearly = toggle.checked;
-            prices.forEach(price => {
-                const monthlyPrice = parseFloat(price.getAttribute('data-monthly'));
-                const yearlyPrice = parseFloat(price.getAttribute('data-yearly'));
+            priceElements.forEach(element => {
+                const monthlyPrice = parseFloat(element.dataset.monthly);
+                const yearlyPrice = parseFloat(element.dataset.yearly);
                 if (!isNaN(monthlyPrice) && !isNaN(yearlyPrice)) {
-                    price.textContent = isYearly ? yearlyPrice.toFixed(2) : monthlyPrice.toFixed(2);
+                    element.textContent = (isYearly ? yearlyPrice : monthlyPrice).toFixed(2);
                 } else {
-                    console.error('Invalid price data:', { monthlyPrice, yearlyPrice });
+                    console.error('Invalid price data:', element.dataset);
                 }
             });
-            billingPeriods.forEach(period => {
-                period.textContent = isYearly ? '/yr' : '/mo';
+
+            periodElements.forEach(element => {
+                element.textContent = isYearly ? '/yr' : '/mo';
             });
+
             buttons.forEach(button => {
                 const monthlyId = button.getAttribute('data-monthly-id');
                 const yearlyId = button.getAttribute('data-yearly-id');
-                const baseUrl = button.href.split('plan_id=')[0];
-                button.href = isYearly ? `${baseUrl}plan_id=${yearlyId}` : `${baseUrl}plan_id=${monthlyId}`;
+                const form = button.closest('form');
+                if (form) {
+                    const planInput = form.querySelector('input[name="plan_id"]');
+                    if (planInput && monthlyId && yearlyId) {
+                        planInput.value = isYearly ? yearlyId : monthlyId;
+                    }
+                }
             });
-        }
 
-        updatePricing(); // Run immediately to set initial state
-        toggle.addEventListener('change', updatePricing);
+            // Update Current badge and button
+            planCards.forEach(card => {
+                const monthlyId = card.getAttribute('data-monthly-id');
+                const yearlyId = card.getAttribute('data-yearly-id');
+                const currentPlanId = card.getAttribute('data-current-plan-id');
+                const badge = card.querySelector('.current-plan-badge');
+                const button = card.querySelector('.plan-button');
+                const form = card.querySelector('form');
+
+                if (badge && button && form) {
+                    // First snippet: Badge visibility
+                    const isCurrent = (isYearly && yearlyId === currentPlanId) || (!isYearly && monthlyId === currentPlanId);
+                    badge.style.display = isCurrent ? 'block' : 'none';
+
+                    // Second snippet: Button state
+                    if (isCurrent) {
+                        button.classList.remove('btn-primary');
+                        button.classList.add('btn-success', 'disabled');
+                        button.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Your Plan';
+                        button.removeAttribute('data-bs-toggle');
+                        button.removeAttribute('data-bs-target');
+                    } else {
+                        button.classList.remove('btn-success', 'disabled');
+                        button.classList.add('btn-primary');
+                        button.innerHTML = `Change to ${card.querySelector('h4').textContent}`;
+                        button.setAttribute('data-bs-toggle', 'modal');
+                        button.setAttribute('data-bs-target', '#confirmUpgradeModal');
+                    }
+                }
+            });
+        };
+
+        billingToggle.addEventListener('change', updatePricing);
+        updatePricing(); // Initial update
     }
 
+    // Handle modal form submission
+    function initializePlanChangeModal() {
+        const modal = document.getElementById('confirmUpgradeModal');
+        if (!modal) return;
 
+        const confirmButton = document.getElementById('confirm-upgrade');
+        let activeForm = null;
+
+        // Set active form when a plan button is clicked
+        document.querySelectorAll('.plan-button').forEach(button => {
+            button.addEventListener('click', () => {
+                activeForm = button.closest('form');
+            });
+        });
+
+        // Submit the active form when the modal's confirm button is clicked
+        confirmButton.addEventListener('click', () => {
+            if (activeForm) {
+                activeForm.submit();
+            }
+        });
+    }
 
     // Initialize Pin and Star buttons
     function initializePinStarButtons() {

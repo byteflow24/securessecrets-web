@@ -1,105 +1,152 @@
-<div class="container mt-5 mb-5">
+<div class="container mt-5 mb-5" data-page="billing">
     <div class="row justify-content-center small">
         <div class="col-md-8 mt-3">
-
             <!-- Flash Messages -->
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }} text-center mt-3 alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                    {% endfor %}
+                    <div id="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} text-center mt-3 alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
                 {% endif %}
             {% endwith %}
 
             <!-- Adding new secret modal -->
             {% include "partials/new_secret_modal.html" %}
 
-            <!-- Row for Current Plan and Upgrade Plan -->
+            <!-- Current Plan Section -->
             <div class="row mb-4">
-                <!-- Current Plan Card -->
-                <div class="col-md-6 d-flex">
-                    <div class="card shadow-sm w-100 d-flex flex-column h-80">
-                        <div class="card-header text-white bg-primary text-center">
-                            <h5 class="mb-0">Current Plan</h5>
+                <div class="col-md-6 mx-auto">
+                    <div class="card shadow-sm current-plan-card">
+                        <div class="card-header text-white bg-primary text-center py-2">
+                            <h6 class="mb-0 fw-bold">Current Plan</h6>
                         </div>
-                        <div class="card-body text-center flex-grow-1">
-                            <p class="lead"><strong>{{ user.plan.plan }}</strong></p>
-                            <p>Status: 
+                        <div class="card-body text-center p-3">
+                            <h5 class="fw-bold mb-2">{{ user.plan.plan }} ({{ user.plan.billing_cycle|capitalize }})</h5>
+                            <p class="mb-0">Status: 
                                 <span class="badge {% if user.subscription_status == 'ACTIVE' %}bg-success{% else %}bg-danger{% endif %} text-white">
                                     {{ user.subscription_status|capitalize }}
                                 </span>
                             </p>
                         </div>
+                        <!-- Pay Now Section -->
+                        {% if user.subscription_status != 'ACTIVE' %}
+                        <div class="col-md-12">
+                            <div class="text-center mb-4">
+                                <p class="text-danger">Your bill has not paid yet. 
+                                    <a href="{{ url_for('main.payment') }}" class="link link-secondary small">Pay Now</a>
+                                </p>
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
-            
-                <!-- Upgrade Plan Card -->
-                <div class="col-md-6 d-flex">
-                    <div class="card shadow-sm w-100 d-flex flex-column h-80">
-                        <div class="card-header text-white bg-primary text-center">
-                            <h5 class="mb-0">Upgrade/ Downgrade Plan</h5>
+            </div>
+
+            <!-- Plan Selection Section -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card shadow-sm">
+                        <div class="card-header text-white bg-primary text-center py-3">
+                            <h5 class="mb-0 fw-bold">Change Plan</h5>
                         </div>
-                        <div class="card-body flex-grow-1">
-                            <form id="upgrade-form" method="post" action="{{ url_for('main.change_plan') }}">
-                                {{ form.hidden_tag() }}
-                                <div class="form-group mb-3 mt-3">
-                                    {{ form.plan_id.label(class="mb-1") }}
-                                    {{ form.plan_id(class="form-select") }}
-                                </div>
-                                <div class="d-flex justify-content-center">
-                                    <button type="button" class="btn btn-primary btn-block" data-bs-toggle="modal" data-bs-target="#confirmUpgradeModal">
-                                        Change Plan Now
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-            
-                        <!-- Modal for confirmation -->
-                        <div class="modal fade" id="confirmUpgradeModal" tabindex="-1" role="dialog" aria-labelledby="confirmUpgradeModalLabel" aria-hidden="true">
-                            <div class="modal-dialog modal-dialog-centered" role="document">
-                                <div class="modal-content">
-                                    <div class="modal-header">
-                                        <h5 class="modal-title" id="confirmUpgradeModalLabel">Confirm Plan Changes</h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                    </div>
-                                    <div class="modal-body small">
-                                        You are about to change your plan. You will be redirected to PayPal to complete the payment process.
-                                        Please follow the instructions to approve your subscription.
-                                    </div>
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                        <button type="submit" form="upgrade-form" id="confirm-upgrade" class="btn btn-primary">Proceed to PayPal</button>
+                        <div class="card-body text-center p-4">
+                            <!-- Billing Toggle -->
+                            <div class="row justify-content-center mb-4">
+                                <div class="col-auto">
+                                    <div class="d-flex align-items-center">
+                                        <span class="me-3 text-muted fw-bold">Monthly</span>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="billingToggle" style="width: 50px; height: 25px;">
+                                            <label class="form-check-label" for="billingToggle"></label>
+                                        </div>
+                                        <span class="ms-3 text-muted fw-bold">Yearly <span class="badge bg-success">Save 10%</span></span>
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Plan Cards -->
+                            <div class="row g-2 justify-content-center text-center plan-cards-container">
+                                {% for plan_name in ['Basic', 'Premium'] %}
+                                    {% set monthly_plan = plans | selectattr('plan', 'equalto', plan_name) | selectattr('billing_cycle', 'equalto', 'monthly') | first %}
+                                    {% set yearly_plan = plans | selectattr('plan', 'equalto', plan_name) | selectattr('billing_cycle', 'equalto', 'yearly') | first %}
+                                    {% if monthly_plan and yearly_plan %}
+                                    <div class="col-12 col-md-6 d-flex justify-content-center">
+                                        <div class="card shadow-sm border-0 plan-card" style="transition: transform 0.3s;"
+                                             data-monthly-id="{{ monthly_plan.id }}" 
+                                             data-yearly-id="{{ yearly_plan.id }}"
+                                             data-current-plan-id="{{ user.plan_id }}">
+                                            <div class="card-header py-4 {% if plan_name == 'Basic' %}bg-light{% else %}bg-primary text-white{% endif %} position-relative">
+                                                <h4 class="my-0 fw-bold {% if plan_name != 'Basic' %}text-white{% endif %}">{{ plan_name }}</h4>
+                                                <span class="current-plan-badge bg-success text-white" style="display: none;">Current</span>
+                                            </div>
+                                            <div class="card-body py-4">
+                                                <h1 class="card-title pricing-card-title display-5">
+                                                    $<span class="price" 
+                                                          data-monthly="{{ monthly_plan.price|float|round(2) }}" 
+                                                          data-yearly="{{ yearly_plan.price|float|round(2) }}">{{ monthly_plan.price|float|round(2) }}</span>
+                                                    <small class="text-muted fw-light billing-period">/mo</small>
+                                                </h1>
+                                                <ul class="list-unstyled mt-3 mb-4">
+                                                    {% for description in monthly_plan.description %}
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>{{ description }}</li>
+                                                    {% endfor %}
+                                                </ul>
+                                                <form id="upgrade-form-{{ plan_name|lower }}" method="post" action="{{ url_for('main.change_plan') }}">
+                                                    {{ form.hidden_tag() }}
+                                                    <input type="hidden" name="plan_id" value="{{ monthly_plan.id }}">
+                                                    <button type="button" class="btn btn-primary btn-lg w-100 plan-button" 
+                                                            data-monthly-id="{{ monthly_plan.id }}" 
+                                                            data-yearly-id="{{ yearly_plan.id }}" 
+                                                            data-bs-toggle="modal" 
+                                                            data-bs-target="#confirmUpgradeModal">
+                                                        Change to {{ plan_name }}
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
                         </div>
                     </div>
-                </div> 
-            </div>            
+                </div>
+            </div>
+
+            <!-- Modal for confirmation -->
+            <div class="modal fade small" id="confirmUpgradeModal" tabindex="-1" role="dialog" aria-labelledby="confirmUpgradeModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="confirmUpgradeModalLabel">Confirm Plan Change</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body small">
+                            Your current plan will be updated, and future payments will be charged automatically based on the new plan's billing cycle.
+                            <strong>Are you sure you want to continue?</strong>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" id="confirm-upgrade" class="btn btn-primary">Proceed to PayPal</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Row for Payment History & Pay Now -->
             <div class="row">
-                <!-- Pay Now Section -->
-                {% if user.subscription_status != 'ACTIVE' %}
-                <div class="col-md-12">
-                    <div class="text-center mb-4">
-                        <p class="text-warning">Your bill has not been paid yet. You can pay it now by clicking the button below.</p>
-                        <a type="button" href="{{ url_for('main.payment') }}" class="btn btn-danger btn-lg">
-                            Pay Now
-                        </a>
-                    </div>
-                </div>
-                {% endif %}
                 <!-- Payment History Table -->
                 <div class="col-md-12">
                     <div class="card shadow-sm mb-4">
                         <div class="card-header text-white bg-primary">
                             <h5 class="mb-0">Payment History</h5>
                         </div>
-                        <div class="card-body p-0">
+                        <div class="card-body p-0" style="max-height: 300px; overflow-y: auto;">
                             <table class="table table-striped mb-0">
                                 <thead class="thead-dark">
                                     <tr>
@@ -115,7 +162,7 @@
                                             <td>{{ payment.payment_date.strftime('%Y-%m-%d %H:%M') }}</td>
                                             <td>{{ payment.amount }} {{ payment.currency }}</td>
                                             <td>
-                                                <span class="badge{% if payment.payment_status == 'Paid' %}badge-success text-primary{% else %}badge-warning text-danger{% endif %}">
+                                                <span class="badge {% if payment.payment_status == 'Paid' %}bg-success text-white{% else %}bg-warning text-dark{% endif %}">
                                                     {{ payment.payment_status }}
                                                 </span>
                                             </td>
@@ -131,3 +178,124 @@
         </div>
     </div>
 </div>
+
+<style>
+    .form-check-input:checked {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+
+    .form-check-input:focus {
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    .plan-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .badge {
+        font-size: 0.75rem;
+        vertical-align: middle;
+    }
+
+    .billing-period {
+        transition: opacity 0.3s ease;
+    }
+
+    .table th, .table td {
+        vertical-align: middle;
+    }
+
+    .plan-cards-container {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .plan-card {
+        width: 100%;
+        margin: 0 auto;
+    }
+
+    .plan-card .card-header h4 {
+        font-size: 1.25rem;
+    }
+
+    .plan-card .card-body {
+        font-size: 0.9rem;
+    }
+
+    .plan-card .pricing-card-title {
+        font-size: 2rem;
+    }
+
+    .plan-card .btn {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .current-plan-card {
+        border-radius: 8px;
+    }
+
+    .current-plan-card .card-header {
+        padding: 0.75rem;
+    }
+
+    .current-plan-card .card-header h6 {
+        font-size: 1rem;
+    }
+
+    .current-plan-card .card-body {
+        padding: 1.5rem;
+    }
+
+    .current-plan-card .card-body h5 {
+        font-size: 1.25rem;
+    }
+
+    .current-plan-card .badge {
+        font-size: 0.7rem;
+    }
+
+    .current-plan-badge {
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        font-size: 0.7rem;
+        padding: 5px 10px;
+        border-radius: 12px;
+        font-weight: 500;
+    }
+
+    @media (max-width: 767.98px) {
+        .plan-card {
+            max-width: 300px;
+        }
+        .form-check-input {
+            width: 40px !important;
+            height: 20px !important;
+        }
+        .badge {
+            font-size: 0.65rem;
+        }
+        .table {
+            font-size: 0.85rem;
+        }
+        .current-plan-card .card-header h6 {
+            font-size: 0.9rem;
+        }
+        .current-plan-card .card-body h5 {
+            font-size: 1.1rem;
+        }
+        .current-plan-card .badge {
+            font-size: 0.65rem;
+        }
+        .current-plan-badge {
+            font-size: 0.65rem;
+            padding: 4px 8px;
+            top: -8px;
+            right: -8px;
+        }
+    }
+</style>

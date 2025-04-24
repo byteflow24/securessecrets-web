@@ -192,6 +192,9 @@ def home():
             flash('The secret you are reporting does not exist.', 'danger')
             return redirect(request.path)
 
+        send_report_email(secret_id, secret, secret_file, report_details)
+        flash('Report submitted successfully.', 'success')
+
     # Contact form submission
     if form.validate_on_submit():
         data = form.data
@@ -318,7 +321,7 @@ def login():
     # print(f"Next Billing Time: {convert_utc_to_local(next_billing_time, 'Asia/Qatar')}")
     # get_access_token()
     # call_plans()
-    create_plan()
+    # create_plan()
     # deactivate_plan('P-52H4034244582515FM6UHT7Y')
     # cancel_subscription("I-M10UXVBHYH55", "Cancel")
 

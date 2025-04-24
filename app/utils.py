@@ -402,6 +402,7 @@ def create_plan():
     }
     
     ############################################ Basic Plan (Trial + Regular Billing Cycle + Annual) ############################################
+
     annual_basic_plan_data = {
         "product_id": plan.product_id,
         "name": "Basic",
@@ -434,6 +435,41 @@ def create_plan():
                 "pricing_scheme": {
                     "fixed_price": {
                         "value": "10.69",  # Yearly price
+                        "currency_code": "USD"
+                    }
+                }
+            }
+        ],
+        "payment_preferences": {
+            "auto_bill_outstanding": True,
+            "setup_fee": {
+                "value": "0",
+                "currency_code": "USD"
+            },
+            "setup_fee_failure_action": "CONTINUE",
+            "payment_failure_threshold": 3
+        }
+    }
+
+    ############################################ Basic Plan ( No Trial + Regular Billing Cycle + Annual) ############################################
+
+    Annual_basic_non_trial_plan_data = {
+        "product_id": plan.product_id,
+        "name": "Annual Basic Plan (No Trial)",
+        "description": "Access to basic features without trial",
+        "status": "ACTIVE",
+        "billing_cycles": [
+            {
+                "frequency": {
+                    "interval_unit": "YEAR",
+                    "interval_count": 1
+                },
+                "tenure_type": "REGULAR",
+                "sequence": 1,
+                "total_cycles": 0,  # No trial, regular billing
+                "pricing_scheme": {
+                    "fixed_price": {
+                        "value": "10.99",  # Yearly price
                         "currency_code": "USD"
                     }
                 }
@@ -707,7 +743,8 @@ def create_plan():
     # test_plan_json_trial = json.dumps(test_plan)
     # test_plan_json = json.dumps(test_non_trial_plan)
     # annual_basic_plan_json = json.dumps(annual_basic_plan_data)
-    annual_premium_plan_json = json.dumps(annual_premium_plan_data)
+    # annual_premium_plan_json = json.dumps(annual_premium_plan_data)
+    Annual_basic_non_trial_plan_json = json.dumps(Annual_basic_non_trial_plan_data)
 
     url = f"{API_URL}/billing/plans"
 
@@ -719,18 +756,19 @@ def create_plan():
     # response_test_plan = requests.post(url, headers=headers, data=test_plan_json)
     # response_test_trial_plan = requests.post(url, headers=headers, data=test_plan_json)
     # response_annual_basic_plan = requests.post(url, headers=headers, data=annual_basic_plan_json)
-    response_annual_premium_plan = requests.post(url, headers=headers, data=annual_premium_plan_json)
+    # response_annual_premium_plan = requests.post(url, headers=headers, data=annual_premium_plan_json)
+    Annual_basic_non_trial_plan = requests.post(url, headers=headers, data=Annual_basic_non_trial_plan_json)
 
     ###################################################################
 
-    if response_annual_premium_plan.status_code == 201:
+    if Annual_basic_non_trial_plan.status_code == 201:
         # Fetch the Basic-Yearly plan
         annual_plan_data = Plan.query.filter(
-            and_(Plan.plan == "Premium", Plan.billing_cycle == "yearly")
+            and_(Plan.plan == "Basic", Plan.billing_cycle == "yearly")
         ).first()
 
         if not annual_plan_data:
-            print("Annual Premium plan not found in the database.")
+            print("Annual Basic plan not found in the database.")
             return
         
         # Check if paypal_plan_id is already a list or a JSON string
@@ -742,17 +780,50 @@ def create_plan():
             raise TypeError("Unexpected type for paypal_plan_id")
 
         # Append the new PayPal Plan ID
-        existing_plan_ids.append(response_annual_premium_plan.json()['id'])
+        existing_plan_ids.append(Annual_basic_non_trial_plan.json()['id'])
 
         # Store back as JSON string
         annual_plan_data.paypal_plan_id = json.dumps(existing_plan_ids)
         db.session.commit()
 
-        print("Annual Premium Plan Created Successfully!")
-        print(response_annual_premium_plan.json())  # Contains the plan_id for Basic
+        print("Annual Basic Plan Created Successfully!")
+        print(Annual_basic_non_trial_plan.json())  # Contains the plan_id for Basic
     else:
-        print("Failed to create Annual Premium Plan.")
-        print(response_annual_premium_plan.json())
+        print("Failed to create Annual Basic Plan.")
+        print(Annual_basic_non_trial_plan.json())
+
+    ###################################################################
+
+    # if response_annual_premium_plan.status_code == 201:
+    #     # Fetch the Basic-Yearly plan
+    #     annual_plan_data = Plan.query.filter(
+    #         and_(Plan.plan == "Premium", Plan.billing_cycle == "yearly")
+    #     ).first()
+
+    #     if not annual_plan_data:
+    #         print("Annual Premium plan not found in the database.")
+    #         return
+        
+    #     # Check if paypal_plan_id is already a list or a JSON string
+    #     if isinstance(annual_plan_data.paypal_plan_id, str):
+    #         existing_plan_ids = json.loads(annual_plan_data.paypal_plan_id)
+    #     elif isinstance(annual_plan_data.paypal_plan_id, list) or annual_plan_data.paypal_plan_id is None:
+    #         existing_plan_ids = annual_plan_data.paypal_plan_id or []
+    #     else:
+    #         raise TypeError("Unexpected type for paypal_plan_id")
+
+    #     # Append the new PayPal Plan ID
+    #     existing_plan_ids.append(response_annual_premium_plan.json()['id'])
+
+    #     # Store back as JSON string
+    #     annual_plan_data.paypal_plan_id = json.dumps(existing_plan_ids)
+    #     db.session.commit()
+
+    #     print("Annual Premium Plan Created Successfully!")
+    #     print(response_annual_premium_plan.json())  # Contains the plan_id for Basic
+    # else:
+    #     print("Failed to create Annual Premium Plan.")
+    #     print(response_annual_premium_plan.json())
 
     ###################################################################
 

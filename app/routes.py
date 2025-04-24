@@ -318,7 +318,7 @@ def login():
     # print(f"Next Billing Time: {convert_utc_to_local(next_billing_time, 'Asia/Qatar')}")
     # get_access_token()
     # call_plans()
-    # create_plan()
+    create_plan()
     # deactivate_plan('P-52H4034244582515FM6UHT7Y')
     # cancel_subscription("I-M10UXVBHYH55", "Cancel")
 

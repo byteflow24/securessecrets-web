@@ -48,7 +48,7 @@ honcho==2.0.0
 humanize==4.10.0
 idna==3.8
 itsdangerous==2.2.0
-Jinja2==3.1.4
+Jinja2==3.1.6
 jsonpickle==3.3.0
 jsonpointer==2.4
 kombu==5.4.1

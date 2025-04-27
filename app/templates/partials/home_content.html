@@ -252,7 +252,7 @@
                         
                         <!-- Submit Button -->
                         <div class="d-grid">
-                            {{ form.submit(class="btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold", style="font-size: 1rem;", id="submitButton") }}
+                            {{ form.submit(class_="btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold", style="font-size: 1rem;", id="submitButton") }}
                         </div>
                     </form>
                 </div>
@@ -267,17 +267,20 @@
 </div>
 
 <!-- reCAPTCHA v3 Script -->
-<script src="https://www.google.com/recaptcha/api.js?render={{site_key}}"></script>
+<script src="https://www.google.com/recaptcha/enterprise.js?render={{ site_key }}&badge=bottomright"></script>
 <script>
     document.getElementById('contactForm').addEventListener('submit', function(event) {
         event.preventDefault(); // Prevent form submission until token is generated
-        grecaptcha.ready(function() {
-            grecaptcha.execute('{{site_key}}', {action: 'submit'}).then(function(token) {
-                // Add the token to the hidden input
+        grecaptcha.enterprise.ready(async () => {
+            try {
+                const token = await grecaptcha.enterprise.execute('{{ site_key }}', {action: 'contact_form'});
+                console.log('Generated reCAPTCHA token:', token);
                 document.getElementById('recaptcha_token').value = token;
-                // Submit the form
                 document.getElementById('contactForm').submit();
-            });
+            } catch (error) {
+                console.error('reCAPTCHA Enterprise error:', error);
+                alert('reCAPTCHA failed to load. Please try again.');
+            }
         });
     });
 </script>

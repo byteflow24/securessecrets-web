@@ -1,100 +1,106 @@
+{% extends base_template %}
+
+{% block content %}
 <!-- Adding new secret modal -->
 {% include "partials/new_secret_modal.html" %}
-<!-- Main Content-->
+<!-- Main Content -->
 <main class="mb-5">
     <div class="container px-4 px-lg-5">
-      <div class="row gx-4 gx-lg-5 justify-content-center">
-        <div class="col-md-10 col-lg-8 col-xl-7">
-          <!-- Introduction -->
-            <div class="text-center mb-3">
+        <div class="row gx-4 gx-lg-5 justify-content-center">
+            <div class="col-md-10 col-lg-8 col-xl-7">
+                <!-- Introduction -->
+                <div class="text-center mb-3">
                     <h2 class="text-center text-primary mb-3">Get in Touch</h2>
                     <p class="text-center text-secondary" style="font-size: 1.2rem;">
                         Fill out the form below, and we'll respond as soon as possible!
                     </p>
-            </div>
-            <!-- Flash message -->
-            <div class="mb2" id="flash_message">
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        <div id="flash-messages">
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                <!-- Flash message -->
+                <div class="mb-2" id="flash_message">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            <div id="flash-messages">
+                                {% for category, message in messages %}
+                                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                        {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                    </div>
+                                {% endfor %}
                             </div>
-                        {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                </div>
+                <!-- Contact Form Card -->
+                <div class="card shadow-lg border-0 rounded-4 mb-4">
+                    <div class="card-body p-5">
+                      <form id="contactForm" action="{{ request.path }}" method="post" novalidate>
+                        {{ form.hidden_tag() }}
+                        <!-- Hidden input for reCAPTCHA token -->
+                        <input type="hidden" name="recaptcha_token" id="recaptcha_token">
+                        <!-- Name Input -->
+                        <div class="form-floating mb-3">
+                            {{ form.name(class_="form-control rounded-3 shadow-sm", id="name", placeholder="Enter your name...") }}
+                            <label for="name" class="text-muted" style="font-size: 1rem;">Your Name</label>
+                            {% for error in form.name.errors %}
+                                <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
+                            {% endfor %}
                         </div>
-                    {% endif %}
-                {% endwith %}
+                        
+                        <!-- Email Input -->
+                        <div class="form-floating mb-3">
+                            {{ form.email(class_="form-control rounded-3 shadow-sm", id="email", placeholder="Enter your email...") }}
+                            <label for="email" class="text-muted" style="font-size: 1rem;">Email Address</label>
+                            {% for error in form.email.errors %}
+                                <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Phone Input -->
+                        <div class="form-floating mb-3">
+                            {{ form.phone(class_="form-control rounded-3 shadow-sm", id="phone", placeholder="Enter your phone number...") }}
+                            <label for="phone" class="text-muted" style="font-size: 1rem;">Phone Number</label>
+                            {% for error in form.phone.errors %}
+                                <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Message Input -->
+                        <div class="form-floating mb-3">
+                            {{ form.message(class_="form-control rounded-3 shadow-sm", id="message", placeholder="Enter your message...", style="height: 10rem;") }}
+                            <label for="message" class="text-muted" style="font-size: 1rem;">Message</label>
+                            {% for error in form.message.errors %}
+                                <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Submit Button -->
+                        <div class="d-grid">
+                            {{ form.submit(class_="btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold", style="font-size: 1rem;", id="submitButton") }}
+                        </div>
+                      </form>
+                    </div>
+                </div>
             </div>
-          <!-- Contact Form Card -->
-          <div class="card shadow-lg border-0 rounded-4 mb-4">
-            <div class="card-body p-5">
-              <form id="contactForm" action="{{ request.path }}" method="post" novalidate>
-                {{ form.hidden_tag() }}
-                <!-- Hidden input for reCAPTCHA token -->
-                <input type="hidden" name="recaptcha_token" id="recaptcha_token">
-                <!-- Name Input -->
-                <div class="form-floating mb-3">
-                    {{ form.name(class_="form-control rounded-3 shadow-sm", id="name", placeholder="Enter your name...") }}
-                    <label for="name" class="text-muted" style="font-size: 1rem;">Your Name</label>
-                    {% for error in form.name.errors %}
-                        <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
-                    {% endfor %}
-                </div>
-                
-                <!-- Email Input -->
-                <div class="form-floating mb-3">
-                    {{ form.email(class_="form-control rounded-3 shadow-sm", id="email", placeholder="Enter your email...") }}
-                    <label for="email" class="text-muted" style="font-size: 1rem;">Email Address</label>
-                    {% for error in form.email.errors %}
-                        <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
-                    {% endfor %}
-                </div>
-                
-                <!-- Phone Input -->
-                <div class="form-floating mb-3">
-                    {{ form.phone(class_="form-control rounded-3 shadow-sm", id="phone", placeholder="Enter your phone number...") }}
-                    <label for="phone" class="text-muted" style="font-size: 1rem;">Phone Number</label>
-                    {% for error in form.phone.errors %}
-                        <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
-                    {% endfor %}
-                </div>
-                
-                <!-- Message Input -->
-                <div class="form-floating mb-3">
-                    {{ form.message(class_="form-control rounded-3 shadow-sm", id="message", placeholder="Enter your message...", style="height: 10rem;") }}
-                    <label for="message" class="text-muted" style="font-size: 1rem;">Message</label>
-                    {% for error in form.message.errors %}
-                        <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
-                    {% endfor %}
-                </div>
-                
-                <!-- Submit Button -->
-                <div class="d-grid">
-                    {{ form.submit(class="btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold", style="font-size: 1rem;", id="submitButton") }}
-                </div>
-            </form>
-            </div>
-          </div>
         </div>
-      </div>
     </div>
 </main>
 
-  <!-- reCAPTCHA v3 Script -->
-<script src="https://www.google.com/recaptcha/api.js?render={{site_key}}"></script>
+<!-- reCAPTCHA v3 Script -->
+<script src="https://www.google.com/recaptcha/enterprise.js?render={{ site_key }}&badge=bottomright"></script>
 <script>
     document.getElementById('contactForm').addEventListener('submit', function(event) {
         event.preventDefault(); // Prevent form submission until token is generated
-        grecaptcha.ready(function() {
-            grecaptcha.execute('{{site_key}}', {action: 'submit'}).then(function(token) {
-                // Add the token to the hidden input
+        grecaptcha.enterprise.ready(async () => {
+            try {
+                const token = await grecaptcha.enterprise.execute('{{ site_key }}', {action: 'contact_form'});
+                console.log('Generated reCAPTCHA token:', token);
                 document.getElementById('recaptcha_token').value = token;
-                // Submit the form
                 document.getElementById('contactForm').submit();
-            });
+            } catch (error) {
+                console.error('reCAPTCHA Enterprise error:', error);
+                alert('reCAPTCHA failed to load. Please try again.');
+            }
         });
     });
 </script>
-  
+{% endblock %}

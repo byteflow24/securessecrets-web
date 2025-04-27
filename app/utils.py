@@ -19,12 +19,15 @@ from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.utils import formataddr
 from email.header import Header
+from google.cloud import recaptchaenterprise_v1
+from google.cloud.recaptchaenterprise_v1 import Assessment
 import logging
 import uuid
 import json
 import pytz
 
-
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @login_manager.user_loader
@@ -266,6 +269,7 @@ API_URL = "https://api-m.paypal.com/v1"
 ####################### RECAPTCHA GOOGLE #######################
 SITE_KEY = os.environ.get("SITE_KEY")
 RECAPTCHA_SECRET_KEY = os.environ.get("RECAPTCHA_SECRET_KEY")
+PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT_ID")
 RECAPTCHA_API_URL = 'https://www.google.com/recaptcha/api/siteverify'
 ####################### SENDBOX ACTION #######################
 # PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_SENDBOX_CLIENT_ID")
@@ -276,52 +280,90 @@ RECAPTCHA_API_URL = 'https://www.google.com/recaptcha/api/siteverify'
 request_id = uuid.uuid4()
 
 # Verify reCAPTCHA token
-def verify_recaptcha(recaptcha_token):
+def verify_recaptcha(recaptcha_token: str, recaptcha_action: str = 'contact_form', flask_request=None) -> tuple[bool, str | None]:
+    """
+    Verify a reCAPTCHA Enterprise token by creating an assessment.
+    
+    Args:
+        recaptcha_token (str): The reCAPTCHA token from the client.
+        recaptcha_action (str): Action name used in grecaptcha.enterprise.execute (e.g., 'contact_form').
+        flask_request: Flask request object to extract user_ip_address and user_agent (optional).
+        
+    Returns:
+        tuple: (bool, str or None)
+            - bool: True if verification succeeds and score >= 0.5, False otherwise.
+            - str or None: Error message if verification fails, None if successful.
+    """
+    if not PROJECT_ID:
+        logger.error("GOOGLE_CLOUD_PROJECT_ID is not set in environment variables")
+        return False, "reCAPTCHA configuration error: Project ID missing"
+
+    if not SITE_KEY:
+        logger.error("SITE_KEY is not set in environment variables")
+        return False, "reCAPTCHA configuration error: Site key missing"
+
+    if not recaptcha_token:
+        logger.error("No reCAPTCHA token provided")
+        return False, "reCAPTCHA token missing"
 
     try:
-        data = {
-            'secret': RECAPTCHA_SECRET_KEY,
-            'response': recaptcha_token
-        }
+        # Create the reCAPTCHA Enterprise client
+        client = recaptchaenterprise_v1.RecaptchaEnterpriseServiceClient()
 
-        response = requests.post(RECAPTCHA_API_URL, data=data, timeout=5)
-        response.raise_for_status()  # Raise an exception for HTTP errors
+        # Set the properties of the event to be tracked
+        event = recaptchaenterprise_v1.Event()
+        event.site_key = SITE_KEY
+        event.token = recaptcha_token
+        event.expected_action = recaptcha_action
+        if flask_request:
+            event.user_ip_address = flask_request.remote_addr
+            event.user_agent = flask_request.headers.get('User-Agent')
 
-        recaptcha_response = response.json()
+        assessment = recaptchaenterprise_v1.Assessment()
+        assessment.event = event
 
-        # Check if verification was successful and score is acceptable
-        if recaptcha_response.get('success') and recaptcha_response.get('score', 0) >= 0.5:
-            return True, None
-        else:
-            error_msg = f"reCAPTCHA verification failed: {recaptcha_response.get('error-codes', 'Unknown error')}"
+        project_name = f"projects/{PROJECT_ID}"
+
+        # Build the assessment request
+        request = recaptchaenterprise_v1.CreateAssessmentRequest()
+        request.assessment = assessment
+        request.parent = project_name
+
+        # Call the API
+        response = client.create_assessment(request)
+
+        # Log the assessment details
+        logger.info(f"reCAPTCHA Enterprise assessment: score={response.risk_analysis.score}, "
+                   f"reasons={response.risk_analysis.reasons}, "
+                   f"action={response.token_properties.action}, "
+                   f"valid={response.token_properties.valid}")
+
+        # Check if the token is valid
+        if not response.token_properties.valid:
+            error_msg = f"Invalid reCAPTCHA token: {response.token_properties.invalid_reason}"
+            logger.error(error_msg)
             return False, error_msg
 
-    except requests.RequestException as e:
-        error_msg = f"Error verifying reCAPTCHA: {str(e)}"
+        # Check if the expected action was executed
+        if response.token_properties.action != recaptcha_action:
+            error_msg = f"reCAPTCHA action mismatch: expected {recaptcha_action}, got {response.token_properties.action}"
+            logger.error(error_msg)
+            return False, error_msg
+
+        # Check the risk score
+        if response.risk_analysis.score >= 0.5:
+            assessment_name = client.parse_assessment_path(response.name).get("assessment")
+            logger.info(f"Assessment name: {assessment_name}")
+            return True, None
+        else:
+            error_msg = f"reCAPTCHA score too low: {response.risk_analysis.score}"
+            logger.error(error_msg)
+            return False, error_msg
+
+    except Exception as e:
+        error_msg = f"Error creating reCAPTCHA assessment: {str(e)}"
+        logger.error(error_msg)
         return False, error_msg
-
-# Get the access token
-def get_access_token():
-
-    headers = {
-        "Accept": "application/json",
-        "Accept-Language": "en_US",
-        "Content-Type": "application/x-www-form-urlencoded",
-    }
-    data = {
-        "grant_type": "client_credentials"
-    }
-    url = f"{API_URL}/oauth2/token"
-
-    response = requests.post(url, headers=headers, data=data, auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET))
-
-    # Check if request was successful
-    if response.status_code == 200:
-        return response.json()["access_token"]
-    else:
-        print(f"Failed to fetch access token: {response.status_code}")
-        print(response.json())
-        return None
     
 # Create Product API
 def create_product():
@@ -348,6 +390,29 @@ def create_product():
         print("Successed fetching product details")
     else:
         print(f"Failed to fetch product id: {response.status_code}")
+        print(response.json())
+        return None
+
+# Get the access token
+def get_access_token():
+
+    headers = {
+        "Accept": "application/json",
+        "Accept-Language": "en_US",
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+    data = {
+        "grant_type": "client_credentials"
+    }
+    url = f"{API_URL}/oauth2/token"
+
+    response = requests.post(url, headers=headers, data=data, auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET))
+
+    # Check if request was successful
+    if response.status_code == 200:
+        return response.json()["access_token"]
+    else:
+        print(f"Failed to fetch access token: {response.status_code}")
         print(response.json())
         return None
     

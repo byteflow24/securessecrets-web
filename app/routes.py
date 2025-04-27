@@ -24,7 +24,9 @@ import logging
 
 main = Blueprint('main', __name__)
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @main.errorhandler(CSRFError)
 def handle_csrf_error(e):
@@ -196,27 +198,34 @@ def home():
         flash('Report submitted successfully.', 'success')
     
     # Contact form submission
-    SITE_KEY = os.environ.get("SITE_KEY")
+    site_key = os.environ.get("SITE_KEY")
+    if not site_key:
+        logger.error("SITE_KEY is not set in environment variables")
+        flash('reCAPTCHA configuration error. Please try again later.', 'danger')
+    
     if form.validate_on_submit():
+        # Log form data for debugging
+        logger.info(f"Form data: {request.form}")
+        
         # Get reCAPTCHA token from form
         recaptcha_token = request.form.get('recaptcha_token')
         
         # Verify reCAPTCHA
-        is_valid, error_msg = verify_recaptcha(recaptcha_token)
+        is_valid, error_msg = verify_recaptcha(recaptcha_token, action='contact_form', flask_request=request)
         
         if is_valid:
             data = form.data
-            print("Home Form submitted successfully:", data)
+            logger.info(f"Contact Form submitted successfully: {data}")
 
             try:
                 contact_email(data["name"], data["email"], data["phone"], data["message"])
                 flash('Your message has been sent successfully!', 'success')
                 return redirect(url_for('main.home'))  # Redirect back to home
             except Exception as e:
-                print(f"Error sending email from home: {e}")
+                logger.error(f"Error sending email from contact: {e}")
                 flash('An error occurred while sending your message. Please try again.', 'danger')
         else:
-            print(f"reCAPTCHA error: {error_msg}")
+            logger.error(f"reCAPTCHA error: {error_msg}")
             flash('reCAPTCHA verification failed. Please try again.', 'danger')
     
     # No need for the Session timeout in this page
@@ -227,10 +236,10 @@ def home():
             'html': render_template('partials/home_content.html',
                                     public_secrets=decrypted_secrets,
                                     form=form,
-                                    site_key=SITE_KEY),
+                                    site_key=site_key),
             'title': 'Home - Secures Secrets'
         })
-    return render_template('home.html', show_header=True, show_footer=True, public_secrets=decrypted_secrets, form=form, site_key=SITE_KEY)
+    return render_template('home.html', show_header=True, show_footer=True, public_secrets=decrypted_secrets, form=form, site_key=site_key)
 
 @main.route('/how-it-works', methods=['GET'])
 def how_works():
@@ -1745,27 +1754,35 @@ def about():
 def contact():
     secret_form = SecretForm()
     form = ContactUsForm()
-    SITE_KEY = os.environ.get("SITE_KEY")
+    site_key = os.environ.get("SITE_KEY")
+    
+    if not site_key:
+        logger.error("SITE_KEY is not set in environment variables")
+        flash('reCAPTCHA configuration error. Please try again later.', 'danger')
+    
     if form.validate_on_submit():
+        # Log form data for debugging
+        logger.info(f"Form data: {request.form}")
+        
         # Get reCAPTCHA token from form
         recaptcha_token = request.form.get('recaptcha_token')
         
         # Verify reCAPTCHA
-        is_valid, error_msg = verify_recaptcha(recaptcha_token)
+        is_valid, error_msg = verify_recaptcha(recaptcha_token, action='contact_form', flask_request=request)
         
         if is_valid:
             data = form.data
-            print("Home Form submitted successfully:", data)
+            logger.info(f"Contact Form submitted successfully: {data}")
 
             try:
                 contact_email(data["name"], data["email"], data["phone"], data["message"])
                 flash('Your message has been sent successfully!', 'success')
                 return redirect(url_for('main.home'))  # Redirect back to home
             except Exception as e:
-                print(f"Error sending email from home: {e}")
+                logger.error(f"Error sending email from contact: {e}")
                 flash('An error occurred while sending your message. Please try again.', 'danger')
         else:
-            print(f"reCAPTCHA error: {error_msg}")
+            logger.error(f"reCAPTCHA error: {error_msg}")
             flash('reCAPTCHA verification failed. Please try again.', 'danger')
     
     if current_user.is_authenticated:
@@ -1775,14 +1792,15 @@ def contact():
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
-                    'html': render_template('partials/contact_content.html',
-                                            form=form,
-                                            secret_form=secret_form,
-                                            base_template=base_template,
-                                            site_key=SITE_KEY),
-                    'title': 'Contact Us - Secures Secrets'
-                })
-    return render_template('contact.html', form=form, secret_form=secret_form, base_template=base_template, show_header=True, show_footer=True)
+            'html': render_template('partials/contact_content.html',
+                                   form=form,
+                                   secret_form=secret_form,
+                                   base_template=base_template,
+                                   site_key=site_key),
+            'title': 'Contact Us - Secures Secrets'
+        })
+    
+    return render_template('contact.html', form=form, secret_form=secret_form, base_template=base_template, site_key=site_key, show_header=True, show_footer=True)
 
 @main.route('/privacy-policy')
 def privacy():

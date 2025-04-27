@@ -211,7 +211,7 @@ def home():
         recaptcha_token = request.form.get('recaptcha_token')
         
         # Verify reCAPTCHA
-        is_valid, error_msg = verify_recaptcha(recaptcha_token, action='contact_form', flask_request=request)
+        is_valid, error_msg = verify_recaptcha(recaptcha_token, recaptcha_action='contact_form', flask_request=request)
         
         if is_valid:
             data = form.data
@@ -1768,7 +1768,7 @@ def contact():
         recaptcha_token = request.form.get('recaptcha_token')
         
         # Verify reCAPTCHA
-        is_valid, error_msg = verify_recaptcha(recaptcha_token, action='contact_form', flask_request=request)
+        is_valid, error_msg = verify_recaptcha(recaptcha_token, recaptcha_action='contact_form', flask_request=request)
         
         if is_valid:
             data = form.data

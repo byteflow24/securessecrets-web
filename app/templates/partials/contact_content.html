@@ -32,12 +32,14 @@
             <div class="card-body p-5">
               <form id="contactForm" action="{{ request.path }}" method="post" novalidate>
                 {{ form.hidden_tag() }}
+                <!-- Hidden input for reCAPTCHA token -->
+                <input type="hidden" name="recaptcha_token" id="recaptcha_token">
                 <!-- Name Input -->
                 <div class="form-floating mb-3">
                     {{ form.name(class_="form-control rounded-3 shadow-sm", id="name", placeholder="Enter your name...") }}
                     <label for="name" class="text-muted" style="font-size: 1rem;">Your Name</label>
                     {% for error in form.name.errors %}
-                        <div class="text-danger samll" style="font-size: 0.89rem;">{{ error }}</div>
+                        <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
                     {% endfor %}
                 </div>
                 
@@ -72,11 +74,27 @@
                 <div class="d-grid">
                     {{ form.submit(class="btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold", style="font-size: 1rem;", id="submitButton") }}
                 </div>
-              </form>
+            </form>
             </div>
           </div>
         </div>
       </div>
     </div>
-  </main>
+</main>
+
+  <!-- reCAPTCHA v3 Script -->
+<script src="https://www.google.com/recaptcha/api.js?render={{site_key}}"></script>
+<script>
+    document.getElementById('contactForm').addEventListener('submit', function(event) {
+        event.preventDefault(); // Prevent form submission until token is generated
+        grecaptcha.ready(function() {
+            grecaptcha.execute('{{site_key}}', {action: 'submit'}).then(function(token) {
+                // Add the token to the hidden input
+                document.getElementById('recaptcha_token').value = token;
+                // Submit the form
+                document.getElementById('contactForm').submit();
+            });
+        });
+    });
+</script>
   

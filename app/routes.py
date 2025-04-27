@@ -1745,16 +1745,28 @@ def about():
 def contact():
     secret_form = SecretForm()
     form = ContactUsForm()
+    SITE_KEY = os.environ.get("SITE_KEY")
     if form.validate_on_submit():
-        data = form.data
-        print("Form submitted successfully:", data)
-        try:
-            contact_email(data["name"], data["email"], data["phone"], data["message"])
-            flash('Your message has been sent successfully!', 'success')
-            return redirect(url_for('main.contact'))
-        except Exception as e:
-            print(f"Error sending email: {e}")
-            flash('An error occurred while sending your message. Please try again.', 'danger')
+        # Get reCAPTCHA token from form
+        recaptcha_token = request.form.get('recaptcha_token')
+        
+        # Verify reCAPTCHA
+        is_valid, error_msg = verify_recaptcha(recaptcha_token)
+        
+        if is_valid:
+            data = form.data
+            print("Home Form submitted successfully:", data)
+
+            try:
+                contact_email(data["name"], data["email"], data["phone"], data["message"])
+                flash('Your message has been sent successfully!', 'success')
+                return redirect(url_for('main.home'))  # Redirect back to home
+            except Exception as e:
+                print(f"Error sending email from home: {e}")
+                flash('An error occurred while sending your message. Please try again.', 'danger')
+        else:
+            print(f"reCAPTCHA error: {error_msg}")
+            flash('reCAPTCHA verification failed. Please try again.', 'danger')
     
     if current_user.is_authenticated:
         base_template = 'base.html'
@@ -1766,7 +1778,8 @@ def contact():
                     'html': render_template('partials/contact_content.html',
                                             form=form,
                                             secret_form=secret_form,
-                                            base_template=base_template),
+                                            base_template=base_template,
+                                            site_key=SITE_KEY),
                     'title': 'Contact Us - Secures Secrets'
                 })
     return render_template('contact.html', form=form, secret_form=secret_form, base_template=base_template, show_header=True, show_footer=True)

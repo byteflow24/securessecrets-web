@@ -4,7 +4,7 @@ from flask_wtf.csrf import CSRFError
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, PublicSecrets
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, verify_recaptcha, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -194,19 +194,30 @@ def home():
 
         send_report_email(secret_id, secret, secret_file, report_details)
         flash('Report submitted successfully.', 'success')
-
+    
     # Contact form submission
+    SITE_KEY = os.environ.get("SITE_KEY")
     if form.validate_on_submit():
-        data = form.data
-        print("Home Form submitted successfully:", data)
+        # Get reCAPTCHA token from form
+        recaptcha_token = request.form.get('recaptcha_token')
+        
+        # Verify reCAPTCHA
+        is_valid, error_msg = verify_recaptcha(recaptcha_token)
+        
+        if is_valid:
+            data = form.data
+            print("Home Form submitted successfully:", data)
 
-        try:
-            contact_email(data["name"], data["email"], data["phone"], data["message"])
-            flash('Your message has been sent successfully!', 'success')
-            return redirect(url_for('main.home'))  # Redirect back to home
-        except Exception as e:
-            print(f"Error sending email from home: {e}")
-            flash('An error occurred while sending your message. Please try again.', 'danger')
+            try:
+                contact_email(data["name"], data["email"], data["phone"], data["message"])
+                flash('Your message has been sent successfully!', 'success')
+                return redirect(url_for('main.home'))  # Redirect back to home
+            except Exception as e:
+                print(f"Error sending email from home: {e}")
+                flash('An error occurred while sending your message. Please try again.', 'danger')
+        else:
+            print(f"reCAPTCHA error: {error_msg}")
+            flash('reCAPTCHA verification failed. Please try again.', 'danger')
     
     # No need for the Session timeout in this page
     session.permanent = False
@@ -214,10 +225,12 @@ def home():
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
             'html': render_template('partials/home_content.html',
-                                    public_secrets=decrypted_secrets, form=form),
+                                    public_secrets=decrypted_secrets,
+                                    form=form,
+                                    site_key=SITE_KEY),
             'title': 'Home - Secures Secrets'
         })
-    return render_template('home.html', show_header=True, show_footer=True, public_secrets=decrypted_secrets, form=form)
+    return render_template('home.html', show_header=True, show_footer=True, public_secrets=decrypted_secrets, form=form, site_key=SITE_KEY)
 
 @main.route('/how-it-works', methods=['GET'])
 def how_works():
@@ -1240,7 +1253,7 @@ def delete_account(user_id):
         # Log out the user before deletion
         logout_user()
 
-        flash("Your account has been deleted. We're sad to see you leave ☹️.", "success")
+        flash("Your account has been deleted. We're sad to see you leave.", "success")
         return redirect(url_for('main.login'))
     
     except SQLAlchemyError as e:

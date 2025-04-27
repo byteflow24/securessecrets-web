@@ -263,13 +263,42 @@ PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_LIVE_CLIENT_ID")
 PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_LIVE_CLIENT_SECRET")
 PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_LIVE_WEBHOOK_ID")
 API_URL = "https://api-m.paypal.com/v1"
+####################### RECAPTCHA GOOGLE #######################
+SITE_KEY = os.environ.get("SITE_KEY")
+RECAPTCHA_SECRET_KEY = os.environ.get("RECAPTCHA_SECRET_KEY")
+RECAPTCHA_API_URL = 'https://www.google.com/recaptcha/api/siteverify'
 ####################### SENDBOX ACTION #######################
-PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_SENDBOX_CLIENT_ID")
-PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_SENDBOX_CLIENT_SECRET")
-PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_WEBHOOK_ID") # Webhook ID
-API_URL = "https://api-m.sandbox.paypal.com/v1"
+# PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_SENDBOX_CLIENT_ID")
+# PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_SENDBOX_CLIENT_SECRET")
+# PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_WEBHOOK_ID") # Webhook ID
+# API_URL = "https://api-m.sandbox.paypal.com/v1"
 # Generating request id
 request_id = uuid.uuid4()
+
+# Verify reCAPTCHA token
+def verify_recaptcha(recaptcha_token):
+
+    try:
+        data = {
+            'secret': RECAPTCHA_SECRET_KEY,
+            'response': recaptcha_token
+        }
+
+        response = requests.post(RECAPTCHA_API_URL, data=data, timeout=5)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+
+        recaptcha_response = response.json()
+
+        # Check if verification was successful and score is acceptable
+        if recaptcha_response.get('success') and recaptcha_response.get('score', 0) >= 0.5:
+            return True, None
+        else:
+            error_msg = f"reCAPTCHA verification failed: {recaptcha_response.get('error-codes', 'Unknown error')}"
+            return False, error_msg
+
+    except requests.RequestException as e:
+        error_msg = f"Error verifying reCAPTCHA: {str(e)}"
+        return False, error_msg
 
 # Get the access token
 def get_access_token():

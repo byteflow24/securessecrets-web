@@ -268,9 +268,7 @@ PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_LIVE_WEBHOOK_ID")
 API_URL = "https://api-m.paypal.com/v1"
 ####################### RECAPTCHA GOOGLE #######################
 SITE_KEY = os.environ.get("SITE_KEY")
-RECAPTCHA_SECRET_KEY = os.environ.get("RECAPTCHA_SECRET_KEY")
 PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT_ID")
-RECAPTCHA_API_URL = 'https://www.google.com/recaptcha/api/siteverify'
 ####################### SENDBOX ACTION #######################
 # PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_SENDBOX_CLIENT_ID")
 # PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_SENDBOX_CLIENT_SECRET")

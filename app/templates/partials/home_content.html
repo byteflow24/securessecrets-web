@@ -210,14 +210,14 @@
             <!-- Contact Form Card -->
             <div class="card shadow-lg border-0 rounded-4 mb-4">
                 <div class="card-body p-5">
-                    <form id="contactForm" action="{{ request.path }}" method="post" novalidate>
+                    <form id="homeContactForm" action="{{ url_for('main.home') }}" method="post" novalidate>
                         {{ form.hidden_tag() }}
                         <!-- Hidden input for reCAPTCHA token -->
-                        <input type="hidden" name="recaptcha_token" id="recaptcha_token">
+                        <input type="hidden" name="recaptcha_token" id="home_recaptcha_token">
                         <!-- Name Input -->
                         <div class="form-floating mb-3">
-                            {{ form.name(class_="form-control rounded-3 shadow-sm", id="name", placeholder="Enter your name...") }}
-                            <label for="name" class="text-muted" style="font-size: 1rem;">Your Name</label>
+                            {{ form.name(class_="form-control rounded-3 shadow-sm", id="home_name", placeholder="Enter your name...") }}
+                            <label for="home_name" class="text-muted" style="font-size: 1rem;">Your Name</label>
                             {% for error in form.name.errors %}
                                 <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
                             {% endfor %}
@@ -225,8 +225,8 @@
                         
                         <!-- Email Input -->
                         <div class="form-floating mb-3">
-                            {{ form.email(class_="form-control rounded-3 shadow-sm", id="email", placeholder="Enter your email...") }}
-                            <label for="email" class="text-muted" style="font-size: 1rem;">Email Address</label>
+                            {{ form.email(class_="form-control rounded-3 shadow-sm", id="home_email", placeholder="Enter your email...") }}
+                            <label for="home_email" class="text-muted" style="font-size: 1rem;">Email Address</label>
                             {% for error in form.email.errors %}
                                 <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
                             {% endfor %}
@@ -234,8 +234,8 @@
                         
                         <!-- Phone Input -->
                         <div class="form-floating mb-3">
-                            {{ form.phone(class_="form-control rounded-3 shadow-sm", id="phone", placeholder="Enter your phone number...") }}
-                            <label for="phone" class="text-muted" style="font-size: 1rem;">Phone Number</label>
+                            {{ form.phone(class_="form-control rounded-3 shadow-sm", id="home_phone", placeholder="Enter your phone number...") }}
+                            <label for="home_phone" class="text-muted" style="font-size: 1rem;">Phone Number</label>
                             {% for error in form.phone.errors %}
                                 <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
                             {% endfor %}
@@ -243,8 +243,8 @@
                         
                         <!-- Message Input -->
                         <div class="form-floating mb-3">
-                            {{ form.message(class_="form-control rounded-3 shadow-sm", id="message", placeholder="Enter your message...", style="height: 10rem;") }}
-                            <label for="message" class="text-muted" style="font-size: 1rem;">Message</label>
+                            {{ form.message(class_="form-control rounded-3 shadow-sm", id="home_message", placeholder="Enter your message...", style="height: 10rem;") }}
+                            <label for="home_message" class="text-muted" style="font-size: 1rem;">Message</label>
                             {% for error in form.message.errors %}
                                 <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
                             {% endfor %}
@@ -252,7 +252,7 @@
                         
                         <!-- Submit Button -->
                         <div class="d-grid">
-                            {{ form.submit(class="btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold", style="font-size: 1rem;", id="submitButton") }}
+                            {{ form.submit(class="btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold", style="font-size: 1rem;", id="home_submitButton") }}
                         </div>
                     </form>
                 </div>
@@ -277,29 +277,37 @@
         console.log('reCAPTCHA Enterprise script loaded successfully');
     }
 
-    document.getElementById('contactForm').addEventListener('submit', function(event) {
-        event.preventDefault(); // Prevent form submission until token is generated
-        console.log('Form submit event triggered');
+    const homeForm = document.getElementById('homeContactForm');
+    if (homeForm) {
+        homeForm.addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent form submission until token is generated
+            console.log('Home form submit event triggered');
 
-        grecaptcha.enterprise.ready(async () => {
-            try {
-                console.log('Executing grecaptcha.enterprise.execute with site_key:', '{{ site_key }}');
-                const token = await grecaptcha.enterprise.execute('{{ site_key }}', {action: 'contact_form'});
-                console.log('Generated reCAPTCHA token:', token);
-                if (token) {
-                    document.getElementById('recaptcha_token').value = token;
-                    console.log('Token set in hidden input:', document.getElementById('recaptcha_token').value);
-                    document.getElementById('contactForm').submit();
-                } else {
-                    console.error('No token generated');
-                    alert('reCAPTCHA token generation failed. Please try again.');
+            grecaptcha.enterprise.ready(async () => {
+                try {
+                    console.log('Executing grecaptcha.enterprise.execute with site_key:', '{{ site_key }}');
+                    const token = await grecaptcha.enterprise.execute('{{ site_key }}', {action: 'contact_form'});
+                    console.log('Generated reCAPTCHA token:', token);
+                    if (token) {
+                        const tokenInput = document.getElementById('home_recaptcha_token');
+                        tokenInput.value = token;
+                        console.log('Token set in hidden input:', tokenInput.value);
+                        // Create and dispatch a new submit event to avoid submit() issues
+                        const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+                        homeForm.dispatchEvent(submitEvent);
+                    } else {
+                        console.error('No token generated');
+                        alert('reCAPTCHA token generation failed. Please try again.');
+                    }
+                } catch (error) {
+                    console.error('reCAPTCHA Enterprise error:', error);
+                    alert('reCAPTCHA failed to load. Please try again.');
                 }
-            } catch (error) {
-                console.error('reCAPTCHA Enterprise error:', error);
-                alert('reCAPTCHA failed to load. Please try again.');
-            }
+            });
         });
-    });
+    } else {
+        console.error('Home contact form not found');
+    }
 </script>
 
 <script>

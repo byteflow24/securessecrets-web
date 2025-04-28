@@ -21,6 +21,14 @@ import traceback
 import requests
 import logging
 
+# Handle Google Application Credentials
+if "GOOGLE_APPLICATION_CREDENTIALS_JSON" in os.environ:
+    creds_path = "/tmp/google-credentials.json"
+    with open(creds_path, "w") as f:
+        f.write(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_path
+else:
+    raise EnvironmentError("Missing GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable.")
 
 main = Blueprint('main', __name__)
 

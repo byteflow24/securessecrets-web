@@ -101,24 +101,30 @@
     document.addEventListener('DOMContentLoaded', function() {
         const form = document.getElementById('homeContactForm');
         const submitButton = document.getElementById('submit_button');
-        
+    
         form.addEventListener('submit', function(event) {
             event.preventDefault(); // Stop normal submit
     
-            grecaptcha.enterprise.ready(function() {
-                grecaptcha.enterprise.execute('{{ site_key }}', {action: 'contact_form'}).then(function(token) {
-                    console.log('reCAPTCHA token generated:', token);
-                    
-                    if (token) {
-                        document.getElementById('recaptcha_token').value = token;
-                        form.submit(); // Now submit with fresh token
-                    } else {
-                        alert('reCAPTCHA verification failed. Please try again.');
-                    }
-                }).catch(function(error) {
-                    console.error('reCAPTCHA error:', error);
-                    alert('reCAPTCHA error. Please refresh the page.');
-                });
+            if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
+                console.error('reCAPTCHA Enterprise script failed to load');
+                alert('reCAPTCHA failed to load. Please try again later.');
+                return; // Prevent form submission if reCAPTCHA isn't ready
+            }
+    
+            grecaptcha.enterprise.execute('{{ site_key }}', {action: 'contact_form'}).then(function(token) {
+                console.log('reCAPTCHA token generated:', token);
+            
+                if (token) {
+                    const tokenInput = document.getElementById('recaptcha_token');
+                    tokenInput.value = token;  // Token is set here
+                    console.log('Token set in hidden input:', tokenInput.value);
+                    form.submit();  // Now submit the form with the token
+                } else {
+                    alert('reCAPTCHA verification failed. Please try again.');
+                }
+            }).catch(function(error) {
+                console.error('reCAPTCHA error:', error);
+                alert('reCAPTCHA error. Please refresh the page.');
             });
         });
     });

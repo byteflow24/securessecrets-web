@@ -73,9 +73,15 @@
                                 {% endfor %}
                             </div>
                             
-                            <!-- Submit Button -->
+                            <!-- Submit Button with reCAPTCHA -->
                             <div class="d-grid">
-                                {{ form.submit(class="btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold", style="font-size: 1rem;", id="contact_submitButton") }}
+                                <button class="g-recaptcha btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold"
+                                        style="font-size: 1rem;"
+                                        data-sitekey="{{ site_key }}"
+                                        data-callback="onContactSubmit"
+                                        data-action="contact_form">
+                                    Submit
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -88,44 +94,24 @@
 <!-- reCAPTCHA v3 Script -->
 <script src="https://www.google.com/recaptcha/enterprise.js?render={{ site_key }}&badge=bottomright"></script>
 <script>
-    // Check if grecaptcha is loaded
+    function onContactSubmit(token) {
+        console.log('reCAPTCHA token generated:', token);
+        if (token) {
+            document.getElementById('contact_recaptcha_token').value = token;
+            console.log('Token set in hidden input:', document.getElementById('contact_recaptcha_token').value);
+            document.getElementById('contactPageForm').submit();
+        } else {
+            console.error('No token generated');
+            alert('reCAPTCHA token generation failed. Please try again.');
+        }
+    }
+
+    // Check if reCAPTCHA script loaded
     if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
         console.error('reCAPTCHA Enterprise script failed to load');
         alert('reCAPTCHA failed to load. Please check your network or try again later.');
     } else {
         console.log('reCAPTCHA Enterprise script loaded successfully');
-    }
-
-    const contactForm = document.getElementById('contactPageForm');
-    if (contactForm) {
-        contactForm.addEventListener('submit', function(event) {
-            event.preventDefault(); // Prevent form submission until token is generated
-            console.log('Contact page form submit event triggered');
-
-            grecaptcha.enterprise.ready(async () => {
-                try {
-                    console.log('Executing grecaptcha.enterprise.execute with site_key:', '{{ site_key }}');
-                    const token = await grecaptcha.enterprise.execute('{{ site_key }}', {action: 'contact_form'});
-                    console.log('Generated reCAPTCHA token:', token);
-                    if (token) {
-                        const tokenInput = document.getElementById('contact_recaptcha_token');
-                        tokenInput.value = token;
-                        console.log('Token set in hidden input:', tokenInput.value);
-                        // Create and dispatch a new submit event to avoid submit() issues
-                        const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-                        contactForm.dispatchEvent(submitEvent);
-                    } else {
-                        console.error('No token generated');
-                        alert('reCAPTCHA token generation failed. Please try again.');
-                    }
-                } catch (error) {
-                    console.error('reCAPTCHA Enterprise error:', error);
-                    alert('reCAPTCHA failed to load. Please try again.');
-                }
-            });
-        });
-    } else {
-        console.error('Contact page form not found');
     }
 </script>
 {% endblock %}

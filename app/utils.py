@@ -278,14 +278,20 @@ PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT_ID")
 request_id = uuid.uuid4()
 
 # Verify reCAPTCHA token
-def verify_recaptcha(recaptcha_token: str, recaptcha_action: str = 'contact_form', flask_request=None) -> tuple[bool, str | None]:
+def create_assessment(
+    recaptcha_token: str,
+    recaptcha_action: str = 'contact_form',
+    flask_request=None,
+    ja3: str = None
+) -> tuple[bool, str | None]:
     """
-    Verify a reCAPTCHA Enterprise token by creating an assessment.
+    Create an assessment to analyze the risk of a UI action.
     
     Args:
         recaptcha_token (str): The reCAPTCHA token from the client.
-        recaptcha_action (str): Action name used in grecaptcha.enterprise.execute (e.g., 'contact_form').
+        recaptcha_action (str): Action name used in the reCAPTCHA button (e.g., 'contact_form').
         flask_request: Flask request object to extract user_ip_address and user_agent (optional).
+        ja3 (str, optional): JA3 fingerprint of the client’s TLS configuration.
         
     Returns:
         tuple: (bool, str or None)
@@ -305,7 +311,6 @@ def verify_recaptcha(recaptcha_token: str, recaptcha_action: str = 'contact_form
         return False, "reCAPTCHA token missing"
 
     try:
-        # Create the reCAPTCHA Enterprise client
         client = recaptchaenterprise_v1.RecaptchaEnterpriseServiceClient()
 
         # Set the properties of the event to be tracked
@@ -316,6 +321,11 @@ def verify_recaptcha(recaptcha_token: str, recaptcha_action: str = 'contact_form
         if flask_request:
             event.user_ip_address = flask_request.remote_addr
             event.user_agent = flask_request.headers.get('User-Agent')
+            # If behind a proxy, try X-Forwarded-For header
+            if not event.user_ip_address:
+                event.user_ip_address = flask_request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+        if ja3:
+            event.ja3 = ja3
 
         assessment = recaptchaenterprise_v1.Assessment()
         assessment.event = event
@@ -327,10 +337,9 @@ def verify_recaptcha(recaptcha_token: str, recaptcha_action: str = 'contact_form
         request.assessment = assessment
         request.parent = project_name
 
-        # Call the API
         response = client.create_assessment(request)
 
-        # Log the assessment details
+        # Log assessment details
         logger.info(f"reCAPTCHA Enterprise assessment: score={response.risk_analysis.score}, "
                    f"reasons={response.risk_analysis.reasons}, "
                    f"action={response.token_properties.action}, "

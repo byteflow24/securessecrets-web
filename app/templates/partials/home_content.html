@@ -252,14 +252,12 @@
                         
                         <!-- Submit Button with reCAPTCHA -->
                         <div class="d-grid">
-                            <button class="g-recaptcha btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold"
-                                    style="font-size: 1rem;"
-                                    data-sitekey="{{ site_key }}"
-                                    data-callback="onHomeSubmit"
-                                    data-action="contact_form"
-                                    id="home_submitButton">
-                                Submit
-                            </button>
+                            <button type="button" onclick="onContactSubmit()" 
+                                        class="btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold"
+                                        style="font-size: 1rem;"
+                                        id="contact_submitButton">
+                                    Submit
+                                </button>
                         </div>
                         <noscript>
                             <div class="alert alert-danger mt-3">
@@ -281,18 +279,21 @@
 <!-- reCAPTCHA Enterprise Script -->
 <script src="https://www.google.com/recaptcha/enterprise.js?render={{ site_key }}&badge=bottomright"></script>
 <script>
-    function onHomeSubmit(token) {
-        console.log('reCAPTCHA token generated for home form:', token);
-        if (token) {
-            const tokenInput = document.getElementById('home_recaptcha_token');
-            tokenInput.value = token;
-            console.log('Token set in hidden input:', tokenInput.value);
-            const form = document.getElementById('homeContactForm');
-            form.submit();
-        } else {
-            console.error('No token generated for home form');
-            alert('reCAPTCHA token generation failed. Please try again.');
-        }
+    function onContactSubmit() {
+        grecaptcha.enterprise.ready(function() {
+            grecaptcha.enterprise.execute('{{ site_key }}', {action: 'contact_form'}).then(function(token) {
+                console.log('reCAPTCHA token generated for contact form:', token);
+                if (token) {
+                    const tokenInput = document.getElementById('contact_recaptcha_token');
+                    tokenInput.value = token;
+                    console.log('Token set in hidden input:', tokenInput.value);
+                    document.getElementById('contactPageForm').submit();
+                } else {
+                    console.error('No token generated for contact form');
+                    alert('reCAPTCHA token generation failed. Please try again.');
+                }
+            });
+        });
     }
 
     // Check if reCAPTCHA script loaded

@@ -256,10 +256,16 @@
                                     style="font-size: 1rem;"
                                     data-sitekey="{{ site_key }}"
                                     data-callback="onHomeSubmit"
-                                    data-action="contact_form">
+                                    data-action="contact_form"
+                                    id="home_submitButton">
                                 Submit
                             </button>
                         </div>
+                        <noscript>
+                            <div class="alert alert-danger mt-3">
+                                JavaScript is required to submit this form. Please enable JavaScript.
+                            </div>
+                        </noscript>
                     </form>
                 </div>
             </div>
@@ -276,24 +282,29 @@
 <script src="https://www.google.com/recaptcha/enterprise.js?render={{ site_key }}&badge=bottomright"></script>
 <script>
     function onHomeSubmit(token) {
-        console.log('reCAPTCHA token generated:', token);
+        console.log('reCAPTCHA token generated for home form:', token);
         if (token) {
-            document.getElementById('home_recaptcha_token').value = token;
-            console.log('Token set in hidden input:', document.getElementById('home_recaptcha_token').value);
-            document.getElementById('homeContactForm').submit();
+            const tokenInput = document.getElementById('home_recaptcha_token');
+            tokenInput.value = token;
+            console.log('Token set in hidden input:', tokenInput.value);
+            const form = document.getElementById('homeContactForm');
+            form.submit();
         } else {
-            console.error('No token generated');
+            console.error('No token generated for home form');
             alert('reCAPTCHA token generation failed. Please try again.');
         }
     }
 
     // Check if reCAPTCHA script loaded
-    if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
-        console.error('reCAPTCHA Enterprise script failed to load');
-        alert('reCAPTCHA failed to load. Please check your network or try again later.');
-    } else {
-        console.log('reCAPTCHA Enterprise script loaded successfully');
-    }
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
+            console.error('reCAPTCHA Enterprise script failed to load');
+            alert('reCAPTCHA failed to load. Please check your network or try again later.');
+            document.getElementById('home_submitButton').disabled = true;
+        } else {
+            console.log('reCAPTCHA Enterprise script loaded successfully');
+        }
+    });
 </script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {

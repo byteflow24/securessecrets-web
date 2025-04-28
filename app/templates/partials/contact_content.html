@@ -79,10 +79,16 @@
                                         style="font-size: 1rem;"
                                         data-sitekey="{{ site_key }}"
                                         data-callback="onContactSubmit"
-                                        data-action="contact_form">
+                                        data-action="contact_form"
+                                        id="contact_submitButton">
                                     Submit
                                 </button>
                             </div>
+                            <noscript>
+                                <div class="alert alert-danger mt-3">
+                                    JavaScript is required to submit this form. Please enable JavaScript.
+                                </div>
+                            </noscript>
                         </form>
                     </div>
                 </div>
@@ -91,27 +97,32 @@
     </div>
 </main>
 
-<!-- reCAPTCHA v3 Script -->
+<!-- reCAPTCHA Enterprise Script -->
 <script src="https://www.google.com/recaptcha/enterprise.js?render={{ site_key }}&badge=bottomright"></script>
 <script>
     function onContactSubmit(token) {
-        console.log('reCAPTCHA token generated:', token);
+        console.log('reCAPTCHA token generated for contact form:', token);
         if (token) {
-            document.getElementById('contact_recaptcha_token').value = token;
-            console.log('Token set in hidden input:', document.getElementById('contact_recaptcha_token').value);
-            document.getElementById('contactPageForm').submit();
+            const tokenInput = document.getElementById('contact_recaptcha_token');
+            tokenInput.value = token;
+            console.log('Token set in hidden input:', tokenInput.value);
+            const form = document.getElementById('contactPageForm');
+            form.submit();
         } else {
-            console.error('No token generated');
+            console.error('No token generated for contact form');
             alert('reCAPTCHA token generation failed. Please try again.');
         }
     }
 
     // Check if reCAPTCHA script loaded
-    if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
-        console.error('reCAPTCHA Enterprise script failed to load');
-        alert('reCAPTCHA failed to load. Please check your network or try again later.');
-    } else {
-        console.log('reCAPTCHA Enterprise script loaded successfully');
-    }
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
+            console.error('reCAPTCHA Enterprise script failed to load');
+            alert('reCAPTCHA failed to load. Please check your network or try again later.');
+            document.getElementById('contact_submitButton').disabled = true;
+        } else {
+            console.log('reCAPTCHA Enterprise script loaded successfully');
+        }
+    });
 </script>
 {% endblock %}

@@ -228,7 +228,7 @@ def home():
             try:
                 contact_email(data["name"], data["email"], data["phone"], data["message"])
                 flash('Your message has been sent successfully!', 'success')
-                return redirect(url_for('main.home'))  # Redirect back to home
+                return redirect(url_for('main.home'))
             except Exception as e:
                 logger.error(f"Error sending email from contact: {e}")
                 flash('An error occurred while sending your message. Please try again.', 'danger')
@@ -1785,7 +1785,7 @@ def contact():
             try:
                 contact_email(data["name"], data["email"], data["phone"], data["message"])
                 flash('Your message has been sent successfully!', 'success')
-                return redirect(url_for('main.home'))  # Redirect back to home
+                return redirect(url_for('main.home'))
             except Exception as e:
                 logger.error(f"Error sending email from contact: {e}")
                 flash('An error occurred while sending your message. Please try again.', 'danger')

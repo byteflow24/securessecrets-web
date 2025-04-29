@@ -278,7 +278,12 @@ PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT_ID")
 request_id = uuid.uuid4()
 
 # Verify reCAPTCHA token
-def create_assessment(recaptcha_token: str, recaptcha_action: str = 'contact_form', flask_request=None, ja3: str = None) -> tuple[bool, str | None]:
+def create_assessment(
+    recaptcha_token: str,
+    recaptcha_action: str = 'contact_form',
+    flask_request=None,
+    ja3: str = None
+) -> tuple[bool, str | None]:
     """
     Create an assessment to analyze the risk of a UI action.
     
@@ -341,8 +346,8 @@ def create_assessment(recaptcha_token: str, recaptcha_action: str = 'contact_for
                    f"valid={response.token_properties.valid}")
 
         # Check if the token is valid
-        if response.token_properties.invalid_reason == recaptchaenterprise_v1.TokenProperties.InvalidReason.TOKEN_EXPIRED:
-            error_msg = "reCAPTCHA token expired. Please resubmit the form."
+        if not response.token_properties.valid:
+            error_msg = f"Invalid reCAPTCHA token: {response.token_properties.invalid_reason}"
             logger.error(error_msg)
             return False, error_msg
 

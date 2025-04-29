@@ -213,7 +213,7 @@
                     <form id="homeContactForm" action="{{ url_for('main.home') }}" method="post" novalidate>
                         {{ form.hidden_tag() }}
                         <!-- Hidden input for reCAPTCHA token -->
-                        <input type="hidden" name="recaptcha_token" id="recaptcha_token">
+                        <input type="hidden" name="recaptcha_token" id="home_recaptcha_token">
                         <!-- Name Input -->
                         <div class="form-floating mb-3">
                             {{ form.name(class_="form-control rounded-3 shadow-sm", id="home_name", placeholder="Enter your name...") }}
@@ -252,10 +252,12 @@
                         
                         <!-- Submit Button with reCAPTCHA -->
                         <div class="d-grid">
-                            <button type="submit" 
-                                class="btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold"
-                                id="submit_button"
-                                style="font-size: 1rem;">
+                            <button class="g-recaptcha btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold"
+                                    style="font-size: 1rem;"
+                                    data-sitekey="{{ site_key }}"
+                                    data-callback="onHomeSubmit"
+                                    data-action="contact_form"
+                                    id="home_submitButton">
                                 Submit
                             </button>
                         </div>
@@ -277,40 +279,37 @@
 </div>
 
 <!-- reCAPTCHA Enterprise Script -->
-<script src="https://www.google.com/recaptcha/enterprise.js?render={{ site_key }}"></script>
+<script src="https://www.google.com/recaptcha/enterprise.js?render={{ site_key }}&badge=bottomright"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const form = document.getElementById('homeContactForm');
-        const submitButton = document.getElementById('submit_button');
-    
-        let submitting = false;
-    
-        form.addEventListener('submit', function(event) {
-            if (!submitting) {
-                event.preventDefault(); // First stage: prevent default
-                if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
-                    console.error('reCAPTCHA Enterprise script failed to load');
-                    alert('reCAPTCHA failed to load. Please try again later.');
-                    return;
-                }
-    
-                grecaptcha.enterprise.execute('{{ site_key }}', { action: 'contact_form' }).then(function(token) {
-                    console.log('reCAPTCHA token generated:', token);
-    
-                    if (token) {
-                        const tokenInput = document.getElementById('recaptcha_token');
-                        tokenInput.value = token;
-                        submitting = true;
-                        form.submit();  // Second stage: submit now with token
-                    } else {
-                        alert('reCAPTCHA verification failed. Please try again.');
-                    }
-                }).catch(function(error) {
-                    console.error('reCAPTCHA error:', error);
-                    alert('reCAPTCHA error. Please refresh the page.');
-                });
+    function onHomeSubmit(token) {
+        console.log('reCAPTCHA token generated for home form:', token);
+        if (token) {
+            const tokenInput = document.getElementById('home_recaptcha_token');
+            tokenInput.value = token;
+            console.log('Token set in hidden input:', tokenInput.value);
+            const form = document.getElementById('homeContactForm');
+            if (form) {
+                form.submit();
+            } else {
+                console.error('Home form not found');
+                alert('Form submission failed. Please refresh the page.');
             }
-        });
+        } else {
+            console.error('No token generated for home form');
+            alert('reCAPTCHA token generation failed. Please try again.');
+        }
+    }
+
+    // Check if reCAPTCHA script loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
+            console.error('reCAPTCHA Enterprise script failed to load');
+            alert('reCAPTCHA failed to load. Please check your network or try again later.');
+            const submitButton = document.getElementById('home_submitButton');
+            if (submitButton) submitButton.disabled = true;
+        } else {
+            console.log('reCAPTCHA Enterprise script loaded successfully');
+        }
     });
 </script>
 <script>

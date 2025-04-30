@@ -1,9 +1,7 @@
 {% extends base_template %}
 
 {% block content %}
-<!-- Adding new secret modal -->
-{% include "partials/new_secret_modal.html" %}
-<!-- Main Content -->
+<!-- Existing HTML unchanged -->
 <main class="mb-5">
     <div class="container px-4 px-lg-5">
         <div class="row gx-4 gx-lg-5 justify-content-center">
@@ -80,8 +78,7 @@
                                             data-sitekey="{{ site_key }}"
                                             data-callback="onContactSubmit"
                                             data-action="contact_form"
-                                            id="contact_submitButton"
-                                            disabled>
+                                            id="contact_submitButton">
                                         Submit
                                     </button>
                                 </div>
@@ -110,8 +107,6 @@
 </main>
 
 {% if not current_user.is_authenticated %}
-    <!-- reCAPTCHA Enterprise Script -->
-    <script src="https://www.google.com/recaptcha/enterprise.js?render={{ site_key }}&badge=bottomright" async defer></script>
     <script>
         function initializeRecaptcha(formId, buttonId, tokenInputId, callbackName) {
             const form = document.getElementById(formId);
@@ -119,33 +114,24 @@
             const tokenInput = document.getElementById(tokenInputId);
             let isSubmitting = false;
 
-            // Clear token input
-            if (tokenInput) {
-                tokenInput.value = '';
-                console.log(`Cleared reCAPTCHA token for ${formId}`);
+            if (!form || !submitButton || !tokenInput) {
+                console.error(`Form elements missing for ${formId}: form=${!!form}, button=${!!submitButton}, tokenInput=${!!tokenInput}`);
+                return;
             }
 
-            // Wait for reCAPTCHA to load
-            const checkRecaptcha = setInterval(() => {
-                if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
-                    clearInterval(checkRecaptcha);
-                    console.log(`reCAPTCHA Enterprise initialized for ${formId}. Site key: {{ site_key }}`);
-                    submitButton.disabled = false; // Enable button
-                    grecaptcha.enterprise.ready(() => {
-                        console.log(`reCAPTCHA ready for ${formId}`);
-                    });
-                }
-            }, 100);
+            // Clear token input
+            tokenInput.value = '';
+            console.log(`Cleared reCAPTCHA token for ${formId}`);
 
-            // Timeout if reCAPTCHA fails to load
-            setTimeout(() => {
-                if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
-                    clearInterval(checkRecaptcha);
-                    console.error(`reCAPTCHA Enterprise failed to load for ${formId} after 10s. Site key: {{ site_key }}`);
-                    alert('reCAPTCHA failed to load. Please check your network or try again later.');
-                    submitButton.disabled = true;
-                }
-            }, 10000);
+            // Reset reCAPTCHA widget
+            if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
+                grecaptcha.enterprise.ready(() => {
+                    console.log(`reCAPTCHA ready for ${formId}`);
+                    submitButton.disabled = false;
+                });
+            } else {
+                console.warn(`reCAPTCHA not loaded yet for ${formId}. Waiting...`);
+            }
 
             // Handle reCAPTCHA callback
             window[callbackName] = function(token) {
@@ -159,7 +145,6 @@
                     form.submit();
                 } else {
                     console.error(`No token generated for ${formId} or already submitting`);
-                    alert('reCAPTCHA token generation failed. Please try again.');
                     submitButton.disabled = false;
                     submitButton.textContent = 'Submit';
                     isSubmitting = false;
@@ -175,14 +160,15 @@
             });
         }
 
-        // Initialize reCAPTCHA on load
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeRecaptcha('contactPageForm', 'contact_submitButton', 'contact_recaptcha_token', 'onContactSubmit');
-        });
+        // Initialize reCAPTCHA
+        initializeRecaptcha('contactPageForm', 'contact_submitButton', 'contact_recaptcha_token', 'onContactSubmit');
 
         // Expose reinitialize function for AJAX
         window.reinitializeContactRecaptcha = function() {
             console.log('Reinitializing reCAPTCHA for contact form after AJAX update');
+            if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
+                grecaptcha.enterprise.reset();
+            }
             initializeRecaptcha('contactPageForm', 'contact_submitButton', 'contact_recaptcha_token', 'onContactSubmit');
         };
     </script>

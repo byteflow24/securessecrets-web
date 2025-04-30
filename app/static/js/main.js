@@ -19,10 +19,18 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (data.reinitializeRecaptcha) {
                 console.warn(`No reCAPTCHA reinitialization function for ${data.reinitializeRecaptcha}`);
             }
+
+            // Ensure scripts in injected content are executed
+            const scripts = targetElement.querySelectorAll('script');
+            scripts.forEach(oldScript => {
+                const newScript = document.createElement('script');
+                newScript.textContent = oldScript.textContent;
+                oldScript.parentNode.replaceChild(newScript, oldScript);
+            });
         })
         .catch(error => {
             console.error('Error loading content:', error);
-            alert('Failed to load content. Please try again.');
+            alert('Failed to load content. Please refresh the page.');
         });
     }
 

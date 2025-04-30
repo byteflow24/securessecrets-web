@@ -250,7 +250,8 @@ def home():
                                     public_secrets=decrypted_secrets,
                                     form=form,
                                     site_key=site_key),
-            'title': 'Home - Secures Secrets'
+            'title': 'Home - Secures Secrets',
+            'reinitializeRecaptcha': 'home'
         })
     return render_template('home.html', show_header=True, show_footer=True, public_secrets=decrypted_secrets, form=form, site_key=site_key)
 

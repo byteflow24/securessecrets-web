@@ -40,7 +40,6 @@
 
     <!-- Core theme JS-->
     <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     
     <!-- jQuery Script -->
     <script src="https://code.jquery.com/jquery-3.6.1.min.js" crossorigin="anonymous"></script>
@@ -64,7 +63,11 @@
                     {% block content %}{% endblock %}
                 </div>
             </div>
-        </main>    
+        </main>
+        <!-- reCAPTCHA Enterprise Script -->
+        <script src="https://www.google.com/recaptcha/enterprise.js?render=6LfeKyYrAAAAAApLhHM9qlvVDlGHIdc9aq9JRTd1&badge=bottomright" async defer></script>
+        <!-- Main JS -->
+        <script src="{{ url_for('static', filename='js/main.js') }}"></script>
         {% if show_footer %}
             {% include "footer_0.html" %}
         {% endif %}

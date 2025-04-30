@@ -180,7 +180,8 @@ def home():
 
         # Append the public secret to the list
         decrypted_secrets.append(public_secret)
-
+    # Site key for the reCAPTCHA
+    site_key = os.environ.get("SITE_KEY")
     # Report submission
     if request.method == "POST":
         form_type = request.form.get('form_type')
@@ -210,7 +211,6 @@ def home():
             
         elif form_type == 'contact':
             # Contact form submission
-            site_key = os.environ.get("SITE_KEY")
             if not site_key:
                 logger.error("SITE_KEY is not set in environment variables")
                 flash('reCAPTCHA configuration error. Please try again later.', 'danger')
@@ -1825,7 +1825,7 @@ def contact():
     else:
         base_template = 'base_0.html'
     
-    return render_template('contact.html', form=form, secret_form=secret_form, base_template=base_template, site_key=site_key, show_header=True, show_footer=False)
+    return render_template('contact.html', form=form, secret_form=secret_form, base_template=base_template, site_key=site_key, show_header=True, show_footer=True)
 
 @main.route('/privacy-policy')
 def privacy():

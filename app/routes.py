@@ -250,8 +250,7 @@ def home():
                                     public_secrets=decrypted_secrets,
                                     form=form,
                                     site_key=site_key),
-            'title': 'Home - Secures Secrets',
-            'reinitializeRecaptcha': 'home'
+            'title': 'Home - Secures Secrets'
         })
     return render_template('home.html', show_header=True, show_footer=True, public_secrets=decrypted_secrets, form=form, site_key=site_key)
 
@@ -1777,7 +1776,7 @@ def contact():
     if form.validate_on_submit():
         # Log form data for debugging
         logger.info(f"Form data: {request.form}")
-        
+
         # Check for suspicious input
         if is_suspicious_input(form.name.data) or is_suspicious_input(form.message.data):
             logger.error("Suspicious input detected in form submission")
@@ -1803,7 +1802,7 @@ def contact():
             try:
                 contact_email(data["name"], data["email"], data["phone"], data["message"])
                 flash('Your message has been sent successfully!', 'success')
-                return redirect(url_for('main.home'))  # Redirect to home
+                return redirect(url_for('main.contact'))
             except Exception as e:
                 logger.error(f"Error sending email from contact: {e}")
                 flash('An error occurred while sending your message. Please try again.', 'danger')
@@ -1818,13 +1817,9 @@ def contact():
                                        base_template=base_template,
                                        site_key=site_key),
                 'title': 'Contact Us - Secures Secrets'
-                # No reinitializeRecaptcha needed, as no reCAPTCHA for authenticated users
             })
     else:
         base_template = 'base_0.html'
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            # Reject AJAX for guests, force full page load
-            return jsonify({'redirect': url_for('main.contact')}), 403
     
     return render_template('contact.html', form=form, secret_form=secret_form, base_template=base_template, site_key=site_key, show_header=True, show_footer=True)
 

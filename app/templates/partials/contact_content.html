@@ -72,6 +72,7 @@
                                     <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
                                 {% endfor %}
                             </div>
+                            
                             {% if not current_user.is_authenticated %}
                                 <!-- Submit button with reCAPTCHA for guests -->
                                 <div class="d-grid">
@@ -80,10 +81,14 @@
                                             data-sitekey="{{ site_key }}"
                                             data-callback="onContactSubmit"
                                             data-action="contact_form"
-                                            id="contact_submitButton"
+                                            id="contact_guest_submit"
                                             disabled>
                                         Submit
                                     </button>
+                                </div>
+                                <!-- Error message for reCAPTCHA failure -->
+                                <div id="recaptcha_error" class="alert alert-danger mt-3 d-none">
+                                    Unable to load reCAPTCHA. Please check your network, disable ad-blockers, or try again later.
                                 </div>
                             {% else %}
                                 <!-- Regular submit button for authenticated users -->
@@ -91,7 +96,7 @@
                                     <button class="btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold"
                                             style="font-size: 1rem;"
                                             type="submit"
-                                            id="contact_submitButton">
+                                            id="contact_auth_submit">
                                         Submit
                                     </button>
                                 </div>
@@ -114,20 +119,44 @@
     <script src="https://www.google.com/recaptcha/enterprise.js?render={{ site_key }}&badge=bottomright" async defer></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const submitButton = document.getElementById('contact_submitButton');
-            if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
-                console.error('reCAPTCHA Enterprise script failed to load');
-                if (submitButton) submitButton.disabled = true;
-            } else {
-                console.log('reCAPTCHA Enterprise script loaded successfully');
+            const submitButton = document.getElementById('contact_guest_submit');
+            const errorMessage = document.getElementById('recaptcha_error');
+            
+            // Check if reCAPTCHA is already loaded
+            if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
+                console.log('reCAPTCHA Enterprise script already loaded');
                 grecaptcha.enterprise.ready(() => {
                     if (submitButton) submitButton.disabled = false;
+                    if (errorMessage) errorMessage.classList.add('d-none');
                 });
+            } else {
+                // Wait for reCAPTCHA to load
+                const checkRecaptcha = setInterval(() => {
+                    if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
+                        console.log('reCAPTCHA Enterprise script loaded successfully');
+                        grecaptcha.enterprise.ready(() => {
+                            if (submitButton) submitButton.disabled = false;
+                            if (errorMessage) errorMessage.classList.add('d-none');
+                        });
+                        clearInterval(checkRecaptcha);
+                    }
+                }, 500);
+                
+                // Timeout after 10 seconds
+                setTimeout(() => {
+                    if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
+                        console.error('reCAPTCHA Enterprise script failed to load');
+                        if (submitButton) submitButton.disabled = true;
+                        if (errorMessage) errorMessage.classList.remove('d-none');
+                        clearInterval(checkRecaptcha);
+                    }
+                }, 10000);
             }
         });
 
         function onContactSubmit(token) {
             console.log('reCAPTCHA token generated for contact form:', token);
+            const errorMessage = document.getElementById('recaptcha_error');
             if (token) {
                 const tokenInput = document.getElementById('contact_recaptcha_token');
                 tokenInput.value = token;
@@ -137,9 +166,17 @@
                     form.submit();
                 } else {
                     console.error('Contact form not found');
+                    if (errorMessage) {
+                        errorMessage.textContent = 'Form submission failed. Please refresh the page.';
+                        errorMessage.classList.remove('d-none');
+                    }
                 }
             } else {
                 console.error('No token generated for contact form');
+                if (errorMessage) {
+                    errorMessage.textContent = 'reCAPTCHA token generation failed. Please try again.';
+                    errorMessage.classList.remove('d-none');
+                }
             }
         }
     </script>

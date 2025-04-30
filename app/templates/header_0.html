@@ -17,7 +17,8 @@
                         <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}" href="#" data-url="{{ url_for('main.how_works') }}">How it Works?</a></li>
                         <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}" href="#" data-url="{{ url_for('main.pricing') }}">Pricing</a></li>
                         <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.about' %}active{% endif %}" href="#" data-url="{{ url_for('main.about') }}">About Us</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('main.contact') }}">Contact Us</a></li>
+                        <li><a class="dropdown-item {% if request.endpoint == 'main.contact' %}active{% endif %}"
+                            href="{{ url_for('main.contact') }}">Contact Us</a></li>
                         </li>
                 </ul>
             </div>
@@ -40,7 +41,8 @@
                                 href="#" data-url="{{ url_for('main.about') }}">About Us</a>
                         </li>
                         <li class="nav-item mx-1">
-                            <a class="nav-link link-dark px-2 py-2" href="{{ url_for('main.contact') }}">Contact Us</a>
+                            <a class="nav-link link-dark px-2 py-2 {% if request.endpoint == 'main.contact' %}active{% endif %}"
+                            href="{{ url_for('main.contact') }}">Contact Us</a>
                         </li>
                     </ul>
                 </div>

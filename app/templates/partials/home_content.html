@@ -196,7 +196,6 @@
 <div class="b-example-divider"></div>
 
 <!-- Contact Section -->
-<!-- Existing HTML unchanged -->
 <div class="container px-4 py-5">
     <div class="row align-items-center g-5 py-5">
         <!-- Text/List - always on the left -->
@@ -279,70 +278,39 @@
     </div>
 </div>
 
+<!-- reCAPTCHA Enterprise Script -->
+<script src="https://www.google.com/recaptcha/enterprise.js?render={{ site_key }}&badge=bottomright" async defer></script>
 <script>
-    function initializeRecaptcha(formId, buttonId, tokenInputId, callbackName) {
-        const form = document.getElementById(formId);
-        const submitButton = document.getElementById(buttonId);
-        const tokenInput = document.getElementById(tokenInputId);
-        let isSubmitting = false;
-
-        if (!form || !submitButton || !tokenInput) {
-            console.error(`Form elements missing for ${formId}: form=${!!form}, button=${!!submitButton}, tokenInput=${!!tokenInput}`);
-            return;
-        }
-
-        // Clear token input
-        tokenInput.value = '';
-        console.log(`Cleared reCAPTCHA token for ${formId}`);
-
-        // Reset reCAPTCHA widget
-        if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
-            grecaptcha.enterprise.ready(() => {
-                console.log(`reCAPTCHA ready for ${formId}`);
-                submitButton.disabled = false;
-            });
-        } else {
-            console.warn(`reCAPTCHA not loaded yet for ${formId}. Waiting...`);
-        }
-
-        // Handle reCAPTCHA callback
-        window[callbackName] = function(token) {
-            if (token && !isSubmitting) {
-                console.log(`reCAPTCHA token generated for ${formId}:`, token);
-                tokenInput.value = token;
-                console.log(`Token set in hidden input for ${formId}:`, tokenInput.value);
-                isSubmitting = true;
-                submitButton.disabled = true;
-                submitButton.textContent = 'Submitting...';
+    function onHomeSubmit(token) {
+        console.log('reCAPTCHA token generated for home form:', token);
+        if (token) {
+            const tokenInput = document.getElementById('home_recaptcha_token');
+            tokenInput.value = token;
+            console.log('Token set in hidden input:', tokenInput.value);
+            const form = document.getElementById('homeContactForm');
+            if (form) {
                 form.submit();
             } else {
-                console.error(`No token generated for ${formId} or already submitting`);
-                submitButton.disabled = false;
-                submitButton.textContent = 'Submit';
-                isSubmitting = false;
+                console.error('Home form not found');
+                alert('Form submission failed. Please refresh the page.');
             }
-        };
-
-        // Prevent manual form submission
-        form.addEventListener('submit', (e) => {
-            if (!isSubmitting) {
-                e.preventDefault();
-                console.warn(`Form submission blocked for ${formId}: Waiting for reCAPTCHA token`);
-            }
-        });
+        } else {
+            console.error('No token generated for home form');
+            alert('reCAPTCHA token generation failed. Please try again.');
+        }
     }
 
-    // Initialize reCAPTCHA
-    initializeRecaptcha('homeContactForm', 'home_submitButton', 'home_recaptcha_token', 'onHomeSubmit');
-
-    // Expose reinitialize function for AJAX
-    window.reinitializeHomeRecaptcha = function() {
-        console.log('Reinitializing reCAPTCHA for home form after AJAX update');
-        if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
-            grecaptcha.enterprise.reset();
+    // Check if reCAPTCHA script loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
+            console.error('reCAPTCHA Enterprise script failed to load');
+            alert('reCAPTCHA failed to load. Please check your network or try again later.');
+            const submitButton = document.getElementById('home_submitButton');
+            if (submitButton) submitButton.disabled = true;
+        } else {
+            console.log('reCAPTCHA Enterprise script loaded successfully');
         }
-        initializeRecaptcha('homeContactForm', 'home_submitButton', 'home_recaptcha_token', 'onHomeSubmit');
-    };
+    });
 </script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {

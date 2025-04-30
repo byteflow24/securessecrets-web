@@ -139,8 +139,9 @@
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
                             <div class="modal-body">
-                                <form method="POST" action="{{ request.path }}" class="needs-validation" novalidate>
+                                <form method="POST" action="{{ main.home }}" class="needs-validation" novalidate>
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="form_type" value="report">
                                     <input type="hidden" id="modal-secret-id" name="secret_id">
                                     <input type="hidden" id="modal-secret" name="secret">
                                     <input type="hidden" id="modal-secret-file" name="secret_file">
@@ -212,6 +213,7 @@
                 <div class="card-body p-5">
                     <form id="homeContactForm" action="{{ url_for('main.home') }}" method="post" novalidate>
                         {{ form.hidden_tag() }}
+                        <input type="hidden" name="form_type" value="contact">
                         <!-- Hidden input for reCAPTCHA token -->
                         <input type="hidden" name="recaptcha_token" id="home_recaptcha_token">
                         <!-- Name Input -->
@@ -318,16 +320,24 @@
         const secretIdInput = document.getElementById('modal-secret-id');
         const secretInput = document.getElementById('modal-secret');
         const fileInput = document.getElementById('modal-secret-file');
-
+    
         reportButtons.forEach(button => {
             button.addEventListener('click', () => {
                 const secretId = button.getAttribute('data-id');
                 const secret = button.getAttribute('data-secret');
                 const file = button.getAttribute('data-file');
-
+    
+                console.log('Report button clicked:', { secretId, secret, file });
+    
                 secretIdInput.value = secretId;
                 secretInput.value = secret;
                 fileInput.value = file || '';
+    
+                console.log('Modal inputs set:', {
+                    secretId: secretIdInput.value,
+                    secret: secretInput.value,
+                    file: fileInput.value
+                });
             });
         });
     });

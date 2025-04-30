@@ -292,16 +292,24 @@
         const secretIdInput = document.getElementById('modal-secret-id');
         const secretInput = document.getElementById('modal-secret');
         const fileInput = document.getElementById('modal-secret-file');
-
+    
         reportButtons.forEach(button => {
             button.addEventListener('click', () => {
                 const secretId = button.getAttribute('data-id');
                 const secret = button.getAttribute('data-secret');
                 const file = button.getAttribute('data-file');
-
+    
+                console.log('Report button clicked:', { secretId, secret, file });
+    
                 secretIdInput.value = secretId;
                 secretInput.value = secret;
                 fileInput.value = file || '';
+    
+                console.log('Modal inputs set:', {
+                    secretId: secretIdInput.value,
+                    secret: secretInput.value,
+                    file: fileInput.value
+                });
             });
         });
     });

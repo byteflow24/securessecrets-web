@@ -183,63 +183,67 @@ def home():
 
     # Report submission
     if request.method == "POST":
-        try:
-            secret_id = int(request.form.get('secret_id'))
-        except (ValueError, TypeError):
-            flash('Invalid secret ID.', 'danger')
-            return redirect(request.path)
+        form_type = request.form.get('form_type')
 
-        report_details = request.form.get('details', '').strip()
-        secret = request.form.get('secret')
-        secret_file = request.form.get('secret_file')
-
-        if not report_details:
-            flash('You must provide a reason for the report.', 'danger')
-            return redirect(request.path)
-
-        public_secret = PublicSecrets.query.filter_by(id=secret_id).first()
-        if not public_secret:
-            flash('The secret you are reporting does not exist.', 'danger')
-            return redirect(request.path)
-
-        send_report_email(secret_id, secret, secret_file, report_details)
-        flash('Report submitted successfully.', 'success')
-    
-    # Contact form submission
-    site_key = os.environ.get("SITE_KEY")
-    if not site_key:
-        logger.error("SITE_KEY is not set in environment variables")
-        flash('reCAPTCHA configuration error. Please try again later.', 'danger')
-    
-    if form.validate_on_submit():
-        # Log form data for debugging
-        logger.info(f"Form data: {request.form}")
-        
-        # Check for suspicious input
-        if is_suspicious_input(form.name.data) or is_suspicious_input(form.message.data):
-            logger.error("Suspicious input detected in form submission")
-            flash('Invalid input detected. Please try again.', 'danger')
-            return redirect(url_for('main.home'))
-        
-        # Get reCAPTCHA token from form
-        recaptcha_token = request.form.get('recaptcha_token')
-        
-        # Verify reCAPTCHA
-        is_valid, error_msg = create_assessment(recaptcha_token, recaptcha_action='contact_form', flask_request=request)
-        
-        if is_valid:
-            data = form.data
-            logger.info(f"Contact Form submitted successfully: {data}")
+        if form_type == 'report':
             try:
-                contact_email(data["name"], data["email"], data["phone"], data["message"])
-                flash('Your message has been sent successfully!', 'success')
-                return redirect(url_for('main.home'))
-            except Exception as e:
-                logger.error(f"Error sending email from contact: {e}")
-                flash('An error occurred while sending your message. Please try again.', 'danger')
-        else:
-            logger.error(f"reCAPTCHA error: {error_msg}")
-            flash('reCAPTCHA verification failed. Please try again.', 'danger')
+                secret_id = int(request.form.get('secret_id'))
+            except (ValueError, TypeError):
+                flash(f'Invalid secret ID. {secret_id}', 'danger')
+                return redirect(request.path)
+
+            report_details = request.form.get('details', '').strip()
+            secret = request.form.get('secret')
+            secret_file = request.form.get('secret_file')
+
+            if not report_details:
+                flash('You must provide a reason for the report.', 'danger')
+                return redirect(request.path)
+
+            public_secret = PublicSecrets.query.filter_by(id=secret_id).first()
+            if not public_secret:
+                flash('The secret you are reporting does not exist.', 'danger')
+                return redirect(request.path)
+
+            send_report_email(secret_id, secret, secret_file, report_details)
+            flash('Report submitted successfully.', 'success')
+            
+        elif form_type == 'contact':
+            # Contact form submission
+            site_key = os.environ.get("SITE_KEY")
+            if not site_key:
+                logger.error("SITE_KEY is not set in environment variables")
+                flash('reCAPTCHA configuration error. Please try again later.', 'danger')
+            
+            if form.validate_on_submit():
+                # Log form data for debugging
+                logger.info(f"Form data: {request.form}")
+                
+                # Check for suspicious input
+                if is_suspicious_input(form.name.data) or is_suspicious_input(form.message.data):
+                    logger.error("Suspicious input detected in form submission")
+                    flash('Invalid input detected. Please try again.', 'danger')
+                    return redirect(url_for('main.home'))
+                
+                # Get reCAPTCHA token from form
+                recaptcha_token = request.form.get('recaptcha_token')
+                
+                # Verify reCAPTCHA
+                is_valid, error_msg = create_assessment(recaptcha_token, recaptcha_action='contact_form', flask_request=request)
+                
+                if is_valid:
+                    data = form.data
+                    logger.info(f"Contact Form submitted successfully: {data}")
+                    try:
+                        contact_email(data["name"], data["email"], data["phone"], data["message"])
+                        flash('Your message has been sent successfully!', 'success')
+                        return redirect(url_for('main.home'))
+                    except Exception as e:
+                        logger.error(f"Error sending email from contact: {e}")
+                        flash('An error occurred while sending your message. Please try again.', 'danger')
+                else:
+                    logger.error(f"reCAPTCHA error: {error_msg}")
+                    flash('reCAPTCHA verification failed. Please try again.', 'danger')
     
     # No need for the Session timeout in this page
     session.permanent = False
@@ -809,7 +813,7 @@ def dashboard():
         try:
             secret_id = int(request.form.get('secret_id'))
         except (ValueError, TypeError):
-            flash('Invalid secret ID.', 'danger')
+            flash(f'Invalid secret ID. {secret_id}', 'danger')
             return redirect(request.path)
 
         report_details = request.form.get('details', '').strip()
@@ -1821,7 +1825,7 @@ def contact():
     else:
         base_template = 'base_0.html'
     
-    return render_template('contact.html', form=form, secret_form=secret_form, base_template=base_template, site_key=site_key, show_header=True, show_footer=True)
+    return render_template('contact.html', form=form, secret_form=secret_form, base_template=base_template, site_key=site_key, show_header=True, show_footer=False)
 
 @main.route('/privacy-policy')
 def privacy():

@@ -72,18 +72,29 @@
                                     <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
                                 {% endfor %}
                             </div>
-                            
-                            <!-- Submit Button with reCAPTCHA -->
-                            <div class="d-grid">
-                                <button class="g-recaptcha btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold"
-                                        style="font-size: 1rem;"
-                                        data-sitekey="{{ site_key }}"
-                                        data-callback="onContactSubmit"
-                                        data-action="contact_form"
-                                        id="contact_submitButton">
-                                    Submit
-                                </button>
-                            </div>
+                            {% if not current_user.is_authenticated %}
+                                <!-- Submit button with reCAPTCHA for guests -->
+                                <div class="d-grid">
+                                    <button class="g-recaptcha btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold"
+                                            style="font-size: 1rem;"
+                                            data-sitekey="{{ site_key }}"
+                                            data-callback="onContactSubmit"
+                                            data-action="contact_form"
+                                            id="contact_submitButton">
+                                        Submit
+                                    </button>
+                                </div>
+                            {% else %}
+                                <!-- Regular submit button for authenticated users -->
+                                <div class="d-grid">
+                                    <button class="btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold"
+                                            style="font-size: 1rem;"
+                                            type="submit"
+                                            id="contact_submitButton">
+                                        Submit
+                                    </button>
+                                </div>
+                            {% endif %}
                             <noscript>
                                 <div class="alert alert-danger mt-3">
                                     JavaScript is required to submit this form. Please enable JavaScript.

@@ -1772,11 +1772,12 @@ def contact():
         # Log form data for debugging
         logger.info(f"Form data: {request.form}")
         
-        # Get reCAPTCHA token from form
-        recaptcha_token = request.form.get('recaptcha_token')
-        
-        # Verify reCAPTCHA
-        is_valid, error_msg = create_assessment(recaptcha_token, recaptcha_action='contact_form', flask_request=request)
+        if not current_user.is_authenticated:
+            # Get reCAPTCHA token from form
+            recaptcha_token = request.form.get('recaptcha_token')
+            
+            # Verify reCAPTCHA
+            is_valid, error_msg = create_assessment(recaptcha_token, recaptcha_action='contact_form', flask_request=request)
         
         if is_valid:
             data = form.data
@@ -1785,7 +1786,7 @@ def contact():
             try:
                 contact_email(data["name"], data["email"], data["phone"], data["message"])
                 flash('Your message has been sent successfully!', 'success')
-                return redirect(url_for('main.home'))
+                return redirect(url_for('main.contact'))
             except Exception as e:
                 logger.error(f"Error sending email from contact: {e}")
                 flash('An error occurred while sending your message. Please try again.', 'danger')

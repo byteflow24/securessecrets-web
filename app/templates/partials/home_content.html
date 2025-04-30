@@ -139,7 +139,7 @@
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
                             <div class="modal-body">
-                                <form method="POST" action="{{ main.home }}" class="needs-validation" novalidate>
+                                <form method="POST" action="{{ url_for('main.home') }}" class="needs-validation" novalidate>
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="form_type" value="report">
                                     <input type="hidden" id="modal-secret-id" name="secret_id">

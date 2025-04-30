@@ -7,4 +7,12 @@
 <div id="content-container">
     {% include 'partials/contact_content.html' %}
 </div>
+<script>
+    // Ensure reinitialization function is available
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof window.reinitializeContactRecaptcha === 'function') {
+            window.reinitializeContactRecaptcha();
+        }
+    });
+</script>
 {% endblock %}

@@ -4,7 +4,7 @@ from flask_wtf.csrf import CSRFError
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, PublicSecrets
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -215,6 +215,12 @@ def home():
         # Log form data for debugging
         logger.info(f"Form data: {request.form}")
         
+        # Check for suspicious input
+        if is_suspicious_input(form.name.data) or is_suspicious_input(form.message.data):
+            logger.error("Suspicious input detected in form submission")
+            flash('Invalid input detected. Please try again.', 'danger')
+            return redirect(url_for('main.home'))
+        
         # Get reCAPTCHA token from form
         recaptcha_token = request.form.get('recaptcha_token')
         
@@ -224,7 +230,6 @@ def home():
         if is_valid:
             data = form.data
             logger.info(f"Contact Form submitted successfully: {data}")
-
             try:
                 contact_email(data["name"], data["email"], data["phone"], data["message"])
                 flash('Your message has been sent successfully!', 'success')
@@ -1772,27 +1777,35 @@ def contact():
         # Log form data for debugging
         logger.info(f"Form data: {request.form}")
         
+        # Check for suspicious input
+        if is_suspicious_input(form.name.data) or is_suspicious_input(form.message.data):
+            logger.error("Suspicious input detected in form submission")
+            flash('Invalid input detected. Please try again.', 'danger')
+            return redirect(url_for('main.contact'))
+        
+        # Get reCAPTCHA token from form (only for non-authenticated users)
+        recaptcha_token = request.form.get('recaptcha_token')
+        
+        # Verify reCAPTCHA for non-authenticated users
         if not current_user.is_authenticated:
-            # Get reCAPTCHA token from form
-            recaptcha_token = request.form.get('recaptcha_token')
-            
-            # Verify reCAPTCHA
             is_valid, error_msg = create_assessment(recaptcha_token, recaptcha_action='contact_form', flask_request=request)
+            if not is_valid:
+                logger.error(f"reCAPTCHA error: {error_msg}")
+                flash('reCAPTCHA verification failed. Please try again.', 'danger')
+                return redirect(url_for('main.contact'))
+        else:
+            is_valid = True  # Skip reCAPTCHA for authenticated users
         
         if is_valid:
             data = form.data
             logger.info(f"Contact Form submitted successfully: {data}")
-
             try:
                 contact_email(data["name"], data["email"], data["phone"], data["message"])
                 flash('Your message has been sent successfully!', 'success')
-                return redirect(url_for('main.contact'))
+                return redirect(url_for('main.home'))
             except Exception as e:
                 logger.error(f"Error sending email from contact: {e}")
                 flash('An error occurred while sending your message. Please try again.', 'danger')
-        else:
-            logger.error(f"reCAPTCHA error: {error_msg}")
-            flash('reCAPTCHA verification failed. Please try again.', 'danger')
     
     if current_user.is_authenticated:
         base_template = 'base.html'
@@ -1806,7 +1819,8 @@ def contact():
                                    secret_form=secret_form,
                                    base_template=base_template,
                                    site_key=site_key),
-            'title': 'Contact Us - Secures Secrets'
+            'title': 'Contact Us - Secures Secrets',
+            'reinitializeRecaptcha': 'contact' if not current_user.is_authenticated else None
         })
     
     return render_template('contact.html', form=form, secret_form=secret_form, base_template=base_template, site_key=site_key, show_header=True, show_footer=True)

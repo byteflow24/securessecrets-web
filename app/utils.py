@@ -277,6 +277,27 @@ PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT_ID")
 # Generating request id
 request_id = uuid.uuid4()
 
+def is_suspicious_input(text: str) -> bool:
+    """
+    Check if input contains HTML or suspicious patterns indicative of bot activity.
+    """
+    if not text:
+        return False
+    # Check for HTML tags or common bot patterns
+    html_pattern = re.compile(r'<[^>]+>')
+    suspicious_patterns = [
+        r'<!DOCTYPE', r'<html', r'<script', r'<iframe', r'http://', r'https://',
+        r'Wildberries', r'free attempts', r'win up to'
+    ]
+    if html_pattern.search(text):
+        logger.warning(f"Suspicious HTML detected in input: {text[:100]}...")
+        return True
+    for pattern in suspicious_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            logger.warning(f"Suspicious pattern detected in input: {text[:100]}...")
+            return True
+    return False
+
 # Verify reCAPTCHA token
 def create_assessment(
     recaptcha_token: str,

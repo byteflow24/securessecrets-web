@@ -7,4 +7,12 @@
 <div id="content-container">
     {% include 'partials/home_content.html' %}
 </div>
+<script>
+    // Ensure reinitialization function is available
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof window.reinitializeHomeRecaptcha === 'function') {
+            window.reinitializeHomeRecaptcha();
+        }
+    });
+</script>
 {% endblock %}

@@ -1824,8 +1824,9 @@ def contact():
             })
     else:
         base_template = 'base_0.html'
+        show_footer = False
     
-    return render_template('contact.html', form=form, secret_form=secret_form, base_template=base_template, site_key=site_key, show_header=True, show_footer=False)
+    return render_template('contact.html', form=form, secret_form=secret_form, base_template=base_template, site_key=site_key, show_header=True, show_footer=True)
 
 @main.route('/privacy-policy')
 def privacy():

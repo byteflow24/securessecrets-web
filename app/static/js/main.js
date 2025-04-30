@@ -4,23 +4,32 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch(url, {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
-        .then(response => response.json())
+        .then(response => {
+            if (response.status === 403 && response.headers.get('content-type').includes('application/json')) {
+                return response.json().then(data => {
+                    if (data.redirect) {
+                        console.log(`Redirecting to ${data.redirect} for non-authenticated user`);
+                        window.location.href = data.redirect;
+                    } else {
+                        throw new Error('Unauthorized AJAX request');
+                    }
+                });
+            }
+            return response.json();
+        })
         .then(data => {
+            if (!data.html) return; // Already redirected
             // Update content
             const targetElement = document.getElementById(targetElementId);
             targetElement.innerHTML = data.html;
             document.title = data.title;
 
-            // Reinitialize reCAPTCHA
-            if (data.reinitializeRecaptcha === 'home' && typeof window.reinitializeHomeRecaptcha === 'function') {
-                window.reinitializeHomeRecaptcha();
-            } else if (data.reinitializeRecaptcha === 'contact' && typeof window.reinitializeContactRecaptcha === 'function') {
-                window.reinitializeContactRecaptcha();
-            } else if (data.reinitializeRecaptcha) {
-                console.warn(`No reCAPTCHA reinitialization function for ${data.reinitializeRecaptcha}`);
+            // Reinitialize reCAPTCHA (only needed for other pages like home)
+            if (data.reinitializeRecaptcha && typeof window[`reinitialize${data.reinitializeRecaptcha.charAt(0).toUpperCase() + data.reinitializeRecaptcha.slice(1)}Recaptcha`] === 'function') {
+                window[`reinitialize${data.reinitializeRecaptcha.charAt(0).toUpperCase() + data.reinitializeRecaptcha.slice(1)}Recaptcha`]();
             }
 
-            // Ensure scripts in injected content are executed
+            // Execute scripts in injected content
             const scripts = targetElement.querySelectorAll('script');
             scripts.forEach(oldScript => {
                 const newScript = document.createElement('script');
@@ -30,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(error => {
             console.error('Error loading content:', error);
-            alert('Failed to load content. Please refresh the page.');
+            window.location.href = url; // Fallback to full page load
         });
     }
 

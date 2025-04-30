@@ -1,7 +1,9 @@
 {% extends base_template %}
 
 {% block content %}
-<!-- Existing HTML unchanged -->
+<!-- Adding new secret modal -->
+{% include "partials/new_secret_modal.html" %}
+<!-- Main Content -->
 <main class="mb-5">
     <div class="container px-4 px-lg-5">
         <div class="row gx-4 gx-lg-5 justify-content-center">
@@ -78,7 +80,8 @@
                                             data-sitekey="{{ site_key }}"
                                             data-callback="onContactSubmit"
                                             data-action="contact_form"
-                                            id="contact_submitButton">
+                                            id="contact_submitButton"
+                                            disabled>
                                         Submit
                                     </button>
                                 </div>
@@ -107,70 +110,38 @@
 </main>
 
 {% if not current_user.is_authenticated %}
+    <!-- reCAPTCHA Enterprise Script -->
+    <script src="https://www.google.com/recaptcha/enterprise.js?render={{ site_key }}&badge=bottomright" async defer></script>
     <script>
-        function initializeRecaptcha(formId, buttonId, tokenInputId, callbackName) {
-            const form = document.getElementById(formId);
-            const submitButton = document.getElementById(buttonId);
-            const tokenInput = document.getElementById(tokenInputId);
-            let isSubmitting = false;
-
-            if (!form || !submitButton || !tokenInput) {
-                console.error(`Form elements missing for ${formId}: form=${!!form}, button=${!!submitButton}, tokenInput=${!!tokenInput}`);
-                return;
-            }
-
-            // Clear token input
-            tokenInput.value = '';
-            console.log(`Cleared reCAPTCHA token for ${formId}`);
-
-            // Reset reCAPTCHA widget
-            if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
-                grecaptcha.enterprise.ready(() => {
-                    console.log(`reCAPTCHA ready for ${formId}`);
-                    submitButton.disabled = false;
-                });
+        document.addEventListener('DOMContentLoaded', () => {
+            const submitButton = document.getElementById('contact_submitButton');
+            if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
+                console.error('reCAPTCHA Enterprise script failed to load');
+                if (submitButton) submitButton.disabled = true;
             } else {
-                console.warn(`reCAPTCHA not loaded yet for ${formId}. Waiting...`);
+                console.log('reCAPTCHA Enterprise script loaded successfully');
+                grecaptcha.enterprise.ready(() => {
+                    if (submitButton) submitButton.disabled = false;
+                });
             }
+        });
 
-            // Handle reCAPTCHA callback
-            window[callbackName] = function(token) {
-                if (token && !isSubmitting) {
-                    console.log(`reCAPTCHA token generated for ${formId}:`, token);
-                    tokenInput.value = token;
-                    console.log(`Token set in hidden input for ${formId}:`, tokenInput.value);
-                    isSubmitting = true;
-                    submitButton.disabled = true;
-                    submitButton.textContent = 'Submitting...';
+        function onContactSubmit(token) {
+            console.log('reCAPTCHA token generated for contact form:', token);
+            if (token) {
+                const tokenInput = document.getElementById('contact_recaptcha_token');
+                tokenInput.value = token;
+                console.log('Token set in hidden input:', tokenInput.value);
+                const form = document.getElementById('contactPageForm');
+                if (form) {
                     form.submit();
                 } else {
-                    console.error(`No token generated for ${formId} or already submitting`);
-                    submitButton.disabled = false;
-                    submitButton.textContent = 'Submit';
-                    isSubmitting = false;
+                    console.error('Contact form not found');
                 }
-            };
-
-            // Prevent manual form submission
-            form.addEventListener('submit', (e) => {
-                if (!isSubmitting && !form.querySelector('button:not(.g-recaptcha)')) {
-                    e.preventDefault();
-                    console.warn(`Form submission blocked for ${formId}: Waiting for reCAPTCHA token`);
-                }
-            });
-        }
-
-        // Initialize reCAPTCHA
-        initializeRecaptcha('contactPageForm', 'contact_submitButton', 'contact_recaptcha_token', 'onContactSubmit');
-
-        // Expose reinitialize function for AJAX
-        window.reinitializeContactRecaptcha = function() {
-            console.log('Reinitializing reCAPTCHA for contact form after AJAX update');
-            if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
-                grecaptcha.enterprise.reset();
+            } else {
+                console.error('No token generated for contact form');
             }
-            initializeRecaptcha('contactPageForm', 'contact_submitButton', 'contact_recaptcha_token', 'onContactSubmit');
-        };
+        }
     </script>
 {% endif %}
 {% endblock %}

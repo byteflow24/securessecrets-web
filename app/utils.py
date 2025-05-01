@@ -260,7 +260,6 @@ def convert_utc_to_local(utc_time, time_zone):
 
 
 # Configures PayPal Payment Gateway
-# TAP_PROD_SECRET_KEY = os.environ.get("TAP_PROD_SECRET_KEY")
 ####################### LIVE ACTION #######################
 PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_LIVE_CLIENT_ID")
 PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_LIVE_CLIENT_SECRET")
@@ -2109,7 +2108,7 @@ def send_secret_email(email, secret_url):
         raise  # Re-raise the exception to be handled by Celery
 
 # contact us email
-def contact_email(name, email, phone, message):
+def contact_email(name, email, subject, message):
     # User email setup
     msg = MIMEMultipart("related")
     msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
@@ -2126,7 +2125,7 @@ def contact_email(name, email, phone, message):
         f"<ul>"
         f"<li><strong>Name:</strong> {name}</li>"
         f"<li><strong>Email:</strong> {email}</li>"
-        f"<li><strong>Phone:</strong> {phone}</li>"
+        f"<li><strong>Subject:</strong> {subject}</li>"
         f"</ul>"
         f"<h3>Your Message</h3>"
         f"<p>{message}</p>"
@@ -2162,7 +2161,7 @@ def contact_email(name, email, phone, message):
         f"<ul>"
         f"<li><strong>Name:</strong> {name}</li>"
         f"<li><strong>Email:</strong> {email}</li>"
-        f"<li><strong>Phone:</strong> {phone}</li>"
+        f"<li><strong>Subject:</strong> {subject}</li>"
         f"<li><strong>Message:</strong><br>{message}</li>"
         f"</ul>"
         f"<p>Sent from the contact form on your site.</p>"

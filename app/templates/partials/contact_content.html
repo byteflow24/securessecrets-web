@@ -34,33 +34,57 @@
                             {{ form.hidden_tag() }}
                             <!-- Hidden input for reCAPTCHA token -->
                             <input type="hidden" name="recaptcha_token" id="contact_recaptcha_token">
-                            <!-- Name Input -->
+                            {% if not current_user.is_authenticated %}
+                                <div class="row mb-3">
+                                    <!-- Name Input -->
+                                    <div class="form-floating col-md-6">
+                                        {{ form.name(class_="form-control rounded-3 shadow-sm", id="contact_name", placeholder="Enter your name...") }}
+                                        <label for="contact_name" class="text-muted" style="font-size: 1rem;">Your Name</label>
+                                        {% for error in form.name.errors %}
+                                            <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                    
+                                    <!-- Email Input -->
+                                    <div class="form-floating col-md-6">
+                                        {{ form.email(class_="form-control rounded-3 shadow-sm", id="contact_email", placeholder="Enter your email...") }}
+                                        <label for="contact_email" class="text-muted" style="font-size: 1rem;">Email Address</label>
+                                        {% for error in form.email.errors %}
+                                            <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% else %}
+                                <div class="row mb-3">
+                                    <!-- Name Input -->
+                                    <div class="form-floating col-md-6">
+                                        {{ form.name(class_="form-control rounded-3 shadow-sm", id="contact_name", autocomplete="contact_name", readonly=true, value=current_user.username) }}
+                                        <label for="contact_name" class="text-muted" style="font-size: 1rem;">Username</label>
+                                        {% for error in form.name.errors %}
+                                            <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                    
+                                    <!-- Email Input -->
+                                    <div class="form-floating col-md-6">
+                                        {{ form.email(class_="form-control rounded-3 shadow-sm", id="contact_email", autocomplete="contact_email", readonly=true) }}
+                                        <label for="contact_email" class="text-muted" style="font-size: 1rem;">Email Address</label>
+                                        {% for error in form.email.errors %}
+                                            <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            <!-- Subject Input -->
                             <div class="form-floating mb-3">
-                                {{ form.name(class_="form-control rounded-3 shadow-sm", id="contact_name", placeholder="Enter your name...") }}
-                                <label for="contact_name" class="text-muted" style="font-size: 1rem;">Your Name</label>
-                                {% for error in form.name.errors %}
+                                {{ form.subject(class_="form-control rounded-3 shadow-sm", id="contact_subject") }}
+                                <label for="contact_subject" class="text-muted" style="font-size: 1rem;">Subject</label>
+                                {% for error in form.subject.errors %}
                                     <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
                                 {% endfor %}
                             </div>
-                            
-                            <!-- Email Input -->
-                            <div class="form-floating mb-3">
-                                {{ form.email(class_="form-control rounded-3 shadow-sm", id="contact_email", placeholder="Enter your email...") }}
-                                <label for="contact_email" class="text-muted" style="font-size: 1rem;">Email Address</label>
-                                {% for error in form.email.errors %}
-                                    <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                            
-                            <!-- Phone Input -->
-                            <div class="form-floating mb-3">
-                                {{ form.phone(class_="form-control rounded-3 shadow-sm", id="contact_phone", placeholder="Enter your phone number...") }}
-                                <label for="contact_phone" class="text-muted" style="font-size: 1rem;">Phone Number</label>
-                                {% for error in form.phone.errors %}
-                                    <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                            
+
                             <!-- Message Input -->
                             <div class="form-floating mb-3">
                                 {{ form.message(class_="form-control rounded-3 shadow-sm", id="contact_message", placeholder="Enter your message...", style="height: 10rem;") }}

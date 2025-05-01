@@ -235,7 +235,7 @@ def home():
                     data = form.data
                     logger.info(f"Contact Form submitted successfully: {data}")
                     try:
-                        contact_email(data["name"], data["email"], data["phone"], data["message"])
+                        contact_email(data["name"], data["email"], data["subject"], data["message"])
                         flash('Your message has been sent successfully!', 'success')
                         return redirect(url_for('main.home'))
                     except Exception as e:
@@ -597,7 +597,7 @@ def update_profile():
     login = LoginHistory.query.filter_by(user_id=current_user.id).all()
     last_login = LoginHistory.query.filter_by(user_id=current_user.id).order_by(LoginHistory.login_time.desc()).first()
     if pr_form.validate_on_submit():
-        # Handle profile update (only profile details)
+        # Handle profile update (only phone details)
         current_user.username = pr_form.username.data
         current_user.phone = pr_form.phone.data
         current_user.country_code = pr_form.code.data
@@ -1770,7 +1770,7 @@ def about():
 @main.route('/contact', methods=['GET' ,'POST'])
 def contact():
     secret_form = SecretForm()
-    form = ContactUsForm()
+    form = ContactUsForm(obj=current_user)
     site_key = os.environ.get("SITE_KEY")
     
     if not site_key:
@@ -1804,7 +1804,7 @@ def contact():
             data = form.data
             logger.info(f"Contact Form submitted successfully: {data}")
             try:
-                contact_email(data["name"], data["email"], data["phone"], data["message"])
+                contact_email(data["name"], data["email"], data["subject"], data["message"])
                 flash('Your message has been sent successfully!', 'success')
                 return redirect(url_for('main.contact'))
             except Exception as e:

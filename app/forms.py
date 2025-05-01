@@ -225,6 +225,6 @@ class CardDetailsForm(FlaskForm):
 class ContactUsForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired()])
     email = EmailField("Email", validators=[DataRequired(), Email(), email_domain_validator])
-    phone = TelField("Phone Number", validators=[DataRequired()])
+    subject = StringField("Subject", validators=[DataRequired(), Length(min=3, max=50, message="Subject should contain 3 to 50 letters")])
     message = TextAreaField("Message", validators=[DataRequired()])
     submit = SubmitField("Send Message")

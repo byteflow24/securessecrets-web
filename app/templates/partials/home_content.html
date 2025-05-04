@@ -307,7 +307,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
             console.error('reCAPTCHA Enterprise script failed to load');
-            alert('reCAPTCHA failed to load. Please check your network or try again later.');
+            // alert('reCAPTCHA failed to load. Please check your network or try again later.');
             const submitButton = document.getElementById('home_submitButton');
             if (submitButton) submitButton.disabled = true;
         } else {

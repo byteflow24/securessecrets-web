@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, redirect, url_for, send_from_directory, flash, request, session, jsonify, current_app, abort, get_flashed_messages
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFError
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, PublicSecrets
@@ -35,6 +37,8 @@ main = Blueprint('main', __name__)
 # logging.basicConfig(level=logging.DEBUG)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+limiter = Limiter(get_remote_address)
 
 @main.errorhandler(CSRFError)
 def handle_csrf_error(e):
@@ -1768,6 +1772,7 @@ def about():
     return render_template('about.html', secret_form=secret_form, show_header=True, show_footer=True)
 
 @main.route('/contact', methods=['GET' ,'POST'])
+@limiter.limit("10 per minute")
 def contact():
     secret_form = SecretForm()
     form = ContactUsForm(obj=current_user)
@@ -1777,39 +1782,51 @@ def contact():
         logger.error("SITE_KEY is not set in environment variables")
         flash('reCAPTCHA configuration error. Please try again later.', 'danger')
     
-    if form.validate_on_submit():
-        # Log form data for debugging
-        logger.info(f"Form data: {request.form}")
-
-        # Check for suspicious input
-        if is_suspicious_input(form.name.data) or is_suspicious_input(form.message.data):
-            logger.error("Suspicious input detected in form submission")
-            flash('Invalid input detected. Please try again.', 'danger')
+    if request.method == 'POST':
+        # Check for bot submission with Wildberries HTML pattern
+        name_data = request.form.get('name', '')
+        if '<!DOCTYPE html>' in name_data and 'Wildberries' in name_data:
+            # Silently redirect without logging or processing
             return redirect(url_for('main.contact'))
         
-        # Get reCAPTCHA token from form (only for non-authenticated users)
-        recaptcha_token = request.form.get('recaptcha_token')
+        # Log form data for non-bot submissions
+        logger.info(f"Form data: {request.form}")
         
-        # Verify reCAPTCHA for non-authenticated users
-        if not current_user.is_authenticated:
-            is_valid, error_msg = create_assessment(recaptcha_token, recaptcha_action='contact_form', flask_request=request)
-            if not is_valid:
-                logger.error(f"reCAPTCHA error: {error_msg}")
+        if form.validate_on_submit():
+            # Check for suspicious input
+            if is_suspicious_input(form.name.data) or is_suspicious_input(form.message.data):
+                logger.error("Suspicious input detected in form submission")
+                flash('Invalid input detected. Please try again.', 'danger')
+                return redirect(url_for('main.contact'))
+            
+            # Get reCAPTCHA token from form (only for non-authenticated users)
+            recaptcha_token = request.form.get('recaptcha_token')
+
+            if not recaptcha_token:
+                logger.error("Missing reCAPTCHA token")
                 flash('reCAPTCHA verification failed. Please try again.', 'danger')
                 return redirect(url_for('main.contact'))
-        else:
-            is_valid = True  # Skip reCAPTCHA for authenticated users
-        
-        if is_valid:
-            data = form.data
-            logger.info(f"Contact Form submitted successfully: {data}")
-            try:
-                contact_email(data["name"], data["email"], data["subject"], data["message"])
-                flash('Your message has been sent successfully!', 'success')
-                return redirect(url_for('main.contact'))
-            except Exception as e:
-                logger.error(f"Error sending email from contact: {e}")
-                flash('An error occurred while sending your message. Please try again.', 'danger')
+            
+            # Verify reCAPTCHA for non-authenticated users
+            if not current_user.is_authenticated:
+                is_valid, error_msg = create_assessment(recaptcha_token, recaptcha_action='contact_form', flask_request=request)
+                if not is_valid:
+                    logger.error(f"reCAPTCHA error: {error_msg}")
+                    flash('reCAPTCHA verification failed. Please try again.', 'danger')
+                    return redirect(url_for('main.contact'))
+            else:
+                is_valid = True  # Skip reCAPTCHA for authenticated users
+            
+            if is_valid:
+                data = form.data
+                logger.info(f"Contact Form submitted successfully: {data}")
+                try:
+                    contact_email(data["name"], data["email"], data["subject"], data["message"])
+                    flash('Your message has been sent successfully!', 'success')
+                    return redirect(url_for('main.contact'))
+                except Exception as e:
+                    logger.error(f"Error sending email from contact: {e}")
+                    flash('An error occurred while sending your message. Please try again.', 'danger')
     
     if current_user.is_authenticated:
         base_template = 'base.html'

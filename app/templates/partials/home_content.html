@@ -188,7 +188,6 @@
                             <div class="modal-body">
                                 <form method="POST" action="{{ url_for('main.home') }}" class="needs-validation" novalidate id="report-form-{{ public.id }}">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="hidden" name="form_type" value="report">
                                     <input type="hidden" id="modal-secret-id-{{ public.id }}" name="secret_id">
                                     <input type="hidden" id="modal-secret-{{ public.id }}" name="secret">
                                     <input type="hidden" id="modal-secret-file-{{ public.id }}" name="secret_file">

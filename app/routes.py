@@ -184,70 +184,30 @@ def home():
 
         # Append the public secret to the list
         decrypted_secrets.append(public_secret)
-    # Site key for the reCAPTCHA
-    site_key = os.environ.get("SITE_KEY")
+
     # Report submission
     if request.method == "POST":
-        form_type = request.form.get('form_type')
+        try:
+            secret_id = int(request.form.get('secret_id'))
+        except (ValueError, TypeError):
+            flash(f'Invalid secret ID. {secret_id}', 'danger')
+            return redirect(request.path)
 
-        if form_type == 'report':
-            try:
-                secret_id = int(request.form.get('secret_id'))
-            except (ValueError, TypeError):
-                flash(f'Invalid secret ID. {secret_id}', 'danger')
-                return redirect(request.path)
+        report_details = request.form.get('details', '').strip()
+        secret = request.form.get('secret')
+        secret_file = request.form.get('secret_file')
 
-            report_details = request.form.get('details', '').strip()
-            secret = request.form.get('secret')
-            secret_file = request.form.get('secret_file')
+        if not report_details:
+            flash('You must provide a reason for the report.', 'danger')
+            return redirect(request.path)
 
-            if not report_details:
-                flash('You must provide a reason for the report.', 'danger')
-                return redirect(request.path)
+        public_secret = PublicSecrets.query.filter_by(id=secret_id).first()
+        if not public_secret:
+            flash('The secret you are reporting does not exist.', 'danger')
+            return redirect(request.path)
 
-            public_secret = PublicSecrets.query.filter_by(id=secret_id).first()
-            if not public_secret:
-                flash('The secret you are reporting does not exist.', 'danger')
-                return redirect(request.path)
-
-            send_report_email(secret_id, secret, secret_file, report_details)
-            flash('Report submitted successfully.', 'success')
-            
-        elif form_type == 'contact':
-            # Contact form submission
-            if not site_key:
-                logger.error("SITE_KEY is not set in environment variables")
-                flash('reCAPTCHA configuration error. Please try again later.', 'danger')
-            
-            if form.validate_on_submit():
-                # Log form data for debugging
-                logger.info(f"Form data: {request.form}")
-                
-                # Check for suspicious input
-                if is_suspicious_input(form.name.data) or is_suspicious_input(form.message.data):
-                    logger.error("Suspicious input detected in form submission")
-                    flash('Invalid input detected. Please try again.', 'danger')
-                    return redirect(url_for('main.home'))
-                
-                # Get reCAPTCHA token from form
-                recaptcha_token = request.form.get('recaptcha_token')
-                
-                # Verify reCAPTCHA
-                is_valid, error_msg = create_assessment(recaptcha_token, recaptcha_action='contact_form', flask_request=request)
-                
-                if is_valid:
-                    data = form.data
-                    logger.info(f"Contact Form submitted successfully: {data}")
-                    try:
-                        contact_email(data["name"], data["email"], data["subject"], data["message"])
-                        flash('Your message has been sent successfully!', 'success')
-                        return redirect(url_for('main.home'))
-                    except Exception as e:
-                        logger.error(f"Error sending email from contact: {e}")
-                        flash('An error occurred while sending your message. Please try again.', 'danger')
-                else:
-                    logger.error(f"reCAPTCHA error: {error_msg}")
-                    flash('reCAPTCHA verification failed. Please try again.', 'danger')
+        send_report_email(secret_id, secret, secret_file, report_details)
+        flash('Report submitted successfully.', 'success')
     
     # No need for the Session timeout in this page
     session.permanent = False
@@ -256,11 +216,10 @@ def home():
         return jsonify({
             'html': render_template('partials/home_content.html',
                                     public_secrets=decrypted_secrets,
-                                    form=form,
-                                    site_key=site_key),
+                                    form=form),
             'title': 'Home - Secures Secrets'
         })
-    return render_template('home.html', show_header=True, show_footer=True, public_secrets=decrypted_secrets, form=form, site_key=site_key)
+    return render_template('home.html', show_header=True, show_footer=True, public_secrets=decrypted_secrets, form=form)
 
 @main.route('/how-it-works', methods=['GET'])
 def how_works():
@@ -1776,7 +1735,8 @@ def about():
             })
     return render_template('about.html', secret_form=secret_form, show_header=True, show_footer=True)
 
-@main.route('/contact', methods=['GET' ,'POST'])
+# Contact server
+@main.route('/contact', methods=['GET', 'POST'])
 @limiter.limit("10 per minute")
 def contact():
     secret_form = SecretForm()
@@ -1786,7 +1746,19 @@ def contact():
     if not site_key:
         logger.error("SITE_KEY is not set in environment variables")
         flash('reCAPTCHA configuration error. Please try again later.', 'danger')
-    
+        return redirect(url_for('main.home'))  # Redirect to home if reCAPTCHA is misconfigured
+
+    # For non-authenticated users, require a reCAPTCHA token even for GET requests
+    if not current_user.is_authenticated and request.method == 'GET':
+        recaptcha_token = request.args.get('recaptcha_token')
+        if not recaptcha_token:
+            logger.warning("Missing reCAPTCHA token for GET request")
+            return "reCAPTCHA verification required", 403  # Block GET requests without a token
+        is_valid, error_msg = create_assessment(recaptcha_token, recaptcha_action='contact_page_load', flask_request=request)
+        if not is_valid:
+            logger.error(f"reCAPTCHA error on GET: {error_msg}")
+            return "reCAPTCHA verification failed", 403
+
     if request.method == 'POST':
         # Check for bot submission with Wildberries HTML pattern
         name_data = request.form.get('name', '')

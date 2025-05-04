@@ -149,6 +149,18 @@
                 grecaptcha.enterprise.ready(() => {
                     if (submitButton) submitButton.disabled = false;
                     if (errorMessage) errorMessage.classList.add('d-none');
+                    // Generate token for page load
+                    grecaptcha.enterprise.execute('{{ site_key }}', { action: 'contact_page_load' }).then(token => {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('recaptcha_token', token);
+                        window.history.replaceState(null, '', url.toString());
+                    }).catch(error => {
+                        console.error('reCAPTCHA token generation for page load failed:', error);
+                        if (errorMessage) {
+                            errorMessage.textContent = 'reCAPTCHA verification failed. Please try again.';
+                            errorMessage.classList.remove('d-none');
+                        }
+                    });
                 });
             } else {
                 // Wait for reCAPTCHA to load
@@ -158,6 +170,18 @@
                         grecaptcha.enterprise.ready(() => {
                             if (submitButton) submitButton.disabled = false;
                             if (errorMessage) errorMessage.classList.add('d-none');
+                            // Generate token for page load
+                            grecaptcha.enterprise.execute('{{ site_key }}', { action: 'contact_page_load' }).then(token => {
+                                const url = new URL(window.location.href);
+                                url.searchParams.set('recaptcha_token', token);
+                                window.history.replaceState(null, '', url.toString());
+                            }).catch(error => {
+                                console.error('reCAPTCHA token generation for page load failed:', error);
+                                if (errorMessage) {
+                                    errorMessage.textContent = 'reCAPTCHA verification failed. Please try again.';
+                                    errorMessage.classList.remove('d-none');
+                                }
+                            });
                         });
                         clearInterval(checkRecaptcha);
                     }

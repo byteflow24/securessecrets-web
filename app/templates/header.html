@@ -4,7 +4,7 @@
             <!-- Logo -->
             {% if not current_user.is_authenticated %}
                 <a href="{{ url_for('main.home') }}" class="navbar-brand d-inline-flex align-items-center">
-                    <img src="{{ url_for('static', filename='assets/images/logoss.png') }}" alt="Logo" style="height: 40px; padding-left: 15px;">
+                    <img src="{{ url_for('static', filename='assets/images/logoss.webp') }}" alt="Logo" style="height: 40px; padding-left: 15px;">
                 </a>
             {% else %}
                 <a href="#" class="navbar-brand d-inline-flex align-items-center dynamic-link" id="logo-link" data-url="{{ url_for('main.login') }}">

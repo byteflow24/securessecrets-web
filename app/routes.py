@@ -1184,19 +1184,24 @@ def only_for_you(token):
             shared_secret.received_time = now
             shared_secret.delete_at = now + timedelta(hours=1)
             db.session.commit()
-        else:
-            # Check if delete_at is not None and if the current time is past the delete time
-            if shared_secret.delete_at and now > shared_secret.delete_at:
-                # Delete the secret after 1 minute of opening
-                db.session.delete(shared_secret)
-                db.session.commit()
-                return "The link has expired.", 404
-            
+        
+        # Check if delete_at is not None and if the current time is past the delete time
+        if shared_secret.delete_at and now > shared_secret.delete_at:
+            # Delete the secret after 1 hour of opening
+            db.session.delete(shared_secret)
+            db.session.commit()
+            return "The link has expired.", 404
+        
+        # Calculate remaining time in seconds
+        remaining_time = (shared_secret.delete_at - now).total_seconds() if shared_secret.delete_at else 0
+        if remaining_time < 0:
+            remaining_time = 0
+
         # Retrieve the associated secret
         secret = db.get_or_404(Secret, shared_secret.secret_id)
         # Decrypting the secret
         decrypted_secret_content = decrypt_secret(secret.secret)
-        return render_template('display_secret.html', decrypted_secret=decrypted_secret_content, secret=secret)
+        return render_template('display_secret.html', decrypted_secret=decrypted_secret_content, secret=secret, remaining_time=int(remaining_time))
     else:
         return "Invalid or expired link", 404
 

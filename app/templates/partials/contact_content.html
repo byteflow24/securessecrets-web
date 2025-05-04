@@ -38,7 +38,7 @@
                                 <div class="row mb-3">
                                     <!-- Name Input -->
                                     <div class="form-floating col-md-6">
-                                        {{ form.name(class_="form-control rounded-3 shadow-sm", oninput="this.value = this.value.replace(/[<>]/g, '')", id="contact_name", placeholder="Enter your name...") }}
+                                        {{ form.name(class_="form-control rounded-3 shadow-sm", oninput="this.value = this.value.replace(/[<>]/g, '')", id="contact_name", autocomplete="contact_name", placeholder="Enter your name...") }}
                                         <label for="contact_name" class="text-muted" style="font-size: 1rem;">Your Name</label>
                                         {% for error in form.name.errors %}
                                             <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
@@ -47,7 +47,7 @@
                                     
                                     <!-- Email Input -->
                                     <div class="form-floating col-md-6">
-                                        {{ form.email(class_="form-control rounded-3 shadow-sm", id="contact_email", placeholder="Enter your email...") }}
+                                        {{ form.email(class_="form-control rounded-3 shadow-sm", id="contact_email", autocomplete="contact_email", placeholder="Enter your email...") }}
                                         <label for="contact_email" class="text-muted" style="font-size: 1rem;">Email Address</label>
                                         {% for error in form.email.errors %}
                                             <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>

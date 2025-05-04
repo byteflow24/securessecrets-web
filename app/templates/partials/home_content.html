@@ -17,7 +17,7 @@
     .news-content p {
         margin-top: 2px;
         margin-bottom: 2px;
-        font-size: 0.8rem;
+        font-size: 0.875rem; /* Increased from 0.8rem for better readability */
     }
 
     .news-content hr {
@@ -45,11 +45,56 @@
         border-radius: 15px;
         box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.1);
     }
+
+    .news-section .text-secondary {
+        color: #4a4a4a; /* Darker shade for better contrast */
+    }
+
+    .small {
+        font-size: 0.875rem; /* Increased from implied smaller size for readability */
+    }
+
+    /* Styles for Why SecuresSecrets Section */
+    .benefit-card {
+        background-color: #fff;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s;
+    }
+
+    .benefit-card:hover {
+        transform: translateY(-5px);
+    }
+
+    .benefit-card i {
+        color: #14a184;
+        font-size: 2rem;
+        margin-bottom: 10px;
+    }
+
+    .benefit-card h5 {
+        font-size: 1.2rem;
+        color: #2d2d2d;
+        margin-bottom: 10px;
+    }
+
+    .benefit-card p {
+        font-size: 0.9375rem; /* Increased from 0.9rem for better readability */
+        color: #555;
+    }
+
+    @media (max-width: 768px) {
+        .benefit-card {
+            margin-bottom: 15px;
+        }
+    }
 </style>
 {% endblock %}
 
 <!-- Hero Section -->
-<div class="container px-4 py-5" style="background-image: url('{{ url_for('static', filename='assets/images/bg_home.png') }}'); background-size: cover; background-position: center; border-radius: 15px;">
+<div class="container px-4" style="background-image: url('{{ url_for('static', filename='assets/images/bg_home.webp') }}'); background-size: cover; background-position: center; border-radius: 15px;">
     <div class="row align-items-center g-5 py-5">
         <div class="col-lg-6 text-white">
             <h1 class="display-2 fw-bold lh-1 mb-3">
@@ -57,7 +102,9 @@
             </h1>
             <p class="lead" style="font-size: 1rem; max-width: 370px;">Store private messages or a last will, set a timer, and let us handle the rest—whether it's sharing with loved ones or publicly.</p>
             <div class="d-grid gap-2 d-md-flex justify-content-md-start">
-                <a href="{{ url_for('main.how_works') }}" class="btn btn-primary px-4">Learn More</a>
+                <a href="#" data-url="{{ url_for('main.how_works') }}" class="btn btn-primary px-4 dynamic-link {% if request.endpoint == 'main.how_works' %}active{% endif %}">
+                    Learn How SecuresSecrets Works
+                </a>
             </div>
         </div>
     </div>
@@ -91,7 +138,7 @@
             </p>
             <p class="small">Want to share your own? Join the community and let your voice be heard.</p>
             <div class="d-grid gap-2 d-md-flex justify-content-md-start">
-                <a href="{{ url_for('main.pricing') }}" class="btn btn-primary mt-4 px-4">
+                <a href="#" data-url="{{ url_for('main.pricing') }}" class="btn btn-primary mt-4 px-4  dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}">
                     ✍️ Share Your Secret — Join Now
                 </a>
             </div>
@@ -104,17 +151,17 @@
                 <div class="news-content">
                     <div class="d-flex justify-content-between align-items-center">
                         <p class="text-secondary"><strong>@{{ public.username }}</strong></p>
-                        <p style="font-size: 0.75rem;">{{ public.display_time }}</p>
+                        <p style="font-size: 0.875rem;">{{ public.display_time }}</p>
                     </div>
                     <div class="secret-wrapper clickable" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; cursor: pointer;">
                         <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.secret|safe }}</p>
                         {% if public.file %}
                             {% if public.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
-                                <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="File Preview" style="max-width: 50%; height: auto;">
+                                <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="Preview of {{ public.file }} attached to secret by {{ public.username }}" style="max-width: 50%; height: auto;" width="150" height="150" loading="lazy">
                             {% elif public.file.endswith('.pdf') %}
-                                <iframe src="{{ url_for('main.download_file', filename=public.file) }}" style="width: 50%; height: auto; border: none;"></iframe>
+                                <iframe src="{{ url_for('main.download_file', filename=public.file) }}" style="width: 50%; height: auto; border: none;" title="PDF preview of {{ public.file }}"></iframe>
                             {% elif public.file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) %}
-                                <iframe src="https://docs.google.com/viewer?url={{ url_for('main.download_file', filename=public.file, _external=True) }}&embedded=true" style="width: 50%; height: auto; border: none;"></iframe>
+                                <iframe src="https://docs.google.com/viewer?url={{ url_for('main.download_file', filename=public.file, _external=True) }}&embedded=true" style="width: 50%; height: auto; border: none;" title="Document preview of {{ public.file }}"></iframe>
                             {% else %}
                                 <p style="font-size: small;">No preview available for this file type.</p>
                             {% endif %}
@@ -125,30 +172,30 @@
                             </p>
                         {% endif %}
                         <div class="mt-2 d-flex justify-content-end gap-3">
-                            <a class="text-danger report-btn" data-bs-toggle="modal" data-bs-target="#reportSecretModel" data-id="{{ public.id }}" data-secret="{{ public.secret }}" data-file="{{ public.file }}" style="font-size: 0.85rem;">Report</a>
+                            <a class="text-danger report-btn" data-bs-toggle="modal" data-bs-target="#reportSecretModel-{{ public.id }}" data-id="{{ public.id }}" data-secret="{{ public.secret }}" data-file="{{ public.file }}" style="font-size: 0.875rem;" aria-label="Report secret by {{ public.username }}">Report</a>
                         </div>
                     </div>
                     <hr>
                 </div>
                 <!-- Report Modal -->
-                <div class="modal fade small" id="reportSecretModel" tabindex="-1" aria-labelledby="reportSecretModelLabel" aria-hidden="true">
+                <div class="modal fade small" id="reportSecretModel-{{ public.id }}" tabindex="-1" aria-labelledby="reportSecretModelLabel-{{ public.id }}" aria-hidden="true">
                     <div class="modal-dialog">
                         <div class="modal-content small">
                             <div class="modal-header">
-                                <h5 class="modal-title" id="reportSecretModelLabel">Report</h5>
+                                <h5 class="modal-title" id="reportSecretModelLabel-{{ public.id }}">Report Secret</h5>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
                             <div class="modal-body">
-                                <form method="POST" action="{{ url_for('main.home') }}" class="needs-validation" novalidate>
+                                <form method="POST" action="{{ url_for('main.home') }}" class="needs-validation" novalidate id="report-form-{{ public.id }}">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="form_type" value="report">
-                                    <input type="hidden" id="modal-secret-id" name="secret_id">
-                                    <input type="hidden" id="modal-secret" name="secret">
-                                    <input type="hidden" id="modal-secret-file" name="secret_file">
+                                    <input type="hidden" id="modal-secret-id-{{ public.id }}" name="secret_id">
+                                    <input type="hidden" id="modal-secret-{{ public.id }}" name="secret">
+                                    <input type="hidden" id="modal-secret-file-{{ public.id }}" name="secret_file">
                                     <div class="mb-3">
-                                        <label for="details" class="form-label">Reason for report</label>
-                                        <textarea class="form-control" id="details" name="details" rows="3" placeholder="Add more context if needed..." required></textarea>
-                                        <div class="invalid-feedback">
+                                        <label for="details-{{ public.id }}" class="form-label">Reason for report</label>
+                                        <textarea class="form-control" id="details-{{ public.id }}" name="details" rows="3" placeholder="Add more context if needed..." required aria-describedby="details-error-{{ public.id }}"></textarea>
+                                        <div class="invalid-feedback" id="details-error-{{ public.id }}">
                                             Please provide a reason for your report.
                                         </div>
                                     </div>
@@ -170,11 +217,11 @@
 <div class="b-example-divider"></div>
 
 <!-- How it Works Section -->
-<div class="container px-4 py-5" style="background-color: #14a184; border-radius: 15px;">
+<div class="container px-4" style="background-color: #14a184; border-radius: 15px;">
     <div class="row align-items-center g-5 py-5">
         <!-- Text/List - always on the left -->
         <div class="col-lg-6 text-light order-1">
-            <h4 class="display-6 fw-bold lh-1 mb-3">How it works?</h4>
+            <h4 class="display-6 fw-bold lh-1 mb-3">How it Works</h4>
             <ul class="small">
                 <li>First you have to login/signup</li>
                 <li>Create your secret</li>
@@ -183,163 +230,135 @@
                 <li>Choose if you want to reveal your secret publicly</li>
             </ul>
             <div class="d-grid gap-2 d-md-flex justify-content-md-start mt-4">
-                <a href="{{ url_for('main.how_works') }}" class="btn btn-light px-4">Know More</a>
+                <a href="#" data-url="{{ url_for('main.how_works') }}" class="btn btn-light px-4 dynamic-link {% if request.endpoint == 'main.how_works' %}active{% endif %}">
+                    Know More About How It Works
+                </a>
             </div>
         </div>
 
         <!-- Image - always on the right -->
         <div class="col-12 col-sm-8 col-lg-6 order-2 mt-4 mt-lg-0">
-            <img src="static/assets/images/works.png" class="d-block mx-lg-auto img-fluid" alt="How it Works" width="300" height="300" loading="lazy" style="border-radius: 5%;">
+            <img src="{{ url_for('static', filename='assets/images/works.webp') }}" class="d-block mx-lg-auto img-fluid" alt="Illustration of how SecuresSecrets works" width="300" height="300" loading="lazy" style="border-radius: 5%;">
         </div>
     </div>
 </div>
 
 <div class="b-example-divider"></div>
 
-<!-- Contact Section -->
+<!-- Why SecuresSecrets Section -->
 <div class="container px-4 py-5">
     <div class="row align-items-center g-5 py-5">
-        <!-- Text/List - always on the left -->
-        <div class="col-lg-6 text-light order-1">
-            <!-- Introduction -->
-            <div class="text-center mb-3">
-                <h2 class="text-center text-primary mb-3">Get in Touch</h2>
-                <p class="text-center text-secondary" style="font-size: 1.2rem;">
-                    Fill out the form below, and we'll respond as soon as possible!
-                </p>
+        <!-- Text/Cards - always on the left -->
+        <div class="col-lg-6 order-1">
+            <h2 class="display-6 fw-bold text-body-emphasis lh-1 mb-3">Why Choose SecuresSecrets?</h2>
+            <p class="small">SecuresSecrets empowers you to share your story on your terms, with unmatched security and control.</p>
+            <div class="benefit-card">
+                <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                <h5>Top-Tier Security</h5>
+                <p>Your secrets are encrypted and protected, ensuring only the right people see them at the right time.</p>
             </div>
-            <!-- Contact Form Card -->
-            <div class="card shadow-lg border-0 rounded-4 mb-4">
-                <div class="card-body p-5">
-                    <form id="homeContactForm" action="{{ url_for('main.home') }}" method="post" novalidate>
-                        {{ form.hidden_tag() }}
-                        <input type="hidden" name="form_type" value="contact">
-                        <!-- Hidden input for reCAPTCHA token -->
-                        <input type="hidden" name="recaptcha_token" id="home_recaptcha_token">
-                        <div class="row mb-3">
-                            <!-- Name Input -->
-                            <div class="form-floating col-md-6">
-                                {{ form.name(class_="form-control rounded-3 shadow-sm", id="home_name", placeholder="Enter your name...") }}
-                                <label for="home_name" class="text-muted" style="font-size: 1rem;">Your Name</label>
-                                {% for error in form.name.errors %}
-                                    <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                            
-                            <!-- Email Input -->
-                            <div class="form-floating col-md-6">
-                                {{ form.email(class_="form-control rounded-3 shadow-sm", id="home_email", placeholder="Enter your email...") }}
-                                <label for="home_email" class="text-muted" style="font-size: 1rem;">Email Address</label>
-                                {% for error in form.email.errors %}
-                                    <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                        </div>
-
-                        <!-- Subject Input -->
-                        <div class="form-floating mb-3">
-                            {{ form.subject(class_="form-control rounded-3 shadow-sm", id="contact_subject") }}
-                            <label for="contact_subject" class="text-muted" style="font-size: 1rem;">Subject</label>
-                            {% for error in form.subject.errors %}
-                                <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                        
-                        <!-- Message Input -->
-                        <div class="form-floating mb-3">
-                            {{ form.message(class_="form-control rounded-3 shadow-sm", id="home_message", style="height: 10rem;") }}
-                            <label for="home_message" class="text-muted" style="font-size: 1rem;">Message</label>
-                            {% for error in form.message.errors %}
-                                <div class="text-danger small" style="font-size: 0.89rem;">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                        
-                        <!-- Submit Button with reCAPTCHA -->
-                        <div class="d-grid">
-                            <button class="g-recaptcha btn btn-primary btn-lg rounded-pill shadow-sm text-uppercase fw-bold"
-                                    style="font-size: 1rem;"
-                                    data-sitekey="{{ site_key }}"
-                                    data-callback="onHomeSubmit"
-                                    data-action="contact_form"
-                                    id="home_submitButton">
-                                Submit
-                            </button>
-                        </div>
-                        <noscript>
-                            <div class="alert alert-danger mt-3">
-                                JavaScript is required to submit this form. Please enable JavaScript.
-                            </div>
-                        </noscript>
-                    </form>
-                </div>
+            <div class="benefit-card">
+                <i class="bi bi-clock-fill" aria-hidden="true"></i>
+                <h5>Timed Reveals</h5>
+                <p>Set a date for your secret to be shared, whether it’s tomorrow or years from now.</p>
+            </div>
+            <div class="benefit-card">
+                <i class="bi bi-person-check-fill" aria-hidden="true"></i>
+                <h5>Choose Your Audience</h5>
+                <p>Share privately with loved ones or publicly with the world—it’s your choice.</p>
+            </div>
+            <div class="d-grid gap-2 d-md-flex justify-content-md-start mt-4">
+                <a href="" data-url="{{ url_for('main.pricing') }}" class="btn btn-primary px-4 dynamic-link {% if request.endpoint == 'main.pricing' %}active{% endif %}">
+                    Choose a Plan Now!
+                </a>
             </div>
         </div>
 
         <!-- Image - always on the right -->
         <div class="col-12 col-sm-8 col-lg-6 order-2 mt-4 mt-lg-0">
-            <img src="static/assets/images/contact.png" class="d-block mx-lg-auto img-fluid" alt="How it Works" width="70%" loading="lazy" style="border-radius: 5%;">
+            <img src="{{ url_for('static', filename='assets/images/why_secrets.webp') }}" class="d-block mx-lg-auto img-fluid" alt="Illustration of a locked book with a key, symbolizing secure secrets" width="400" height="300" loading="lazy" style="border-radius: 5%;">
         </div>
     </div>
 </div>
 
-<!-- reCAPTCHA Enterprise Script -->
-<script src="https://www.google.com/recaptcha/enterprise.js?render={{ site_key }}&badge=bottomright" async defer></script>
-<script>
-    function onHomeSubmit(token) {
-        console.log('reCAPTCHA token generated for home form:', token);
-        if (token) {
-            const tokenInput = document.getElementById('home_recaptcha_token');
-            tokenInput.value = token;
-            console.log('Token set in hidden input:', tokenInput.value);
-            const form = document.getElementById('homeContactForm');
-            if (form) {
-                form.submit();
-            } else {
-                console.error('Home form not found');
-                alert('Form submission failed. Please refresh the page.');
-            }
-        } else {
-            console.error('No token generated for home form');
-        }
-    }
-
-    // Check if reCAPTCHA script loaded
-    document.addEventListener('DOMContentLoaded', () => {
-        if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
-            console.error('reCAPTCHA Enterprise script failed to load');
-            // alert('reCAPTCHA failed to load. Please check your network or try again later.');
-            const submitButton = document.getElementById('home_submitButton');
-            if (submitButton) submitButton.disabled = true;
-        } else {
-            console.log('reCAPTCHA Enterprise script loaded successfully');
-        }
-    });
-</script>
+<!-- Scripts -->
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         const reportButtons = document.querySelectorAll('.report-btn');
-        const secretIdInput = document.getElementById('modal-secret-id');
-        const secretInput = document.getElementById('modal-secret');
-        const fileInput = document.getElementById('modal-secret-file');
-    
+        const forms = document.querySelectorAll('.needs-validation');
+
+        // Handle report button clicks
         reportButtons.forEach(button => {
             button.addEventListener('click', () => {
                 const secretId = button.getAttribute('data-id');
                 const secret = button.getAttribute('data-secret');
                 const file = button.getAttribute('data-file');
-    
-                console.log('Report button clicked:', { secretId, secret, file });
-    
-                secretIdInput.value = secretId;
-                secretInput.value = secret;
-                fileInput.value = file || '';
-    
-                console.log('Modal inputs set:', {
-                    secretId: secretIdInput.value,
-                    secret: secretInput.value,
-                    file: fileInput.value
-                });
+
+                const secretIdInput = document.getElementById(`modal-secret-id-${secretId}`);
+                const secretInput = document.getElementById(`modal-secret-${secretId}`);
+                const fileInput = document.getElementById(`modal-secret-file-${secretId}`);
+
+                if (secretIdInput && secretInput && fileInput) {
+                    secretIdInput.value = secretId;
+                    secretInput.value = secret;
+                    fileInput.value = file || '';
+                }
             });
+        });
+
+        // Form validation
+        forms.forEach(form => {
+            form.addEventListener('submit', (event) => {
+                if (!form.checkValidity()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                form.classList.add('was-validated');
+            }, false);
         });
     });
 </script>
+
+<!-- Featured Secrets Spotlight Section -->
+<!-- <div class="container px-4 py-5">
+    <div class="row align-items-center g-5 py-5">
+        Text - always on the left
+        <div class="col-lg-6 order-1">
+            <h2 class="display-6 fw-bold text-body-emphasis lh-1 mb-3">Featured Secrets</h2>
+            <p class="small">Discover the most captivating secrets shared by our community. From heartfelt confessions to surprising revelations, these stories resonate with thousands.</p>
+            <p class="small">Ready to share your own? Join now and let your secret shine.</p>
+            <div class="d-grid gap-2 d-md-flex justify-content-md-start mt-4">
+                <a href="{{ url_for('main.pricing') }}" class="btn btn-primary px-4">Share Your Secret</a>
+            </div>
+        </div>
+
+        Carousel - always on the right
+        <div class="col-12 col-sm-8 col-lg-6 order-2 mt-4 mt-lg-0">
+            <div id="featuredSecretsCarousel" class="carousel slide" data-bs-ride="carousel">
+                <div class="carousel-inner">
+                    {% for secret in featured_secrets %}
+                    <div class="carousel-item {% if loop.first %}active{% endif %}">
+                        <h3>{{ secret.title }}</h3>
+                        <p>{{ secret.secret|safe }}</p>
+                        <p class="username">— @{{ secret.username }}</p>
+                    </div>
+                    {% else %}
+                    <div class="carousel-item active">
+                        <h3>No Featured Secrets Yet</h3>
+                        <p>Be the first to share a secret and get featured!</p>
+                        <p class="username">— SecuresSecrets Team</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button class="carousel-control-prev" type="button" data-bs-target="#featuredSecretsCarousel" data-bs-slide="prev">
+                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">Previous</span>
+                </button>
+                <button class="carousel-control-next" type="button" data-bs-target="#featuredSecretsCarousel" data-bs-slide="next">
+                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">Next</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div> -->

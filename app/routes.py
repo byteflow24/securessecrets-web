@@ -1735,8 +1735,7 @@ def about():
             })
     return render_template('about.html', secret_form=secret_form, show_header=True, show_footer=True)
 
-# Contact server
-@main.route('/contact', methods=['GET', 'POST'])
+@main.route('/contact', methods=['GET' ,'POST'])
 @limiter.limit("10 per minute")
 def contact():
     secret_form = SecretForm()
@@ -1746,28 +1745,7 @@ def contact():
     if not site_key:
         logger.error("SITE_KEY is not set in environment variables")
         flash('reCAPTCHA configuration error. Please try again later.', 'danger')
-        return redirect(url_for('main.home'))  # Redirect to home if reCAPTCHA is misconfigured
-
-    # For non-authenticated users, require a reCAPTCHA token even for GET requests
-    if not current_user.is_authenticated and request.method == 'GET':
-        recaptcha_token = request.args.get('recaptcha_token')
-        retry_count = int(request.args.get('retry', 0))
-
-        if not recaptcha_token:
-            if retry_count >= 3:  # Prevent infinite redirect loops
-                logger.error("Max retries reached for reCAPTCHA token generation")
-                flash('Unable to verify reCAPTCHA. Please try again later or enable JavaScript.', 'danger')
-                return redirect(url_for('main.home'))  # Redirect to home after max retries
-            logger.warning(f"Missing reCAPTCHA token for GET request, retry attempt {retry_count + 1}")
-            # Redirect to the same page with an incremented retry count
-            return redirect(url_for('main.contact', retry=retry_count + 1))
-
-        is_valid, error_msg = create_assessment(recaptcha_token, recaptcha_action='contact_page_load', flask_request=request)
-        if not is_valid:
-            logger.error(f"reCAPTCHA error on GET: {error_msg}")
-            flash('reCAPTCHA verification failed. Please try again.', 'danger')
-            return redirect(url_for('main.contact', retry=0))  # Reset retry count on invalid token
-
+    
     if request.method == 'POST':
         # Check for bot submission with Wildberries HTML pattern
         name_data = request.form.get('name', '')

@@ -142,32 +142,13 @@
         document.addEventListener('DOMContentLoaded', () => {
             const submitButton = document.getElementById('contact_guest_submit');
             const errorMessage = document.getElementById('recaptcha_error');
-            const recaptchaTokenInput = document.getElementById('contact_recaptcha_token');
-
-            function generateAndRedirectWithToken() {
-                grecaptcha.enterprise.execute('{{ site_key }}', { action: 'contact_page_load' }).then(token => {
-                    recaptchaTokenInput.value = token;
-                    console.log('Generated token for page load:', token);
-                    // Redirect with token in query string
-                    const url = new URL(window.location.href);
-                    url.searchParams.set('recaptcha_token', token);
-                    window.location.href = url.toString(); // Force reload with token
-                }).catch(error => {
-                    console.error('reCAPTCHA token generation failed:', error);
-                    if (errorMessage) {
-                        errorMessage.textContent = 'reCAPTCHA verification failed. Please refresh the page.';
-                        errorMessage.classList.remove('d-none');
-                    }
-                });
-            }
-
+            
             // Check if reCAPTCHA is already loaded
             if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
                 console.log('reCAPTCHA Enterprise script already loaded');
                 grecaptcha.enterprise.ready(() => {
                     if (submitButton) submitButton.disabled = false;
                     if (errorMessage) errorMessage.classList.add('d-none');
-                    generateAndRedirectWithToken();
                 });
             } else {
                 // Wait for reCAPTCHA to load
@@ -177,7 +158,6 @@
                         grecaptcha.enterprise.ready(() => {
                             if (submitButton) submitButton.disabled = false;
                             if (errorMessage) errorMessage.classList.add('d-none');
-                            generateAndRedirectWithToken();
                         });
                         clearInterval(checkRecaptcha);
                     }

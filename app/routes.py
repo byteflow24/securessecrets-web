@@ -1751,13 +1751,22 @@ def contact():
     # For non-authenticated users, require a reCAPTCHA token even for GET requests
     if not current_user.is_authenticated and request.method == 'GET':
         recaptcha_token = request.args.get('recaptcha_token')
+        retry_count = int(request.args.get('retry', 0))
+
         if not recaptcha_token:
-            logger.warning("Missing reCAPTCHA token for GET request")
-            return "reCAPTCHA verification required", 403  # Block GET requests without a token
+            if retry_count >= 3:  # Prevent infinite redirect loops
+                logger.error("Max retries reached for reCAPTCHA token generation")
+                flash('Unable to verify reCAPTCHA. Please try again later or enable JavaScript.', 'danger')
+                return redirect(url_for('main.home'))  # Redirect to home after max retries
+            logger.warning(f"Missing reCAPTCHA token for GET request, retry attempt {retry_count + 1}")
+            # Redirect to the same page with an incremented retry count
+            return redirect(url_for('main.contact', retry=retry_count + 1))
+
         is_valid, error_msg = create_assessment(recaptcha_token, recaptcha_action='contact_page_load', flask_request=request)
         if not is_valid:
             logger.error(f"reCAPTCHA error on GET: {error_msg}")
-            return "reCAPTCHA verification failed", 403
+            flash('reCAPTCHA verification failed. Please try again.', 'danger')
+            return redirect(url_for('main.contact', retry=0))  # Reset retry count on invalid token
 
     if request.method == 'POST':
         # Check for bot submission with Wildberries HTML pattern

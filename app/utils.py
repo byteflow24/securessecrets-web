@@ -1786,7 +1786,7 @@ def email_reminder(email, username, trial_end_date, reminder_type):
     msg.attach(MIMEText(body, 'html'))
 
     # Add the logo image to the email
-    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.png')
+    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
     try:
         with open(logo_path, "rb") as img:
             img_data = img.read()
@@ -1865,7 +1865,7 @@ def reminder_to_pay_email(username, email, plan_name, days_left):
     msg.attach(MIMEText(body, 'html'))
 
     # Add the logo image to the email
-    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.png')
+    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
     try:
         with open(logo_path, "rb") as img:
             img_data = img.read()
@@ -1939,7 +1939,7 @@ def send_payment_email(email, username, plan_name, payment_amount, payment_date,
     msg.attach(MIMEText(body, 'html'))
 
     # Add inline logo image
-    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.png')
+    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
     try:
         with open(logo_path, "rb") as img:
             img_data = img.read()
@@ -1988,7 +1988,7 @@ def send_payment_failed_email(email, username, failure_status, plan_name, card_t
     msg.attach(MIMEText(body, 'html'))
 
     # Add the logo image to the email
-    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.png')
+    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
     try:
         with open(logo_path, "rb") as img:
             img_data = img.read()
@@ -2037,7 +2037,7 @@ def send_verification_email(user_email, username, token):
     msg.attach(MIMEText(body, 'html'))
 
     # Add the logo image to the email
-    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.png')
+    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
     try:
         with open(logo_path, "rb") as img:
             img_data = img.read()
@@ -2084,7 +2084,7 @@ def send_secret_email(email, secret_url):
     msg.attach(MIMEText(body, 'html'))
 
     # Add inline logo image
-    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.png')
+    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
     try:
         with open(logo_path, "rb") as img:
             img_data = img.read()
@@ -2138,7 +2138,7 @@ def contact_email(name, email, subject, message):
     msg.attach(MIMEText(body, 'html'))
 
     # Add inline logo image
-    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.png')
+    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
     try:
         with open(logo_path, "rb") as img:
             img_data = img.read()
@@ -2226,7 +2226,7 @@ def send_report_email(secret_id, secret, secret_file, report_details):
 
     msg.attach(MIMEText(body, 'html'))
 
-    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.png')
+    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
     try:
         with open(logo_path, "rb") as img:
             image = MIMEImage(img.read(), name=os.path.basename(logo_path))

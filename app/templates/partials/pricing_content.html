@@ -53,6 +53,9 @@
                                   data-monthly="{{ monthly_plan.price|float|round(2) }}" 
                                   data-yearly="{{ yearly_plan.price|float|round(2) }}">{{ monthly_plan.price|float|round(2) }}</span>
                             <small class="text-muted fw-light billing-period">/mo</small>
+                            <div class="original-price text-muted mt-2" style="display: none;">
+                                <small>Original: <s>$<span class="original-price-value">{{ (monthly_plan.price|float * 12)|round(2) }}</span>/yr</s></small>
+                            </div>
                         </h1>
                         <ul class="list-unstyled mt-3 mb-4">
                             {% for description in monthly_plan.description %}
@@ -188,6 +191,16 @@
     .plan-card .btn {
         padding: 0.75rem; /* Normal button padding */
         font-size: 1rem; /* Normal button text */
+    }
+
+    .original-price {
+        font-size: 0.9rem;
+        opacity: 0.7;
+        transition: opacity 0.3s ease;
+    }
+    
+    .original-price s {
+        color: #dc3545; /* Red strikethrough for emphasis */
     }
 
     @media (max-width: 767.98px) {

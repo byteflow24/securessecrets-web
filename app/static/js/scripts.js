@@ -390,28 +390,33 @@ window.addEventListener('DOMContentLoaded', () => {
             // console.log('Billing toggle not found');
             return;
         }
-
+    
         const updatePricing = () => {
             const isYearly = billingToggle.checked;
             const priceElements = document.querySelectorAll('.price');
             const periodElements = document.querySelectorAll('.billing-period');
             const buttons = document.querySelectorAll('.plan-button');
             const planCards = document.querySelectorAll('.plan-card');
-
-            priceElements.forEach(element => {
+            const originalPriceContainers = document.querySelectorAll('.original-price');
+    
+            priceElements.forEach((element, index) => {
                 const monthlyPrice = parseFloat(element.dataset.monthly);
                 const yearlyPrice = parseFloat(element.dataset.yearly);
                 if (!isNaN(monthlyPrice) && !isNaN(yearlyPrice)) {
                     element.textContent = (isYearly ? yearlyPrice : monthlyPrice).toFixed(2);
+                    // Show/hide original price (monthly price × 12) for yearly billing
+                    if (originalPriceContainers[index]) {
+                        originalPriceContainers[index].style.display = isYearly ? 'block' : 'none';
+                    }
                 } else {
                     console.error('Invalid price data:', element.dataset);
                 }
             });
-
+    
             periodElements.forEach(element => {
                 element.textContent = isYearly ? '/yr' : '/mo';
             });
-
+    
             buttons.forEach(button => {
                 const monthlyId = button.getAttribute('data-monthly-id');
                 const yearlyId = button.getAttribute('data-yearly-id');
@@ -423,7 +428,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
-
+    
             // Update Current badge and button
             planCards.forEach(card => {
                 const monthlyId = card.getAttribute('data-monthly-id');
@@ -432,12 +437,12 @@ window.addEventListener('DOMContentLoaded', () => {
                 const badge = card.querySelector('.current-plan-badge');
                 const button = card.querySelector('.plan-button');
                 const form = card.querySelector('form');
-
+    
                 if (badge && button && form) {
                     // First snippet: Badge visibility
                     const isCurrent = (isYearly && yearlyId === currentPlanId) || (!isYearly && monthlyId === currentPlanId);
                     badge.style.display = isCurrent ? 'block' : 'none';
-
+    
                     // Second snippet: Button state
                     if (isCurrent) {
                         button.classList.remove('btn-primary');
@@ -448,14 +453,14 @@ window.addEventListener('DOMContentLoaded', () => {
                     } else {
                         button.classList.remove('btn-success', 'disabled');
                         button.classList.add('btn-primary');
-                        button.innerHTML = `Change to ${card.querySelector('h4').textContent}`;
+                        button.innerHTML = `Change Plan Now!`;
                         button.setAttribute('data-bs-toggle', 'modal');
                         button.setAttribute('data-bs-target', '#confirmUpgradeModal');
                     }
                 }
             });
         };
-
+    
         billingToggle.addEventListener('change', updatePricing);
         updatePricing(); // Initial update
     }

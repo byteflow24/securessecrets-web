@@ -52,7 +52,7 @@ googleapis-common-protos==1.70.0
 greenlet==3.0.3
 grpcio==1.71.0
 grpcio-status==1.71.0
-gunicorn==21.2.0
+gunicorn==23.0.0
 honcho==2.0.0
 humanize==4.10.0
 idna==3.8

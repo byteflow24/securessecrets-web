@@ -306,13 +306,8 @@ def register():
 
     return render_template('register.html', form=form, current_user=current_user, show_header=False, show_footer=True)
 
-# Log in server
-@main.route('/login', methods=['GET', 'POST'])
-def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('main.dashboard'))
 
-    # create_product()
+# create_product()
     # print(get_subscription_details("I-YM3K8PW3Y4HL"))
     # subscription_details = get_subscription_details("I-YM3K8PW3Y4HL")
     # # Use `.get()` to avoid KeyError
@@ -326,6 +321,15 @@ def login():
     # create_plan()
     # deactivate_plan('P-52H4034244582515FM6UHT7Y')
     # cancel_subscription("I-M10UXVBHYH55", "Cancel")
+
+    
+# Log in server
+@main.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+
+    
 
     form = LoginForm()
     # Get next from both GET and POST
@@ -469,7 +473,7 @@ def logout():
     session.clear()
     return redirect(url_for('main.login'))
 
-
+# Updating timezone for each user
 @main.route('/update-timezone', methods=['POST'])
 def update_timezone():
     data = request.get_json()
@@ -546,7 +550,7 @@ def reset_password():
 
     return render_template('reset_password.html', form=form)
 
-# Setting the profile
+# Profile
 @main.route('/profile', methods=['GET', 'POST'])
 @login_required
 @subscription_ended()

@@ -11,6 +11,7 @@ class Config:
         UPLOAD_FOLDER = '/var/data/uploads'  # Render persistent disk
     MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500 MB limit
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=15)
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
 
     SERVER_NAME = 'www.securessecrets.com'
     APPLICATION_ROOT = '/'

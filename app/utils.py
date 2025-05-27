@@ -1,4 +1,4 @@
-from flask import abort, request, url_for, session, flash, redirect
+from flask import abort, request, url_for, session, flash, redirect, jsonify
 from flask_login import current_user
 from functools import wraps
 from urllib.parse import urlparse, urljoin
@@ -25,6 +25,7 @@ import logging
 import uuid
 import json
 import pytz
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -65,33 +66,43 @@ def require_pricing_session():
     return decorator
 
 # Decorator to restrict access to dashboard and payment pages if the user's subscription or trial has ended
-def subscription_ended():
+def subscription_ended(api=False):
     def decorator(func):
         @wraps(func)
         def decorated_function(*args, **kwargs):
             current_date = datetime.now(timezone.utc).date()
-            
-            # Check if the user is logged in
+
+            # Check if user is authenticated
             if not current_user.is_authenticated:
-                return redirect(url_for('main.login'))  # Redirect to login if not logged in
-            
-            # Bypass subscription check for admin
+                if api:
+                    return jsonify({"success": False, "error": "Unauthorized"}), 401
+                return redirect(url_for('main.login'))
+
+            # Admin bypasses subscription check
             if current_user.username == 'admin':
-                return func(*args, **kwargs)  # Allow full access for admin
-            
-            # Check if the subscription is valid
-            if (
-                ((current_user.trial_end_date and current_user.trial_end_date.date() >= current_date) or
-                (current_user.subscription_status == "ACTIVE" and
-                (current_user.next_billing_date and current_user.next_billing_date.date() >= current_date)))
-            ):
-                # If the subscription is active, allow full access
                 return func(*args, **kwargs)
-            
-            # If the subscription has ended, restrict access to certain routes
-            if func.__name__ not in ('main.dashboard', 'main.payment'):
-                return redirect(url_for('main.dashboard'))  # Redirect to dashboard for restricted users
-            
+
+            trial_valid = current_user.trial_end_date and current_user.trial_end_date.date() >= current_date
+            subscription_valid = (
+                current_user.subscription_status == "ACTIVE" and
+                current_user.next_billing_date and
+                current_user.next_billing_date.date() >= current_date
+            )
+
+            if trial_valid or subscription_valid:
+                return func(*args, **kwargs)
+
+            # Subscription/trial ended
+            if api:
+                return jsonify({
+                    "success": False,
+                    "error": "Subscription or trial has ended. Please renew to access your account."
+                }), 403
+
+            # For web views, redirect to dashboard unless it's already dashboard or payment
+            if func.__name__ not in ('dashboard', 'payment'):
+                return redirect(url_for('main.dashboard'))
+
             return func(*args, **kwargs)
         return decorated_function
     return decorator

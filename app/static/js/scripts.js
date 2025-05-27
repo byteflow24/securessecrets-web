@@ -108,7 +108,7 @@ window.addEventListener('DOMContentLoaded', () => {
             // Check if the user is unauthorized (session expired)
             if (response.status === 401) {
                 showFlashMessage('Your session has ended due to inactivity. Please log in again.', 'danger');
-                window.location.href = '/'; // Redirect to login page
+                window.location.href = '/login'; // Redirect to login page
                 return null; // Stop further processing
             }
 

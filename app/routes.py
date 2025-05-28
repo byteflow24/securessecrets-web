@@ -329,8 +329,6 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
 
-    
-
     form = LoginForm()
     # Get next from both GET and POST
     next_page = request.args.get('next') or request.form.get('next')
@@ -1275,12 +1273,6 @@ def delete_published_secret(pb_secret_id):
         flash('Secret has been deleted successfully.', 'success')
         return redirect(url_for('main.dashboard'))
 
-# Report of public secret (user)
-@main.route('/report-secret/<int:pb_secret_id>', methods=['POST'])
-def report_secret(pb_secret_id):
-    details = request.form.get('details', '').strip()
-    secret = PublicSecrets.query.get_or_404(pb_secret_id)
-
 
 # Editing secret
 @main.route('/update-secret/<int:secret_id>', methods=['POST'])
@@ -1504,7 +1496,6 @@ def confirm_email(token):
 
     return redirect(url_for('main.login'))
 
-
 # Notify registerer to check email for verification
 @main.route('/confirmation-pending')
 def confirmation_pending():
@@ -1666,53 +1657,64 @@ def paypal_webhook():
 @main.route('/downloads/<filename>')
 def download_file(filename):
     try:
-        upload_folder = current_app.config['UPLOAD_FOLDER']
-        
-        # Get the absolute path of the file
-        file_path = os.path.join(upload_folder, filename)
-        abs_path = os.path.abspath(file_path)
+        # Step 1: Get the secret that contains this file
+        secret = Secret.query.filter_by(file=filename).first()
+        if not secret:
+            abort(404, description="Secret not found")
 
-        # Check if the file exists
+        # Step 2: Check if the current user is the owner
+        is_owner = current_user.is_authenticated and secret.user_id == current_user.id
+
+        # Step 3: Check if this file is published (shared publicly)
+        shared_secret = SharedSecret.query.filter_by(secret_id=secret.id).first()
+        is_public = False
+        if shared_secret:
+            is_public = PublicSecrets.query.filter_by(shared_secret_id=shared_secret.id, file=filename).first() is not None
+
+        # Step 4: Restrict access unless public or owner
+        if not is_owner and not is_public:
+            abort(403, description="You are not authorized to access this file.")
+
+        # Step 5: Serve the file
+        upload_folder = current_app.config['UPLOAD_FOLDER']
+        abs_path = os.path.abspath(os.path.join(upload_folder, filename))
+
         if not os.path.exists(abs_path):
-            flash("File not found.", "danger")
-            return abort(404)
-        
-        # For PDF and Office files, serve them inline (no download)
+            abort(404, description="File not found")
+
+        # Optional: Show inline for office/pdf files
         if filename.endswith('.pdf'):
             return send_from_directory(
-                os.path.dirname(abs_path), 
-                os.path.basename(abs_path), 
-                as_attachment=False,  # This prevents the file from being downloaded
-                mimetype='application/pdf'  # Explicitly set the MIME type to PDF
+                os.path.dirname(abs_path),
+                os.path.basename(abs_path),
+                as_attachment=False,
+                mimetype='application/pdf'
             )
-        
-        # Check for Word, Excel, and PowerPoint files and serve inline
         elif filename.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')):
-            # We can set the MIME type based on file extensions
-            if filename.endswith(('.doc', '.docx')):
-                mimetype = 'application/msword'
-            elif filename.endswith(('.xls', '.xlsx')):
-                mimetype = 'application/vnd.ms-excel'
-            elif filename.endswith(('.ppt', '.pptx')):
-                mimetype = 'application/vnd.ms-powerpoint'
-            
+            mime_map = {
+                '.doc': 'application/msword',
+                '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                '.xls': 'application/vnd.ms-excel',
+                '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                '.ppt': 'application/vnd.ms-powerpoint',
+                '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            }
+            ext = os.path.splitext(filename)[1]
+            mimetype = mime_map.get(ext, 'application/octet-stream')
+
             return send_from_directory(
-                os.path.dirname(abs_path), 
-                os.path.basename(abs_path), 
-                as_attachment=False,  # Prevent download, show inline
-                mimetype=mimetype  # Set the correct MIME type for each file type
+                os.path.dirname(abs_path),
+                os.path.basename(abs_path),
+                as_attachment=False,
+                mimetype=mimetype
             )
-        
-        # Send the file from the directory
+
+        # Default: download file as attachment
         return send_from_directory(os.path.dirname(abs_path), os.path.basename(abs_path), as_attachment=True)
 
     except Exception as e:
-        # Print the full traceback to help with debugging
-        print("Error: ", str(e))
+        print("Error:", str(e))
         traceback.print_exc()
-
-        # Show a user-friendly error message
-        flash(f"Error downloading file: {str(e)}", "danger")
         return abort(500)
 
 @main.route('/terms-of-services')

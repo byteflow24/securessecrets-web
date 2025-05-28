@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, current_app, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db
 from .models import User, LoginHistory, Secret, SharedSecret, PublicSecrets, Payment, Plan
-from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan
+from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token
 from sqlalchemy.orm import joinedload
@@ -12,6 +12,7 @@ from werkzeug.utils import secure_filename
 import requests
 import os
 import json
+import time
 
 api = Blueprint('api', __name__, url_prefix='/api')
 
@@ -46,7 +47,7 @@ def api_pricing():
 
     return jsonify({"plans": plans_data}), 200
 
-########################################### PAYMENT API ###########################################
+########################################### PAYMENT PROCESS API ###########################################
 
 # === Payment Info ===
 @api.route('/payment-info', methods=['GET'])
@@ -180,6 +181,28 @@ def register_api():
         db.session.rollback()
         print(f"Registration error: {e}")
         return jsonify({'error': 'An error occurred during registration. Please try again.'}), 500
+    
+
+# === User's timezone ===
+@api.route('/update-timezone', methods=['POST'])
+@jwt_required()
+def api_update_timezone():
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    data = request.get_json()
+    time_zone = data.get("time_zone")
+    if not time_zone:
+        return jsonify({"error": "Time zone not provided"}), 400
+
+    user.time_zone = time_zone
+    db.session.commit()
+
+    return jsonify({"message": "Time zone updated successfully"}), 200
+
 
 ########################################### LOGIN API ###########################################
 
@@ -1051,6 +1074,33 @@ def api_change_password():
         db.session.rollback()
         return jsonify(success=False, error=str(e)), 500
 
+# === Delete Account ===
+@api.route('/delete-account', methods=['DELETE'])
+@jwt_required()
+def api_delete_account():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
+    if user is None:
+        return jsonify({"error": "User not found."}), 404
+
+    try:
+        # Cancel PayPal subscription
+        cancel_subscription(user.paypal_subscription_id, "Deleting my account.")
+        time.sleep(5)
+
+        # Delete the user account
+        db.session.delete(user)
+        db.session.commit()
+
+        return jsonify({"message": "Your account has been deleted."}), 200
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        print(e)
+        return jsonify({"error": "Failed to delete account. Please try again."}), 500
+
+
 ########################################### BILLING API ###########################################
 
 # === Billing ===
@@ -1147,3 +1197,46 @@ def api_change_plan():
 
     return jsonify(success=False, error="Failed to update subscription plan. Please try again."), 500
 
+########################################### FORGOT PASSWORD API ###########################################
+
+@api.route('/forgot-password', methods=['POST'])
+def api_forgot_password():
+    data = request.get_json()
+    email = data.get("email")
+
+    user = User.query.filter_by(email=email).first()
+    if user:
+        if user.reset_pswd_token:
+            user.reset_pswd_token = None
+        token = generate_token()
+        user.reset_pswd_token = token
+        db.session.commit()
+        reset_password_email(user.email, user.username, token)
+
+    # Always return generic success message to prevent email enumeration
+    return jsonify({"message": "A reset link has been sent."}), 200
+
+########################################### FORGOT PASSWORD API ###########################################
+
+@api.route('/delete-pubsecret/<int:pb_secret_id>', methods=['DELETE'])
+@jwt_required()
+def api_delete_published_secret(pb_secret_id):
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
+    # Check admin authorization
+    if not user or user.username != "admin":
+        return jsonify({"error": "You are not authorized to delete this secret."}), 403
+
+    secret = PublicSecrets.query.get(pb_secret_id)
+    if not secret:
+        return jsonify({"error": "Secret not found."}), 404
+
+    try:
+        db.session.delete(secret)
+        db.session.commit()
+        return jsonify({"message": "Secret deleted successfully."}), 200
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        print(e)
+        return jsonify({"error": "Failed to delete the secret."}), 500

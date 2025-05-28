@@ -1,4 +1,4 @@
-from flask import abort, request, url_for, session, flash, redirect, jsonify
+from flask import abort, request, url_for, session, flash, redirect, jsonify, send_from_directory
 from flask_login import current_user
 from functools import wraps
 from urllib.parse import urlparse, urljoin
@@ -268,6 +268,29 @@ def convert_utc_to_local(utc_time, time_zone):
     local_time = utc_time.astimezone(local_tz)
 
     return local_time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def serve_file(abs_path, filename):
+    # Serve PDF or Office inline, otherwise as attachment
+    ext = os.path.splitext(filename)[1].lower()
+
+    mime_types = {
+        '.pdf': 'application/pdf',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.xls': 'application/vnd.ms-excel',
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.ppt': 'application/vnd.ms-powerpoint',
+        '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    }
+
+    return send_from_directory(
+        os.path.dirname(abs_path),
+        os.path.basename(abs_path),
+        as_attachment=ext not in mime_types,
+        mimetype=mime_types.get(ext, None)
+    )
+
 
 
 # Configures PayPal Payment Gateway

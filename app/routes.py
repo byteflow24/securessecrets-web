@@ -6,7 +6,7 @@ from flask_limiter.util import get_remote_address
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, PublicSecrets
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -1657,63 +1657,40 @@ def paypal_webhook():
 @main.route('/downloads/<filename>')
 def download_file(filename):
     try:
-        # Step 1: Get the secret that contains this file
-        secret = Secret.query.filter_by(file=filename).first()
-        if not secret:
-            abort(404, description="Secret not found")
-
-        # Step 2: Check if the current user is the owner
-        is_owner = current_user.is_authenticated and secret.user_id == current_user.id
-
-        # Step 3: Check if this file is published (shared publicly)
-        shared_secret = SharedSecret.query.filter_by(secret_id=secret.id).first()
-        is_public = False
-        if shared_secret:
-            is_public = PublicSecrets.query.filter_by(shared_secret_id=shared_secret.id, file=filename).first() is not None
-
-        # Step 4: Restrict access unless public or owner
-        if not is_owner and not is_public:
-            abort(403, description="You are not authorized to access this file.")
-
-        # Step 5: Serve the file
         upload_folder = current_app.config['UPLOAD_FOLDER']
         abs_path = os.path.abspath(os.path.join(upload_folder, filename))
 
+        # Check if file physically exists
         if not os.path.exists(abs_path):
-            abort(404, description="File not found")
+            return abort(404, description="File not found.")
 
-        # Optional: Show inline for office/pdf files
-        if filename.endswith('.pdf'):
-            return send_from_directory(
-                os.path.dirname(abs_path),
-                os.path.basename(abs_path),
-                as_attachment=False,
-                mimetype='application/pdf'
-            )
-        elif filename.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')):
-            mime_map = {
-                '.doc': 'application/msword',
-                '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                '.xls': 'application/vnd.ms-excel',
-                '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                '.ppt': 'application/vnd.ms-powerpoint',
-                '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-            }
-            ext = os.path.splitext(filename)[1]
-            mimetype = mime_map.get(ext, 'application/octet-stream')
+        # Check if file is published publicly
+        public = PublicSecrets.query.filter_by(file=filename).first()
+        if public:
+            return serve_file(abs_path, filename)
 
-            return send_from_directory(
-                os.path.dirname(abs_path),
-                os.path.basename(abs_path),
-                as_attachment=False,
-                mimetype=mimetype
-            )
+        # If not public, restrict access
+        if not current_user.is_authenticated:
+            return abort(403, description="Login required.")
 
-        # Default: download file as attachment
-        return send_from_directory(os.path.dirname(abs_path), os.path.basename(abs_path), as_attachment=True)
+        # Is the file owned by the current user?
+        owned_secret = Secret.query.filter_by(file=filename, user_id=current_user.id).first()
+        if owned_secret:
+            return serve_file(abs_path, filename)
+
+        # Was this file shared with the current user via email?
+        shared = SharedSecret.query.join(Secret).filter(
+            Secret.file == filename,
+            SharedSecret.email == current_user.email
+        ).first()
+        if shared:
+            return serve_file(abs_path, filename)
+
+        # If all checks fail, deny access
+        return abort(403, description="You don't have permission to access this file.")
 
     except Exception as e:
-        print("Error:", str(e))
+        print("Download error:", str(e))
         traceback.print_exc()
         return abort(500)
 

@@ -375,7 +375,6 @@ def dashboard_api():
 ########################################### PUBLIC SECRETS API ###########################################
 
 @api.route('/public-secrets', methods=['GET'])
-@jwt_required()
 def public_secrets_api():
     now = datetime.now()
     current_date = now.date()

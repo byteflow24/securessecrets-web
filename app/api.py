@@ -206,7 +206,6 @@ def api_update_timezone():
 
 ########################################### LOGIN API ###########################################
 
-# === Login ===
 @api.route('/login', methods=['POST'])
 def login_api():
     data = request.get_json()
@@ -235,7 +234,6 @@ def login_api():
     if not user.is_confirmed:
         return jsonify({'error': 'Email not confirmed'}), 403
 
-    # Log login
     ip_address = request.remote_addr
     login_history = LoginHistory(
         user_id=user.id, 
@@ -247,84 +245,9 @@ def login_api():
 
     access_token = create_access_token(identity=str(user.id), expires_delta=timedelta(hours=24))
 
-    # ====== Public Secrets Logic =======
-    shared_secret = db.session.execute(
-        db.select(SharedSecret)
-        .where(
-            SharedSecret.public == True,
-            (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None)
-        )
-        .options(joinedload(SharedSecret.user), joinedload(SharedSecret.secret))
-    ).scalars().all()
-
-    now = datetime.now()
-    current_date = now.date()
-    current_time = now.time()
-
-    for secret in shared_secret:
-        latest_login = db.session.execute(
-            db.select(LoginHistory.login_time)
-            .where(LoginHistory.user_id == secret.user_id)
-            .order_by(desc(LoginHistory.login_time))
-            .limit(1)
-        ).scalar_one_or_none()
-
-        if latest_login and (secret.last_login is None or latest_login > secret.last_login):
-            secret.last_login = latest_login
-            if secret.period:
-                try:
-                    secret.time_period = latest_login + timedelta(days=int(secret.period))
-                except ValueError:
-                    continue
-
-        if secret.date_to_send == current_date and secret.time_to_send == current_time:
-            date_time = datetime.combine(secret.date_to_send, secret.time_to_send)
-        else:
-            date_time = None
-
-        public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
-        if public_secret:
-            if secret.time_period:
-                public_secret.share_date = secret.time_period
-            elif date_time:
-                public_secret.share_date = date_time
-
-    db.session.commit()
-
-    public_secrets = PublicSecrets.query.filter(
-        PublicSecrets.share_date <= now
-    ).order_by(PublicSecrets.share_date.desc()).all()
-
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    for ps in public_secrets[:]:
-        if ps.file:
-            file_path = os.path.join(upload_folder, ps.file)
-            if not os.path.exists(file_path):
-                db.session.delete(ps)
-                public_secrets.remove(ps)
-
-    db.session.commit()
-
-    decrypted_secrets = []
-    for ps in public_secrets:
-        if ps.secret:
-            secret_text = decrypt_secret(ps.secret) if is_encrypted(ps.secret) else ps.secret
-        else:
-            secret_text = ""
-
-        decrypted_secrets.append({
-            "id": ps.id,
-            "secret": secret_text,
-            "display_time": ps.share_date.strftime('%H:%M') if ps.share_date else '',
-            "file": ps.file,
-            "username": ps.username if ps.username else 'Unknown'
-        })
-    # ===================================
-
     return jsonify({
         'access_token': access_token,
-        'user_id': user.id,
-        'public_secrets': decrypted_secrets
+        'user_id': user.id
     }), 200
 
 ########################################### LOGOUT API ###########################################
@@ -447,6 +370,87 @@ def dashboard_api():
         "public_secrets": decrypted_secrets,
         "approval_link": approval_link
     }), 200
+
+
+########################################### PUBLIC SECRETS API ###########################################
+
+@api.route('/public-secrets', methods=['GET'])
+@jwt_required()
+def public_secrets_api():
+    now = datetime.now()
+    current_date = now.date()
+    current_time = now.time()
+
+    shared_secret = db.session.execute(
+        db.select(SharedSecret)
+        .where(
+            SharedSecret.public == True,
+            (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None)
+        )
+        .options(joinedload(SharedSecret.user), joinedload(SharedSecret.secret))
+    ).scalars().all()
+
+    for secret in shared_secret:
+        latest_login = db.session.execute(
+            db.select(LoginHistory.login_time)
+            .where(LoginHistory.user_id == secret.user_id)
+            .order_by(desc(LoginHistory.login_time))
+            .limit(1)
+        ).scalar_one_or_none()
+
+        if latest_login and (secret.last_login is None or latest_login > secret.last_login):
+            secret.last_login = latest_login
+            if secret.period:
+                try:
+                    secret.time_period = latest_login + timedelta(days=int(secret.period))
+                except ValueError:
+                    continue
+
+        if secret.date_to_send == current_date and secret.time_to_send == current_time:
+            date_time = datetime.combine(secret.date_to_send, secret.time_to_send)
+        else:
+            date_time = None
+
+        public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
+        if public_secret:
+            if secret.time_period:
+                public_secret.share_date = secret.time_period
+            elif date_time:
+                public_secret.share_date = date_time
+
+    db.session.commit()
+
+    public_secrets = PublicSecrets.query.filter(
+        PublicSecrets.share_date <= now
+    ).order_by(PublicSecrets.share_date.desc()).all()
+
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    for ps in public_secrets[:]:
+        if ps.file:
+            file_path = os.path.join(upload_folder, ps.file)
+            if not os.path.exists(file_path):
+                db.session.delete(ps)
+                public_secrets.remove(ps)
+
+    db.session.commit()
+
+    decrypted_secrets = []
+    for ps in public_secrets:
+        if ps.secret:
+            secret_text = decrypt_secret(ps.secret) if is_encrypted(ps.secret) else ps.secret
+        else:
+            secret_text = ""
+
+        decrypted_secrets.append({
+            "id": ps.id,
+            "secret": secret_text,
+            "display_time": ps.share_date.strftime('%H:%M') if ps.share_date else '',
+            "file": ps.file,
+            "username": ps.username if ps.username else 'Unknown'
+        })
+
+    return jsonify({'public_secrets': decrypted_secrets}), 200
+
 
 ########################################### ALL SECRETS API ###########################################
 
@@ -1216,7 +1220,7 @@ def api_forgot_password():
     # Always return generic success message to prevent email enumeration
     return jsonify({"message": "A reset link has been sent."}), 200
 
-########################################### FORGOT PASSWORD API ###########################################
+########################################### DEL PB-S BY ADMIN API ###########################################
 
 @api.route('/delete-pubsecret/<int:pb_secret_id>', methods=['DELETE'])
 @jwt_required()

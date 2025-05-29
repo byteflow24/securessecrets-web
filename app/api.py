@@ -442,6 +442,7 @@ def public_secrets_api():
 
         decrypted_secrets.append({
             "id": ps.id,
+            "title": ps.title,
             "secret": secret_text,
             "display_time": ps.share_date.strftime('%H:%M') if ps.share_date else '',
             "file": ps.file,

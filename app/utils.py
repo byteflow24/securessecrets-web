@@ -25,7 +25,7 @@ import logging
 import uuid
 import json
 import pytz
-
+import jwt
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -1734,6 +1734,17 @@ def not_paied_reminder():
 # Generating a token
 def generate_token():
     return secrets.token_urlsafe(32)
+
+
+# Generate access token
+def generate_access_token(user_id, secret_key, expires_in=3600):
+    payload = {
+        'user_id': user_id,
+        'exp': datetime.utcnow() + timedelta(seconds=expires_in),
+        'iat': datetime.utcnow()
+    }
+    token = jwt.encode(payload, secret_key, algorithm='HS256')
+    return token
 
 
 # Sender details which SS email, and pswd

@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, current_app, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db
 from .models import User, LoginHistory, Secret, SharedSecret, PublicSecrets, Payment, Plan
-from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription
+from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token
 from sqlalchemy.orm import joinedload
@@ -1106,6 +1106,23 @@ def api_delete_account():
 
 
 ########################################### BILLING API ###########################################
+
+# Generating token
+@api.route('/payment-token', methods=['POST'])
+@jwt_required()  # or use your auth system to protect this
+def get_payment_token():
+    user_id = get_jwt_identity()  # If you're using Flask-JWT-Extended
+
+    token = generate_access_token(
+        user_id=user_id,
+        secret_key=current_app.config['SECRET_KEY']
+    )
+
+    return jsonify({
+        "payment_token": token,
+        "payment_url": url_for('payment', token={token})
+    }), 200
+
 
 # === Billing ===
 @api.route('/billing', methods=['GET'])

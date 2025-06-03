@@ -22,6 +22,7 @@ import os
 import traceback
 import requests
 import logging
+import jwt
 
 # Handle Google Application Credentials
 if "GOOGLE_APPLICATION_CREDENTIALS_JSON" in os.environ:
@@ -1393,20 +1394,32 @@ def pricing():
     return render_template('pricing.html', current_user=current_user, plans=plans, show_header=True, show_footer=True)
 
 
-@main.route('/charge', methods=['GET', 'POST'])
-@login_required
+@main.route('/charge')
 def payment():
-    # If the user is not authenticated (session expired), return 401
-    if not current_user.is_authenticated:
-        return jsonify({"error": "Unauthorized", "message": "Your session has expired. Please log in again."}), 401
-    
+    if current_user.is_authenticated:
+        user = current_user
+    else:
+        token = request.args.get("token")
+        if not token:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        try:
+            decoded = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+            user = User.query.get(decoded['user_id'])
+
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+
+            login_user(user)  # Log in manually for session
+        except Exception as e:
+            return jsonify({"error": "Invalid or expired token"}), 401
+
     client_id = os.environ.get("PAYPAL_LIVE_CLIENT_ID")
-    paypal_plan_id = json.loads(current_user.plan.paypal_plan_id)[0]
+    paypal_plan_id = json.loads(user.plan.paypal_plan_id)[0]
 
-    if not client_id or not paypal_plan_id:
-        return jsonify({"status": "error", "message": "Missing data"}), 400
+    return render_template("card_details.html", show_header=False, show_footer=False,
+                           client_id=client_id, paypal_plan_id=paypal_plan_id)
 
-    return render_template("card_details.html", show_header=False, show_footer=False, client_id=client_id, paypal_plan_id=paypal_plan_id)
 
 
 @main.route('/process-subscription', methods=['POST'])

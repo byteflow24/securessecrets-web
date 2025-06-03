@@ -292,7 +292,6 @@ def serve_file(abs_path, filename):
     )
 
 
-
 # Configures PayPal Payment Gateway
 ####################### LIVE ACTION #######################
 PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_LIVE_CLIENT_ID")

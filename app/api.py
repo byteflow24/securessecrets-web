@@ -176,7 +176,7 @@ def register_api():
     try:
         db.session.commit()
         send_verification_email(new_user.email, new_user.username, new_user.email_token)
-        return jsonify({'message': 'User registered successfully. Please check your email to confirm your account.'}), 201
+        return jsonify({'message': 'User registered successfully. Please check your email to confirm your account.'}), 200
     except Exception as e:
         db.session.rollback()
         print(f"Registration error: {e}")

@@ -2,8 +2,6 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, PasswordField, FileField, TextAreaField, SelectField, EmailField, DateField, BooleanField, DateTimeField, HiddenField, TelField, TextAreaField
 from wtforms.validators import DataRequired, Optional, Length, Regexp, Email, AnyOf
 from .utils import email_domain_validator, validate_period, is_future_date_or_today, is_future_time_today
-from datetime import datetime, date
-
 
 
 # WTForm for creating a secret
@@ -25,7 +23,7 @@ class RegisterForm(FlaskForm):
             regex=password_regex,
             message=(
                 "Password must be at least 8 characters long, "
-                "contain at least one uppercase letter, one number, and one symbol."
+                "include upper & lower case letters, a number, and a symbol."
             )
         )
     ])

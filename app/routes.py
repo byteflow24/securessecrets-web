@@ -1410,7 +1410,6 @@ def payment():
             if not user:
                 return jsonify({"error": "User not found"}), 404
 
-            login_user(user)  # Log in manually for session
         except Exception as e:
             return jsonify({"error": "Invalid or expired token"}), 401
 

@@ -91,8 +91,13 @@
         .then(response => response.json())
         .then(data => {
           alert(data.message);  // Show success or error message
-          if (data.status === 'success') {
-              window.location.href = '/dashboard';  // Redirect on success
+          // Check if the user is in a Flutter WebView (basic detection)
+          const isFlutterApp = window.location.search.includes('from=app') || navigator.userAgent.includes('Flutter');
+
+          if (isFlutterApp) {
+            window.location.href = 'myapp://subscription-success';  // Deep link back to Flutter app
+          } else {
+            window.location.href = '/dashboard';  // Regular web redirect
           }
         })
         .catch(error => {

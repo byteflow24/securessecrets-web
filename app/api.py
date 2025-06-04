@@ -257,97 +257,33 @@ def login_api():
 def api_logout():
     return jsonify({"msg": "Logged out successfully"}), 200
 
-
 ########################################### DASHBOARD API ###########################################
 
 @api.route('/dashboard', methods=['GET'])
 @jwt_required()
 def dashboard_api():
     user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
+    user = db.session.get(User, int(user_id))
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
     # Redirect new users to payment
     if user.status == "new":
-        return jsonify({'error': 'Payment required', 'redirect_url': url_for("api.payment")}), 402
+        token = generate_access_token(
+            user_id=user.id,
+            secret_key=current_app.config['JWT_SECRET_KEY']
+        )
 
-    # Count user's secrets
+        charge_url = url_for('main.payment', token=token, _external=True)
+
+        return jsonify({
+            'error': 'Payment required',
+            'payment_token': token,
+            'redirect_url': charge_url
+        }), 402
+
     secrets_count = Secret.query.filter_by(user_id=user.id).count()
     last_login = user.login_history[-1].login_time if user.login_history else None
-
-    # Public shared secrets
-    shared_secret = db.session.execute(
-        db.select(SharedSecret)
-        .where(
-            SharedSecret.public == True,
-            (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None)
-        )
-        .options(joinedload(SharedSecret.user), joinedload(SharedSecret.secret))
-    ).scalars().all()
-
-    now = datetime.now()
-    current_date = now.date()
-    current_time = now.time()
-
-    for secret in shared_secret:
-        latest_login = db.session.execute(
-            db.select(LoginHistory.login_time)
-            .where(LoginHistory.user_id == secret.user_id)
-            .order_by(desc(LoginHistory.login_time))
-            .limit(1)
-        ).scalar_one_or_none()
-
-        if latest_login and (secret.last_login is None or latest_login > secret.last_login):
-            secret.last_login = latest_login
-            if secret.period:
-                try:
-                    secret.time_period = latest_login + timedelta(days=int(secret.period))
-                except ValueError:
-                    continue
-
-        if secret.date_to_send == current_date and secret.time_to_send == current_time:
-            date_time = datetime.combine(secret.date_to_send, secret.time_to_send)
-        else:
-            date_time = None
-
-        public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
-        if public_secret:
-            if secret.time_period:
-                public_secret.share_date = secret.time_period
-            elif date_time:
-                public_secret.share_date = date_time
-
-    db.session.commit()
-
-    public_secrets = PublicSecrets.query.filter(
-        PublicSecrets.share_date <= now
-    ).order_by(PublicSecrets.share_date.desc()).all()
-
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    for ps in public_secrets[:]:
-        if ps.file:
-            file_path = os.path.join(upload_folder, ps.file)
-            if not os.path.exists(file_path):
-                db.session.delete(ps)
-                public_secrets.remove(ps)
-
-    db.session.commit()
-
-    decrypted_secrets = []
-    for ps in public_secrets:
-        if ps.secret:
-            secret_text = decrypt_secret(ps.secret) if is_encrypted(ps.secret) else ps.secret
-        else:
-            secret_text = ""
-
-        decrypted_secrets.append({
-            "id": ps.id,
-            "secret": secret_text,
-            "display_time": ps.share_date.strftime('%H:%M') if ps.share_date else '',
-            "file": ps.file,
-            "username": ps.username if ps.username else 'Unknown'
-        })
 
     subscription_approval = get_subscription_details(user.paypal_subscription_id)
     if not subscription_approval:
@@ -360,14 +296,12 @@ def dashboard_api():
             )
         else:
             approval_link = "pass"
-            
 
     return jsonify({
         "username": user.username,
         "email": user.email,
         "secrets_count": secrets_count,
         "last_login": last_login.strftime('%Y-%m-%d %H:%M:%S') if last_login else None,
-        "public_secrets": decrypted_secrets,
         "approval_link": approval_link
     }), 200
 
@@ -1106,22 +1040,6 @@ def api_delete_account():
 
 
 ########################################### BILLING API ###########################################
-
-# Generating token
-@api.route('/payment-token', methods=['POST'])
-@jwt_required()  # or use your auth system to protect this
-def get_payment_token():
-    user_id = get_jwt_identity()  # If you're using Flask-JWT-Extended
-
-    token = generate_access_token(
-        user_id=user_id,
-        secret_key=current_app.config['SECRET_KEY']
-    )
-
-    return jsonify({
-        "payment_token": token,
-        "payment_url": url_for('payment', token={token})
-    }), 200
 
 
 # === Billing ===

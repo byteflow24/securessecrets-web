@@ -1,10 +1,10 @@
 from flask import Blueprint, request, jsonify, current_app, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
-from . import db
+from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, PublicSecrets, Payment, Plan
 from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token
 from datetime import datetime, timedelta, timezone, date
-from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token
+from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -255,6 +255,8 @@ def login_api():
 @api.route('/logout', methods=['POST'])
 @jwt_required()
 def api_logout():
+    jti = get_jwt()["jti"]
+    blacklist.add(jti)
     return jsonify({"msg": "Logged out successfully"}), 200
 
 ########################################### DASHBOARD API ###########################################
@@ -285,6 +287,16 @@ def dashboard_api():
     secrets_count = Secret.query.filter_by(user_id=user.id).count()
     last_login = user.login_history[-1].login_time if user.login_history else None
 
+    plan_name = user.plan.plan if user.plan else 'INACTIVE'
+    next_billing_date = user.next_billing_date.strftime('%Y-%m-%d') if user.next_billing_date else 'INACTIVE'
+    
+    storage_used_mb = round(user.storage_used / (1024 * 1024), 2)
+    storage_limit_mb = round(user.plan.storage_limit / (1024 * 1024), 2) if user.plan else 0
+    storage_percentage = (
+        round((user.storage_used / user.plan.storage_limit) * 100, 2)
+        if user.plan and user.plan.storage_limit else 0
+    )
+
     subscription_approval = get_subscription_details(user.paypal_subscription_id)
     if not subscription_approval:
         approval_link = "pass"
@@ -300,8 +312,13 @@ def dashboard_api():
     return jsonify({
         "username": user.username,
         "email": user.email,
-        "secrets_count": secrets_count,
+        "plan": plan_name,
+        "next_billing_date": next_billing_date,
+        "secrets_count": f"{secrets_count}/10" if plan_name == 'Basic' else secrets_count,
         "last_login": last_login.strftime('%Y-%m-%d %H:%M:%S') if last_login else None,
+        "storage_used_mb": storage_used_mb,
+        "storage_limit_mb": storage_limit_mb,
+        "storage_percentage": storage_percentage,
         "approval_link": approval_link
     }), 200
 

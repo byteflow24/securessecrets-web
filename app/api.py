@@ -907,57 +907,63 @@ def share_secret_api():
 @jwt_required()
 # @subscription_ended(api=True)
 def api_profile():
-    user_id = get_jwt_identity()
-    user = db.session.get(User, int(user_id))
+    try:
+        user_id = get_jwt_identity()
+        user = db.session.get(User, int(user_id))
 
-    if not user:
-        return jsonify(success=False, error="User not found."), 404
+        if not user:
+            return jsonify(success=False, error="User not found."), 404
 
-    if request.method == 'GET':
-        login_history = LoginHistory.query.filter_by(user_id=user.id).all()
-        last_login = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc()).first()
+        if request.method == 'GET':
+            login_history = LoginHistory.query.filter_by(user_id=user.id).all()
+            last_login = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc()).first()
 
-        return jsonify(
-            success=True,
-            user={
-                "username": user.username,
-                "email": user.email,
-                "phone": user.phone,
-                "country_code": user.country_code,
-                "plan": user.plan.name,
-                "storage_used": user.storage_used,
-                "storage_limit": user.plan.storage_limit,
-            },
-            login_history=[
-                {
-                    "ip": log.ip,
-                    "user_agent": log.user_agent,
-                    "login_time": log.login_time.strftime("%Y-%m-%d %H:%M:%S")
-                } for log in login_history
-            ],
-            last_login={
-                "ip": last_login.ip,
-                "user_agent": last_login.user_agent,
-                "login_time": last_login.login_time.strftime("%Y-%m-%d %H:%M:%S")
-            } if last_login else None
-        ), 200
+            return jsonify(
+                success=True,
+                user={
+                    "username": user.username,
+                    "email": user.email,
+                    "phone": user.phone,
+                    "country_code": user.country_code,
+                    "plan": user.plan.name if user.plan else "Free",
+                    "storage_used": user.storage_used,
+                    "storage_limit": user.plan.storage_limit if user.plan else 0,
+                },
+                login_history=[
+                    {
+                        "ip": log.ip,
+                        "user_agent": log.user_agent,
+                        "login_time": log.login_time.strftime("%Y-%m-%d %H:%M:%S")
+                    } for log in login_history
+                ],
+                last_login={
+                    "ip": last_login.ip,
+                    "user_agent": last_login.user_agent,
+                    "login_time": last_login.login_time.strftime("%Y-%m-%d %H:%M:%S")
+                } if last_login else None
+            ), 200
 
-    elif request.method == 'PUT':
-        data = request.get_json()
-        username = data.get('username', '').strip()
-        phone = data.get('phone', '').strip()
-        code = data.get('country_code', '').strip()
+        elif request.method == 'PUT':
+            data = request.get_json()
+            username = data.get('username', '').strip()
+            phone = data.get('phone', '').strip()
+            code = data.get('country_code', '').strip()
 
-        if not username or not phone or not code:
-            return jsonify(success=False, error="Username, phone, and country code are required."), 400
+            if not username or not phone or not code:
+                return jsonify(success=False, error="Username, phone, and country code are required."), 400
 
-        user.username = username
-        user.phone = phone
-        user.country_code = code
+            user.username = username
+            user.phone = phone
+            user.country_code = code
 
-        db.session.commit()
+            db.session.commit()
 
-        return jsonify(success=True, message="Profile updated successfully!"), 200
+            return jsonify(success=True, message="Profile updated successfully!"), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify(success=False, error=f"Server error: {str(e)}"), 500
 
 # === Login history ===
 @api.route('/login-history', methods=['GET'])

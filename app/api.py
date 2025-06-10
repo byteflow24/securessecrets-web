@@ -905,10 +905,10 @@ def share_secret_api():
 # === Profile/ updating user phone === 
 @api.route('/profile', methods=['GET', 'PUT'])
 @jwt_required()
-@subscription_ended(api=True)
+# @subscription_ended(api=True)
 def api_profile():
     user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
+    user = db.session.get(User, int(user_id))
 
     if not user:
         return jsonify(success=False, error="User not found."), 404
@@ -998,7 +998,7 @@ def api_login_history():
 @subscription_ended(api=True)
 def api_change_password():
     user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
+    user = db.session.get(User, int(user_id))
 
     if not user:
         return jsonify(success=False, error="User not found."), 404

@@ -931,14 +931,14 @@ def api_profile():
                 },
                 login_history=[
                     {
-                        "ip": log.ip,
-                        "user_agent": log.user_agent,
+                        "ip": log.ip_address,
+                        # "user_agent": log.user_agent,
                         "login_time": log.login_time.strftime("%Y-%m-%d %H:%M:%S")
                     } for log in login_history
                 ],
                 last_login={
-                    "ip": last_login.ip,
-                    "user_agent": last_login.user_agent,
+                    "ip": last_login.ip_address,
+                    # "user_agent": last_login.user_agent,
                     "login_time": last_login.login_time.strftime("%Y-%m-%d %H:%M:%S")
                 } if last_login else None
             ), 200

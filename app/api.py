@@ -925,7 +925,7 @@ def api_profile():
                     "email": user.email,
                     "phone": user.phone,
                     "country_code": user.country_code,
-                    "plan": user.plan.name if user.plan else "Free",
+                    "plan": user.plan.plan if user.plan else "Free",
                     "storage_used": user.storage_used,
                     "storage_limit": user.plan.storage_limit if user.plan else 0,
                 },

@@ -918,6 +918,9 @@ def api_profile():
             login_history = LoginHistory.query.filter_by(user_id=user.id).all()
             last_login = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc()).first()
 
+            storage_used_mb = round(user.storage_used / (1024 * 1024), 2)
+            storage_limit_mb = round(user.plan.storage_limit / (1024 * 1024), 2) if user.plan else 0
+
             return jsonify(
                 success=True,
                 user={
@@ -927,8 +930,8 @@ def api_profile():
                     "country_code": user.country_code,
                     "plan": user.plan.plan if user.plan else "Free",
                     "next_bill": user.next_billing_date,
-                    "storage_used": user.storage_used,
-                    "storage_limit": user.plan.storage_limit if user.plan else 0,
+                    "storage_used": storage_used_mb,
+                    "storage_limit": storage_limit_mb,
                 },
                 login_history=[
                     {

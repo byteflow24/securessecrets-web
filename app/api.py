@@ -1082,6 +1082,7 @@ def api_plan():
             return jsonify(
                 success=True,
                 plan={
+                    "plan_id": user.plan.id,
                     "plan": user.plan.plan if user.plan else "Free",
                     "bill_cycle": user.plan.billing_cycle,
                     "subscription_status": user.subscription_status,

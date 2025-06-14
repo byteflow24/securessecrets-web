@@ -902,8 +902,8 @@ def share_secret_api():
 
 ########################################### PROFILE API ###########################################
 
-# === Profile/ updating user phone === 
-@api.route('/profile', methods=['GET', 'PUT'])
+# === Profile === 
+@api.route('/profile', methods=['GET'])
 @jwt_required()
 # @subscription_ended(api=True)
 def api_profile():
@@ -931,6 +931,7 @@ def api_profile():
                     "phone": user.phone,
                     "country_code": user.country_code,
                     "plan": user.plan.plan if user.plan else "Free",
+                    "subscription_status": user.subscription_status,
                     "next_bill": next_billing_date,
                     "storage_used": storage_used_mb,
                     "storage_limit": storage_limit_mb,
@@ -949,65 +950,57 @@ def api_profile():
                 } if last_login else None
             ), 200
 
-        elif request.method == 'PUT':
-            data = request.get_json()
-            username = data.get('username', '').strip()
-            phone = data.get('phone', '').strip()
-            code = data.get('country_code', '').strip()
-
-            if not username or not phone or not code:
-                return jsonify(success=False, error="Username, phone, and country code are required."), 400
-
-            user.username = username
-            user.phone = phone
-            user.country_code = code
-
-            db.session.commit()
-
-            return jsonify(success=True, message="Profile updated successfully!"), 200
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify(success=False, error=f"Server error: {str(e)}"), 500
 
-# === Login history ===
-@api.route('/login-history', methods=['GET'])
+# === Updating Phone ===
+@api.route('/update-phone', methods=['GET', 'PUT'])
 @jwt_required()
-@subscription_ended(api=True)
-def api_login_history():
-    user_id = get_jwt_identity()
-    page = request.args.get('page', 1, type=int)
-    per_page = 5
+def api_update_phone():
+    try:
+        user_id = get_jwt_identity()
+        user = db.session.get(User, int(user_id))
 
-    login_history = LoginHistory.query.filter_by(user_id=user_id) \
-        .order_by(LoginHistory.login_time.desc()) \
-        .paginate(page=page, per_page=per_page, error_out=False)
+        if not user:
+            return jsonify(success=False, error="User not found."), 404
 
-    total_pages = login_history.pages
-    start_page = max(1, page - 2)
-    end_page = min(total_pages, page + 2)
-    page_range = list(range(start_page, end_page + 1))
+        if request.method == 'GET':
+            return jsonify(
+                success=True,
+                user={
 
-    history_data = [{
-        'login_time': login.login_time.strftime("%Y-%m-%d %H:%M:%S"),
-        'ip_address': login.ip,
-        'user_agent': login.user_agent
-    } for login in login_history.items]
+                    "phone": user.phone,
+                    "country_code": user.country_code,
 
-    return jsonify({
-        'success': True,
-        'data': history_data,
-        'total': login_history.total,
-        'page': page,
-        'pages': total_pages,
-        'page_range': page_range
-    }), 200
+                }), 200
+        
+        elif request.method == 'PUT':
+            data = request.get_json()
+            phone = data.get('phone', '').strip()
+            code = data.get('country_code', '').strip()
+
+            if not phone or not code:
+                return jsonify(success=False, error="Phone, and country code are required."), 400
+
+            user.phone = phone
+            user.country_code = code
+
+            db.session.commit()
+
+            return jsonify(success=True, message="Phone number updated successfully!"), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify(success=False, error=f"Server error: {str(e)}"), 500
+        
 
 # === Changing password ===
-@api.route('/change-password', methods=['POST'])
+@api.route('/change-password', methods=['PATCH'])
 @jwt_required()
-@subscription_ended(api=True)
+# @subscription_ended(api=True)
 def api_change_password():
     user_id = get_jwt_identity()
     user = db.session.get(User, int(user_id))
@@ -1046,30 +1039,63 @@ def api_change_password():
 @jwt_required()
 def api_delete_account():
     user_id = get_jwt_identity()
-    user = User.query.get(user_id)
+    user = User.query.get(int(user_id))
 
     if user is None:
-        return jsonify({"error": "User not found."}), 404
+        return jsonify(success=False, error="User not found."), 404
 
     try:
         # Cancel PayPal subscription
-        cancel_subscription(user.paypal_subscription_id, "Deleting my account.")
-        time.sleep(5)
+        if user.paypal_subscription_id:
+            cancel_subscription(user.paypal_subscription_id, "Deleting my account.")
+            time.sleep(5)
 
         # Delete the user account
         db.session.delete(user)
         db.session.commit()
 
-        return jsonify({"message": "Your account has been deleted."}), 200
+        return jsonify(success=True, message="Your account has been deleted!"), 200
 
     except SQLAlchemyError as e:
         db.session.rollback()
         print(e)
-        return jsonify({"error": "Failed to delete account. Please try again."}), 500
+        return jsonify(success=False, error="Failed to delete account. Please try again."), 500
 
 
 ########################################### BILLING API ###########################################
+# === Retrieving plan === 
+@api.route('/plan', methods=['GET'])
+@jwt_required()
+def api_plan():
+    try:
+        user_id = get_jwt_identity()
+        user = db.session.get(User, int(user_id))
 
+        if not user:
+            return jsonify(success=False, error="User not found."), 404
+
+        if request.method == 'GET':
+            next_billing_date = user.next_billing_date.strftime('%Y-%m-%d') if user.next_billing_date else 'INACTIVE'
+            storage_used_mb = round(user.storage_used / (1024 * 1024), 2)
+            storage_limit_mb = round(user.plan.storage_limit / (1024 * 1024), 2) if user.plan else 0
+
+            return jsonify(
+                success=True,
+                plan={
+                    "plan": user.plan.plan if user.plan else "Free",
+                    "bill_cycle": user.plan.billing_cycle,
+                    "subscription_status": user.subscription_status,
+                    "next_bill": next_billing_date,
+                    "storage_used": storage_used_mb,
+                    "storage_limit": storage_limit_mb,
+                    "features": user.plan.description,
+                }
+            ), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify(success=False, error=f"Server error: {str(e)}"), 500
 
 # === Billing ===
 @api.route('/billing', methods=['GET'])
@@ -1119,7 +1145,6 @@ def billing_api():
 # === Changing Plan ===
 @api.route('/change-plan', methods=['POST'])
 @jwt_required()
-@subscription_ended(api=True)
 def api_change_plan():
     user_id = get_jwt_identity()
     user = db.session.get(User, user_id)

@@ -1506,6 +1506,8 @@ def handle_payment_success(data):
         user.paypal_payer_id = subscriber.get("payer_id", user.paypal_payer_id)  # Keep existing payer_id if missing
         user.updated_at = payment_time
 
+        user.subscription_status = "ACTIVE"
+
         db.session.commit()
         print(f"Payment recorded successfully for User {user.id}, Amount: {payment_amount} {currency}")
 

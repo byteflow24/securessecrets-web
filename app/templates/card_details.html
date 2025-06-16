@@ -1,104 +1,108 @@
 <!DOCTYPE html>
 <head>
-   <meta name="viewport" content="width=device-width, initial-scale=1"> <!-- Ensures optimal rendering on mobile devices. -->
-   <style>
-     /* Basic reset */
-     body, html {
-       margin: 0;
-       padding: 0;
-       height: 100%;
-       font-family: Arial, sans-serif;
-     }
-
-     /* Center the content vertically and horizontally */
-     body {
-       display: flex;
-       flex-direction: column;
-       justify-content: center;
-       align-items: center;
-       text-align: center;
-       height: 100vh;
-       background-color: #f4f4f4;
-       padding: 20px;
-     }
-     
-     /* Styling the text above the PayPal button */
-     .payment-message {
-       font-size: 18px;  /* Medium size font */
-       color: #333;
-       margin-bottom: 25px;
-       line-height: 1.5;
-     }
-     
-     /* Center the PayPal button container and adjust spacing */
-     #paypal-button-container {
-       display: flex;
-       justify-content: center;
-       align-items: center;
-       width: 30%;
-     }
-
-     /* Adjust PayPal button size */
-     .paypal-button {
-       width: 100px;
-     }
-   </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      height: 100vh;
+      background-color: #f4f4f4;
+      padding: 20px;
+    }
+    .payment-message {
+      font-size: 18px;
+      color: #333;
+      margin-bottom: 25px;
+      line-height: 1.5;
+    }
+    #payment-options {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+      width: 100%;
+      max-width: 300px;
+    }
+    #paypal-button-container, #apple-pay-button, #google-pay-button {
+      width: 100%;
+      max-width: 200px;
+    }
+    /* Apple Pay button styling (matches Apple's guidelines) */
+    #apple-pay-button {
+      display: none; /* Hidden by default, shown if Apple Pay is available */
+      -webkit-appearance: -apple-pay-button;
+      -apple-pay-button-type: subscribe; /* For subscriptions */
+      -apple-pay-button-style: black;
+    }
+    /* Google Pay button styling */
+    #google-pay-button {
+      display: none; /* Hidden by default, shown if Google Pay is available */
+    }
+  </style>
 </head>
 <body>
-  <!-- Text message above the PayPal button -->
   <div class="payment-message">
     {% if not current_user.next_billing_date %}
-      <p>Please enter your card details to complete the subscription. You will receive a 14-day free trial before any charges are made.</p>
+      <p>Please select a payment method to complete the subscription. You will receive a 14-day free trial before any charges are made.</p>
     {% else %}
-      <P>Please enter your card details to complete the subscription.</P>
+      <p>Please select a payment method to complete the subscription.</p>
     {% endif %}
   </div>
 
-  <!-- PayPal button script -->
-  <script src="https://www.paypal.com/sdk/js?client-id={{ client_id }}&vault=true&intent=subscription"></script>
+  <div id="payment-options">
+    <!-- PayPal button container -->
+    <div id="paypal-button-container"></div>
+    <!-- Apple Pay button -->
+    <div id="apple-pay-button"></div>
+    <!-- Google Pay button (optional) -->
+    <div id="google-pay-button"></div>
+  </div>
 
-  <!-- PayPal button container -->
-  <div id="paypal-button-container"></div>
+  <!-- PayPal SDK with components for Apple Pay and other methods -->
+  <script src="https://www.paypal.com/sdk/js?client-id={{ client_id }}&vault=true&intent=subscription&components=buttons,applepay"></script>
 
   <script>
+    // Check if Apple Pay is available
+    function isApplePayAvailable() {
+      return window.ApplePaySession && ApplePaySession.canMakePayments();
+    }
+
+    // Initialize PayPal buttons
     paypal.Buttons({
       createSubscription: function(data, actions) {
         return actions.subscription.create({
-          'plan_id': '{{ paypal_plan_id }}'  // Dynamically passes the PayPal plan ID from Flask
+          plan_id: '{{ paypal_plan_id }}'
         });
       },
       onApprove: function(data, actions) {
-        // Log the entire response object to the console
         console.log('PayPal response:', data);
-
-        // Handle the approval and pass the subscription details back to your backend
-        const subscriptionID = data.subscriptionID;
-        const responseData = data;
-
-        // Send the subscription ID and user details to your Flask backend to process the data
         fetch('/process-subscription', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token() }}',  // CSRF protection if you're using Flask-WTF
+            'X-CSRFToken': '{{ csrf_token() }}'
           },
           body: JSON.stringify({
-            subscription_id: subscriptionID,
-            user_id: '{{ current_user.id }}',  // Pass the current user's ID
-            paypal_response: responseData,  // Pass the entire PayPal response object
+            subscription_id: data.subscriptionID,
+            user_id: '{{ current_user.id }}',
+            paypal_response: data,
+            payment_method: 'paypal'
           })
         })
         .then(response => response.json())
         .then(data => {
-          alert(data.message);  // Show success or error message
-          // Check if the user is in a Flutter WebView (basic detection)
+          alert(data.message);
           const isFlutterApp = window.location.search.includes('from=app') || navigator.userAgent.includes('Flutter');
-
-          if (isFlutterApp) {
-            window.location.href = 'myapp://subscription-success';  // Deep link back to Flutter app
-          } else {
-            window.location.href = '/dashboard';  // Regular web redirect
-          }
+          window.location.href = isFlutterApp ? 'myapp://subscription-success' : '/dashboard';
         })
         .catch(error => {
           console.error('Error:', error);
@@ -106,6 +110,130 @@
         });
       }
     }).render('#paypal-button-container');
+
+    // Apple Pay Integration
+    if (isApplePayAvailable()) {
+      document.getElementById('apple-pay-button').style.display = 'block';
+      
+      paypal.Applepay().config().then(config => {
+        const paymentRequest = {
+          countryCode: 'US', // Adjust based on your region
+          currencyCode: '{{ currency }}',
+          supportedNetworks: ['visa', 'masterCard', 'amex', 'discover'],
+          merchantCapabilities: ['supports3DS'],
+          total: {
+            label: 'Subscription',
+            amount: '{{ amount }}', // Passed from Flask
+            type: 'final'
+          },
+          requiredBillingContactFields: ['postalAddress', 'name']
+        };
+
+        document.getElementById('apple-pay-button').onclick = function() {
+          const session = new ApplePaySession(6, paymentRequest);
+          
+          session.onvalidatemerchant = event => {
+            paypal.Applepay().validateMerchant({
+              validationUrl: event.validationURL
+            }).then(merchantSession => {
+              session.completeMerchantValidation(merchantSession);
+            }).catch(err => {
+              console.error('Apple Pay validation error:', err);
+              session.abort();
+            });
+          };
+
+          session.onpaymentauthorized = event => {
+            paypal.Applepay().confirmOrder({
+              orderId: '{{ paypal_plan_id }}', // Use plan ID or create an order ID
+              token: event.payment.token,
+              billingContact: event.payment.billingContact
+            }).then(confirmResult => {
+              session.completePayment(ApplePaySession.STATUS_SUCCESS);
+              fetch('/process-subscription', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRFToken': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                  subscription_id: confirmResult.orderId,
+                  user_id: '{{ current_user.id }}',
+                  paypal_response: confirmResult,
+                  payment_method: 'applepay'
+                })
+              })
+              .then(response => response.json())
+              .then(data => {
+                alert(data.message);
+                const isFlutterApp = window.location.search.includes('from=app') || navigator.userAgent.includes('Flutter');
+                window.location.href = isFlutterApp ? 'myapp://subscription-success' : '/dashboard';
+              })
+              .catch(error => {
+                console.error('Error:', error);
+                session.completePayment(ApplePaySession.STATUS_FAILURE);
+                alert("An error occurred with Apple Pay. Please try again.");
+              });
+            }).catch(err => {
+              console.error('Apple Pay confirmation error:', err);
+              session.completePayment(ApplePaySession.STATUS_FAILURE);
+            });
+          };
+
+          session.begin();
+        };
+        paypal.GooglePay().config().then(config => {
+          console.log('Google Pay config:', config);
+          console.log('Google Pay isEligible:', config.isEligible);
+          if (config.isEligible) {
+            document.getElementById('google-pay-button').style.display = 'block';
+            paypal.Buttons({
+              fundingSource: paypal.FUNDING.GOOGLEPAY,
+              createSubscription: function(data, actions) {
+                return actions.subscription.create({
+                  plan_id: '{{ paypal_plan_id }}'
+                });
+              },
+              onApprove: function(data, actions) {
+                console.log('Google Pay response:', data);
+                fetch('/process-subscription', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                  },
+                  body: JSON.stringify({
+                    subscription_id: data.subscriptionID,
+                    user_id: '{{ current_user.id }}',
+                    paypal_response: data,
+                    payment_method: 'googlepay'
+                  })
+                })
+                .then(response => response.json())
+                .then(data => {
+                  alert(data.message);
+                  const isFlutterApp = window.location.search.includes('from=app') || navigator.userAgent.includes('Flutter');
+                  window.location.href = isFlutterApp ? 'myapp://subscription-success' : '/dashboard';
+                })
+                .catch(error => {
+                  console.error('Google Pay error:', error);
+                  alert("An error occurred with Google Pay.");
+                });
+              }
+            }).render('#google-pay-button').catch(err => {
+              console.error('Google Pay render error:', err);
+            });
+          } else {
+            console.log('Google Pay not eligible. Reasons:', config);
+            document.getElementById('no-wallet-message').style.display = 'block';
+          }
+        }).catch(err => {
+          console.error('Google Pay config error:', err);
+        });
+      }).catch(err => {
+        console.error('Apple Pay config error:', err);
+      });
+    }
   </script>
 </body>
 </html>

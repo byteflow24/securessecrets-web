@@ -1148,7 +1148,7 @@ def billing_api():
 @jwt_required()
 def api_change_plan():
     user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
+    user = db.session.get(User, int(user_id))
 
     if not user:
         return jsonify(success=False, error="User not found."), 404

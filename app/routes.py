@@ -1412,12 +1412,15 @@ def payment():
 
         except Exception as e:
             return jsonify({"error": "Invalid or expired token"}), 401
-
+        
+    
+    currency = user.plan.currency
+    amount = user.plan.price
     client_id = os.environ.get("PAYPAL_LIVE_CLIENT_ID")
     paypal_plan_id = json.loads(user.plan.paypal_plan_id)[0]
 
     return render_template("card_details.html", show_header=False, show_footer=False,
-                           client_id=client_id, paypal_plan_id=paypal_plan_id)
+                           client_id=client_id, paypal_plan_id=paypal_plan_id, currency=currency, amount=amount)
 
 
 

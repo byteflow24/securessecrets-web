@@ -291,6 +291,17 @@ def serve_file(abs_path, filename):
         mimetype=mime_types.get(ext, None)
     )
 
+# def as_dict(self):
+#     return {
+#         "id": self.id,
+#         "title": self.title,
+#         "snapshot_secret": self.snapshot_secret,
+#         "file": self.file,
+#         "share_date": self.share_date.isoformat() if self.share_date else None,
+#         "public": self.public,
+        
+#     }
+
 
 # Configures PayPal Payment Gateway
 ####################### LIVE ACTION #######################

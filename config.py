@@ -9,7 +9,7 @@ class Config:
         UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')  # Local directory
     else:
         UPLOAD_FOLDER = '/var/data/uploads'  # Render persistent disk
-    MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500 MB limit
+    MAX_CONTENT_LENGTH = 250 * 1024 * 1024  # 500 MB limit
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=15)
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
     JWT_BLACKLIST_ENABLED = True

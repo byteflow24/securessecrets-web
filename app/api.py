@@ -1,7 +1,7 @@
-from flask import Blueprint, request, jsonify, current_app, url_for
+from flask import Blueprint, request, jsonify, current_app, url_for, abort, send_file
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
-from .models import User, LoginHistory, Secret, SharedSecret, PublicSecrets, Payment, Plan
+from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan
 from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
@@ -9,10 +9,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.utils import secure_filename
-import requests
-import os
-import json
-import time
+import mimetypes, uuid, traceback, time, json, os, requests
 
 api = Blueprint('api', __name__, url_prefix='/api')
 
@@ -361,7 +358,7 @@ def public_secrets_api():
         else:
             date_time = None
 
-        public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
+        public_secret = SharedSecret.query.filter_by(id=secret.id).first()
         if public_secret:
             if secret.time_period:
                 public_secret.share_date = secret.time_period
@@ -370,9 +367,9 @@ def public_secrets_api():
 
     db.session.commit()
 
-    public_secrets = PublicSecrets.query.filter(
-        PublicSecrets.share_date <= now
-    ).order_by(PublicSecrets.share_date.desc()).all()
+    public_secrets =  SharedSecret.query.filter(
+        SharedSecret.share_date <= now
+    ).order_by(SharedSecret.share_date.desc()).all()
 
     upload_folder = current_app.config['UPLOAD_FOLDER']
     for ps in public_secrets[:]:
@@ -386,8 +383,8 @@ def public_secrets_api():
 
     decrypted_secrets = []
     for ps in public_secrets:
-        if ps.secret:
-            secret_text = decrypt_secret(ps.secret) if is_encrypted(ps.secret) else ps.secret
+        if ps.snapshot_secret:
+            secret_text = decrypt_secret(ps.snapshot_secret) if is_encrypted(ps.snapshot_secret) else ps.snapshot_secret
         else:
             secret_text = ""
 
@@ -439,15 +436,15 @@ def all_secrets_api():
     # Fetch shared secrets
     shared_secrets = db.session.execute(
         db.select(SharedSecret)
-        .options(db.joinedload(SharedSecret.secret), db.joinedload(SharedSecret.public_secret))
+        .options(db.joinedload(SharedSecret.secret))
         .where(SharedSecret.user_id == user.id)
         .order_by(SharedSecret.date_to_send.desc())
     ).scalars().all()
 
     shared_secrets_data = []
     for shared in shared_secrets:
-        if shared.public_secret and is_encrypted(shared.public_secret.secret):
-            shared.public_secret.secret = decrypt_secret(shared.public_secret.secret)
+        if shared.snapshot_secret and is_encrypted(shared.snapshot_secret):
+            shared.snapshot_secret = decrypt_secret(shared.snapshot_secret)
 
         if shared.date_to_send and shared.time_to_send:
             combined = datetime.combine(shared.date_to_send, shared.time_to_send)
@@ -457,11 +454,15 @@ def all_secrets_api():
 
         shared_secrets_data.append({
             'id': shared.id,
-            'public': bool(shared.public_secret),
-            'title': shared.secret.title if shared.secret else '',
-            'secret': shared.secret.secret if shared.secret else '',
+            'public': bool(shared.public),
+            'email': shared.email,
+            'title': shared.title if shared.title else '',
+            'secret': shared.snapshot_secret if shared.snapshot_secret else '',
+            'file': shared.file if shared.file else None,
             'date_to_send': shared.date_to_send.isoformat() if shared.date_to_send else None,
             'time_to_send': shared.time_to_send.isoformat() if shared.time_to_send else None,
+            "share_date": shared.share_date.isoformat() if shared and shared.share_date else None,
+            "time_period": shared.time_period.isoformat() if shared.time_period else None,
             'status': status,
         })
 
@@ -475,7 +476,7 @@ def all_secrets_api():
 @jwt_required()
 def search_secrets_api():
     user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
+    user = db.session.get(User, int(user_id))
 
     if not user:
         return jsonify({'error': 'User not found'}), 403
@@ -512,13 +513,12 @@ def search_secrets_api():
 # === Add secret === 
 @api.route('/add-secret', methods=['POST'])
 @jwt_required()
-@subscription_ended(api=True)
 def add_secret_api():
     user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
+    user = db.session.get(User, int(user_id))
 
     if not user:
-        return jsonify({'success': False, 'error': 'User not found'}), 403
+        return jsonify({'success': False, 'error': 'User not authorized'}), 403
 
     data = request.get_json()
     title = data.get('title', '').strip()
@@ -577,22 +577,22 @@ def add_secret_api():
 # === Uploading a file ===
 @api.route('/upload', methods=['POST'])
 @jwt_required()
-@subscription_ended(api=True)
 def upload_file_api():
-    if 'file' not in request.files:
-        return jsonify(error='No file part in the request'), 400
-
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify(error='No selected file'), 400
-
-    user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
-
-    if not user:
-        return jsonify(error='User not authenticated'), 401
-
     try:
+        user_id = get_jwt_identity()
+        user = db.session.get(User, int(user_id))
+
+        if not user:
+            return jsonify(error='User not authorized'), 401
+
+        if 'file' not in request.files:
+            return jsonify(error='No file part in the request'), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify(error='No selected file'), 400
+
+        # Read file size to check against user's limit
         file_bytes = file.read()
         file_size = len(file_bytes)
         file.seek(0)
@@ -600,30 +600,41 @@ def upload_file_api():
         if user.storage_used + file_size > user.plan.storage_limit:
             return jsonify(error='Exceeds storage limit'), 403
 
-        filename = secure_filename(file.filename)
+        # Generate unique filename
+        original_filename = secure_filename(file.filename)
+        unique_prefix = uuid.uuid4().hex
+        filename = f"{unique_prefix}_{original_filename}"
+
+        # Save path
         upload_folder = current_app.config['UPLOAD_FOLDER']
-        if not os.path.exists(upload_folder):
-            os.makedirs(upload_folder)
+        os.makedirs(upload_folder, exist_ok=True)
         file_path = os.path.join(upload_folder, filename)
 
+        # Save the file
         file.save(file_path)
 
-        # Update user's storage
+        # Update user storage
         user.storage_used += file_size
         db.session.commit()
 
-        return jsonify(message='File successfully uploaded', filename=filename), 200
+        # Return result
+        mime, _ = mimetypes.guess_type(filename)
+        return jsonify(
+            message='File successfully uploaded',
+            filename=filename,
+            mimetype=mime
+        ), 200
 
     except Exception as e:
-        return jsonify(error=str(e)), 500
+        print("[❌ Upload Error]", str(e))
+        return jsonify(error='Server error during upload'), 500
     
 # === Route to fetch the user's current storage usage and limit, requiring login ===
 @api.route('/get-storage-info', methods=['GET'])
 @jwt_required()
-@subscription_ended(api=True)
 def get_storage_info_api():
     user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
+    user = db.session.get(User, int(user_id))
 
     if not user:
         return jsonify(error='User not authenticated'), 401
@@ -640,10 +651,9 @@ def get_storage_info_api():
 # === Editing Secret ===
 @api.route('/update-secret/<int:secret_id>', methods=['PUT'])
 @jwt_required()
-@subscription_ended(api=True)
 def update_secret_api(secret_id):
     user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
+    user = db.session.get(User, int(user_id))
     if not user:
         return jsonify(success=False, error="User not found."), 404
 
@@ -720,7 +730,7 @@ def update_secret_api(secret_id):
                 "title": secret.title,
                 "secret": decrypted_secret,
                 "file": secret.file,
-                "date": secret.date.strftime("%Y-%m-%d %H:%M:%S"),
+                "date": secret.date.strftime("%Y-%m-%d"),
                 "file_preview": secret.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) if secret.file else False,
             }
         ), 200
@@ -732,10 +742,9 @@ def update_secret_api(secret_id):
 # === Deleting secret === 
 @api.route('/delete-secret/<int:sec_id>', methods=['DELETE'])
 @jwt_required()
-@subscription_ended(api=True)
 def delete_secret_api(sec_id):
     user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
+    user = db.session.get(User, int(user_id))
 
     if not user:
         return jsonify(error='User not authenticated'), 401
@@ -756,7 +765,7 @@ def delete_secret_api(sec_id):
             file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], secret.file)
 
             is_shared_publicly = db.session.execute(
-                db.select(PublicSecrets).filter_by(file=secret.file)
+                db.select(SharedSecret).filter_by(file=secret.file)
             ).scalar()
 
             if os.path.exists(file_path) and not is_shared_publicly:
@@ -778,15 +787,40 @@ def delete_secret_api(sec_id):
     except Exception as e:
         current_app.logger.error(f"Error deleting secret {sec_id}: {e}")
         return jsonify(error='An unexpected error occurred'), 500
+    
+
+# === Deleting shared secret === 
+@api.route('/delete-shared-secret/<int:sec_id>', methods=['DELETE'])
+@jwt_required()
+def delete_shared_secret_api(sec_id):
+    user_id = get_jwt_identity()
+    user = db.session.get(User, int(user_id))
+
+    if not user:
+        return jsonify(error='User not authenticated'), 401
+
+    try:
+        secret = db.get_or_404(SharedSecret, sec_id)
+
+        db.session.delete(secret)
+        db.session.commit()
+
+        return jsonify(success=True, message='Secret deleted successfully'), 200
+
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify(error='A database error occurred while deleting the secret'), 500
+    except Exception as e:
+        current_app.logger.error(f"Error deleting secret {sec_id}: {e}")
+        return jsonify(error='An unexpected error occurred'), 500
 
 
 # === Sharing Secret === 
 @api.route('/share-secret', methods=['POST'])
 @jwt_required()
-@subscription_ended(api=True)
 def share_secret_api():
     user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
+    user = db.session.get(User, int(user_id))
     if not user:
         return jsonify(success=False, message="User not found"), 404
 
@@ -803,20 +837,19 @@ def share_secret_api():
 
     # === LAST LOGIN SHARING ===
     if data.get("date_period"):
-        date_period = int(data.get("date_period"))
+        date_period = int(data["date_period"])
         emails = [e.strip() for e in data.get("email_login", "").split(",") if e.strip()]
         public = data.get("public_login", False)
         confirm_deletion = data.get("public_confirm_deletion", False)
 
         if not emails and not public:
             return jsonify(success=False, message="You must provide emails or enable public sharing for last login"), 400
-
+        
         last_login_entry = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc()).first()
-        last_login = last_login_entry.login_time if last_login_entry else None
-
-        if not last_login:
+        if not last_login_entry:
             return jsonify(success=False, message="Last login time not found"), 400
 
+        last_login = last_login_entry.login_time
         time_period = last_login + timedelta(days=date_period)
         token = generate_token() if emails else None
 
@@ -824,34 +857,26 @@ def share_secret_api():
             user_id=user.id,
             secret_id=secret_id,
             email=emails or None,
+            username=user.username,
             public=public,
+            title=secret.title,
+            snapshot_secret=secret.secret,
+            file=secret.file,
             last_login=last_login,
             period=date_period,
             time_period=time_period,
             public_delete_confirm=confirm_deletion,
-            token=token
+            token=token,
+            received=False,
+            share_date=time_period
         )
         db.session.add(shared_secret)
         db.session.commit()
-
-        if public:
-            public_secret = PublicSecrets(
-                shared_secret_id=shared_secret.id,
-                username=user.username,
-                title=secret.title,
-                secret=secret.secret,
-                file=secret.file,
-                share_date=time_period
-            )
-            db.session.add(public_secret)
-            db.session.commit()
 
         responses.append(f"Shared via last login — will activate after {date_period} day(s) from last login.")
 
     # === SCHEDULED SHARING ===
     if data.get("date") and data.get("time"):
-        date_str = data["date"]
-        time_str = data["time"]
         emails = [e.strip() for e in data.get("email_scheduled", "").split(",") if e.strip()]
         public = data.get("public_scheduled", False)
         confirm_deletion = data.get("scheduled_confirm_deletion", False)
@@ -860,45 +885,78 @@ def share_secret_api():
             return jsonify(success=False, message="You must provide emails or enable public sharing for scheduled sharing"), 400
 
         try:
-            share_datetime_local = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+            date_str = data["date"]
+            time_str = data["time"]
+            local_dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
         except ValueError:
             return jsonify(success=False, message="Invalid date/time format. Expected YYYY-MM-DD and HH:MM"), 400
 
-        share_datetime_utc = convert_utc_to_local(share_datetime_local, user.time_zone)
-        date_to_send, time_to_send = share_datetime_utc.date(), share_datetime_utc.time()
+        # Convert to UTC
+        share_datetime_utc = convert_utc_to_local(local_dt, user.time_zone)
+        date_to_send = share_datetime_utc
+        time_to_send = share_datetime_utc
         token = generate_token() if emails else None
 
         shared_secret = SharedSecret(
             user_id=user.id,
             secret_id=secret_id,
             email=emails or None,
+            username=user.username,
             public=public,
-            date_to_send=str(date_to_send),
-            time_to_send=str(time_to_send),
+            title=secret.title,
+            snapshot_secret=secret.secret,
+            file=secret.file,
+            date_to_send=date_to_send,
+            time_to_send=time_to_send,
             schedule_delete_confirm=confirm_deletion,
-            token=token
+            token=token,
+            received=False,
+            share_date=share_datetime_utc
         )
         db.session.add(shared_secret)
         db.session.commit()
-
-        if public:
-            public_secret = PublicSecrets(
-                shared_secret_id=shared_secret.id,
-                username=user.username,
-                title=secret.title,
-                secret=secret.secret,
-                file=secret.file,
-                share_date=share_datetime_utc
-            )
-            db.session.add(public_secret)
-            db.session.commit()
 
         responses.append(f"Scheduled to share on {date_str} at {time_str}")
 
     if not responses:
         return jsonify(success=False, message="No valid sharing configuration found."), 400
 
-    return jsonify(success=True, messages=responses), 200
+    # Get the latest shared secret just created
+    latest_shared = db.session.query(SharedSecret)\
+        .filter_by(user_id=user.id, secret_id=secret_id)\
+        .order_by(SharedSecret.id.desc())\
+        .first()
+
+    # Decrypt if needed
+    if latest_shared and latest_shared.snapshot_secret and is_encrypted(latest_shared.snapshot_secret):
+        latest_shared.snapshot_secret = decrypt_secret(latest_shared.snapshot_secret)
+
+    # Calculate status
+    if latest_shared.date_to_send and latest_shared.time_to_send:
+        combined = datetime.combine(latest_shared.date_to_send, latest_shared.time_to_send)
+        status = 'shared' if combined <= datetime.now() else 'pending'
+    else:
+        status = 'shared' if latest_shared.received else 'pending'
+
+    # Return the secret info
+    return jsonify({
+        "success": True,
+        "messages": responses,
+        "secret": {
+            "id": latest_shared.id,
+            "public": bool(latest_shared.public),
+            "email": latest_shared.email,
+            "title": latest_shared.title or '',
+            "secret": latest_shared.snapshot_secret or '',
+            "file": latest_shared.file or None,
+            "date_to_send": latest_shared.date_to_send.isoformat() if latest_shared.date_to_send else None,
+            "time_to_send": latest_shared.time_to_send.isoformat() if latest_shared.time_to_send else None,
+            "share_date": latest_shared.share_date.isoformat() if latest_shared.share_date else None,
+            "time_period": latest_shared.time_period.isoformat() if latest_shared.time_period else None,
+            "status": status
+        }
+    }), 200
+
 
 ########################################### PROFILE API ###########################################
 
@@ -1222,7 +1280,7 @@ def api_delete_published_secret(pb_secret_id):
     if not user or user.username != "admin":
         return jsonify({"error": "You are not authorized to delete this secret."}), 403
 
-    secret = PublicSecrets.query.get(pb_secret_id)
+    secret = SharedSecret.query.get(pb_secret_id)
     if not secret:
         return jsonify({"error": "Secret not found."}), 404
 
@@ -1234,3 +1292,51 @@ def api_delete_published_secret(pb_secret_id):
         db.session.rollback()
         print(e)
         return jsonify({"error": "Failed to delete the secret."}), 500
+    
+
+@api.route('/download/<filename>', methods=['GET'])
+@jwt_required(optional=True)
+def download_file_api(filename):
+    try:
+        upload_folder = current_app.config['UPLOAD_FOLDER']
+        abs_path = os.path.abspath(os.path.join(upload_folder, filename))
+
+        # ✅ Check if file exists
+        if not os.path.exists(abs_path):
+            return abort(404, description="File not found.")
+
+        # ✅ Determine MIME type
+        mimetype, _ = mimetypes.guess_type(abs_path)
+        if mimetype is None:
+            mimetype = 'application/octet-stream'
+
+        # ✅ Publicly shared file?
+        public_entry = SharedSecret.query.filter_by(file=filename, public=True).first()
+        if public_entry:
+            return send_file(abs_path, mimetype=mimetype, conditional=True)
+
+        # ✅ Get user from token if available
+        user_id = get_jwt_identity()
+        user = db.session.get(User, int(user_id)) if user_id else None
+
+        if user:
+            # ✅ File owned by user?
+            owned = Secret.query.filter_by(file=filename, user_id=user.id).first()
+            if owned:
+                return send_file(abs_path, mimetype=mimetype, conditional=True)
+
+            # ✅ File shared with user via email?
+            shared = SharedSecret.query.join(Secret).filter(
+                Secret.file == filename,
+                SharedSecret.email == user.email
+            ).first()
+            if shared:
+                return send_file(abs_path, mimetype=mimetype, conditional=True)
+
+        # ❌ If no access
+        return abort(403, description="You don't have permission to access this file.")
+
+    except Exception as e:
+        print("[API Download Error]", str(e))
+        traceback.print_exc()
+        return abort(500)

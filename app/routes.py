@@ -1,28 +1,21 @@
-from flask import Blueprint, render_template, redirect, url_for, send_from_directory, flash, request, session, jsonify, current_app, abort, get_flashed_messages
+from flask import Blueprint, render_template, redirect, url_for, send_from_directory, flash, request, session, jsonify, current_app, abort, send_file
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
-from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, PublicSecrets
+from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret
 from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone 
 from twilio.rest import Client
-import pytz
-import time
-import json
 from dateutil.relativedelta import relativedelta
-import os
-import traceback
-import requests
-import logging
-import jwt
+import pytz, paypalrestsdk, uuid, time, json, os, traceback, requests, logging, jwt, mimetypes
 
 # Handle Google Application Credentials
 if "GOOGLE_APPLICATION_CREDENTIALS_JSON" in os.environ:
@@ -143,8 +136,9 @@ def home():
             # Combine date_to_send and time_to_send if they exist and match the current time
             date_time = datetime.combine(secret.date_to_send, secret.time_to_send)
 
-        # Update the associated PublicSecrets share_date if available
-        public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
+        # Update the associated SharedSecret share_date if available
+        public_secret = SharedSecret.query.filter_by(id=secret.id).first()
+
         if public_secret:
             # Update share_date based on valid `time_period` or `date_time`
             if secret.time_period:
@@ -156,9 +150,9 @@ def home():
     db.session.commit()
 
     # Fetch all public shared secrets with eligible share_date, sorted by share_date (newest first)
-    public_secrets = PublicSecrets.query.filter(
-        PublicSecrets.share_date <= datetime.now()
-    ).order_by(PublicSecrets.share_date.desc()).all()
+    public_secrets = SharedSecret.query.filter(
+        SharedSecret.share_date <= datetime.now()
+    ).order_by(SharedSecret.share_date.desc()).all()
 
     upload_folder = current_app.config['UPLOAD_FOLDER']
 
@@ -167,21 +161,21 @@ def home():
         if public_secret.file:  # If there's a file associated
             file_path = os.path.join(upload_folder, public_secret.file)
             if not os.path.exists(file_path):  # File is missing
-                # Delete the secret from PublicSecrets
+                # Delete the secret from SharedSecret
                 db.session.delete(public_secret)
                 public_secrets.remove(public_secret)
 
     # Decrypt and prepare public secrets for display
     decrypted_secrets = []
     for public_secret in public_secrets:
-        public_secret.display_time = ''
         
-         # Always format the share_date time
-        public_secret.display_time = public_secret.share_date.strftime('%H:%M') if public_secret.share_date else ''
+        # Dynamically attach display_time as a string
+        display_time = public_secret.share_date.strftime('%H:%M') if public_secret.share_date else ''
+        public_secret.display_time = display_time
 
         # Decrypt the secret if it's encrypted
-        if is_encrypted(public_secret.secret):
-            public_secret.secret = decrypt_secret(public_secret.secret)
+        if public_secret.snapshot_secret and is_encrypted(public_secret.snapshot_secret):
+            public_secret.snapshot_secret = decrypt_secret(public_secret.snapshot_secret)
 
         # Append the public secret to the list
         decrypted_secrets.append(public_secret)
@@ -202,7 +196,7 @@ def home():
             flash('You must provide a reason for the report.', 'danger')
             return redirect(request.path)
 
-        public_secret = PublicSecrets.query.filter_by(id=secret_id).first()
+        public_secret = SharedSecret.query.filter_by(id=secret_id).first()
         if not public_secret:
             flash('The secret you are reporting does not exist.', 'danger')
             return redirect(request.path)
@@ -373,97 +367,8 @@ def login():
             
             return redirect(url_for('main.dashboard'))
     
-    # Fetch the public shared secrets, eager-load user and secret relationships
-    shared_secret = db.session.execute(
-        db.select(SharedSecret)
-        .where(SharedSecret.public == True, 
-            (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None))
-        .options(joinedload(SharedSecret.user), joinedload(SharedSecret.secret))
-    ).scalars().all()
-
-    current_date = datetime.now().date()
-    current_time = datetime.now().time()
-
-    # Check if the user logged in recently and update the time period or scheduled date
-    for secret in shared_secret:
-        # Get the most recent login date for the user
-        latest_login = db.session.execute(
-            db.select(LoginHistory.login_time)
-            .where(LoginHistory.user_id == secret.user_id)
-            .order_by(desc(LoginHistory.login_time))
-            .limit(1)
-        ).scalar_one_or_none()
-
-        # Initialize date_time with None for cases when no scheduled date is set
-        date_time = None
-
-        # If a recent login exists and it's more recent than the current last_login
-        if latest_login and (secret.last_login is None or latest_login > secret.last_login):
-            # Update the last_login to the latest login date
-            secret.last_login = latest_login
-
-            # Handle `period` and calculate `time_period` if `period` is present
-            if secret.period:
-                try:
-                    # Calculate the new time period based on the period (e.g., days)
-                    time_period = latest_login + timedelta(days=int(secret.period))
-                    secret.time_period = time_period
-                except ValueError:
-                    # Skip this secret if `period` is invalid but do not raise an error
-                    continue
-
-        # Handle the scenario when `date_to_send` and `time_to_send` are used
-        if secret.date_to_send == current_date and secret.time_to_send == current_time:
-            # Combine date_to_send and time_to_send if they exist and match the current time
-            date_time = datetime.combine(secret.date_to_send, secret.time_to_send)
-
-        # Update the associated PublicSecrets share_date if available
-        public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
-        if public_secret:
-            # Update share_date based on valid `time_period` or `date_time`
-            if secret.time_period:
-                public_secret.share_date = secret.time_period
-            elif date_time:
-                public_secret.share_date = date_time
-
-    # Commit changes to the database
-    db.session.commit()
-
-    # Fetch all public shared secrets with eligible share_date, sorted by share_date (newest first)
-    public_secrets = PublicSecrets.query.filter(
-        PublicSecrets.share_date <= datetime.now()
-    ).order_by(PublicSecrets.share_date.desc()).all()
-
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-
-    # Check if files exist; delete secrets with missing files
-    for public_secret in public_secrets[:]:
-        if public_secret.file:  # If there's a file associated
-            file_path = os.path.join(upload_folder, public_secret.file)
-            if not os.path.exists(file_path):  # File is missing
-                # Delete the secret from PublicSecrets
-                db.session.delete(public_secret)
-                public_secrets.remove(public_secret)
-
-    # Decrypt and prepare public secrets for display
-    decrypted_secrets = []
-    for public_secret in public_secrets:
-        public_secret.display_time = ''
-        
-         # Always format the share_date time
-        public_secret.display_time = public_secret.share_date.strftime('%H:%M') if public_secret.share_date else ''
-
-        # Decrypt the secret if it's encrypted
-        if is_encrypted(public_secret.secret):
-            public_secret.secret = decrypt_secret(public_secret.secret)
-
-        # Append the public secret to the list
-        decrypted_secrets.append(public_secret)
     
-    # No need for the Session timeout in this page
-    session.permanent = True
-    
-    return render_template('login.html', form=form, current_user=current_user, show_header=False, show_footer=True, public_secrets=decrypted_secrets)
+    return render_template('login.html', form=form, current_user=current_user, show_header=False, show_footer=True)
 
 # Log out server
 @main.route('/logout')
@@ -718,8 +623,8 @@ def dashboard():
             # Combine date_to_send and time_to_send if they exist and match the current time
             date_time = datetime.combine(secret.date_to_send, secret.time_to_send)
 
-        # Update the associated PublicSecrets share_date if available
-        public_secret = PublicSecrets.query.filter_by(shared_secret_id=secret.id).first()
+        # Update the associated SharedSecret > when public true > share_date if available
+        public_secret = SharedSecret.query.filter_by(id=secret.id).first()
         if public_secret:
             # Update share_date based on valid `time_period` or `date_time`
             if secret.time_period:
@@ -731,9 +636,9 @@ def dashboard():
     db.session.commit()
 
     # Fetch all public shared secrets with eligible share_date, sorted by share_date (newest first)
-    public_secrets = PublicSecrets.query.filter(
-        PublicSecrets.share_date <= datetime.now()
-    ).order_by(PublicSecrets.share_date.desc()).all()
+    public_secrets = SharedSecret.query.filter(
+        SharedSecret.share_date <= datetime.now()
+    ).order_by(SharedSecret.share_date.desc()).all()
 
     upload_folder = current_app.config['UPLOAD_FOLDER']
 
@@ -742,7 +647,7 @@ def dashboard():
         if public_secret.file:  # If there's a file associated
             file_path = os.path.join(upload_folder, public_secret.file)
             if not os.path.exists(file_path):  # File is missing
-                # Delete the secret from PublicSecrets
+                # Delete the secret from SharedSecret
                 db.session.delete(public_secret)
                 public_secrets.remove(public_secret)
 
@@ -752,15 +657,16 @@ def dashboard():
     # Decrypt and prepare public secrets for display
     decrypted_secrets = []
     for public_secret in public_secrets:
-        public_secret.display_time = ''
-        
-        # Always format the share_date time
-        public_secret.display_time = public_secret.share_date.strftime('%H:%M') if public_secret.share_date else ''
+
+        # Dynamically attach display_time as a string
+        display_time = public_secret.share_date.strftime('%H:%M') if public_secret.share_date else ''
+        public_secret.display_time = display_time
 
         # Decrypt the secret if it's encrypted
-        if is_encrypted(public_secret.secret):
-            public_secret.secret = decrypt_secret(public_secret.secret)
+        if public_secret.snapshot_secret and is_encrypted(public_secret.snapshot_secret):
+            public_secret.snapshot_secret = decrypt_secret(public_secret.snapshot_secret)
 
+        
         # Append the public secret to the list
         decrypted_secrets.append(public_secret)
     
@@ -790,7 +696,7 @@ def dashboard():
             flash('You must provide a reason for the report.', 'danger')
             return redirect(request.path)
 
-        public_secret = PublicSecrets.query.filter_by(id=secret_id).first()
+        public_secret = SharedSecret.query.filter_by(id=secret_id).first()
         if not public_secret:
             flash('The secret you are reporting does not exist.', 'danger')
             return redirect(request.path)
@@ -844,7 +750,6 @@ def all_secrets():
     # Fetch shared secrets for the current user
     shared_secrets = db.session.execute(
         db.select(SharedSecret)
-        .options(db.joinedload(SharedSecret.secret), db.joinedload(SharedSecret.public_secret))
         .where(SharedSecret.user_id == current_user.id)  # assuming shared via email
         .order_by(SharedSecret.date_to_send.desc())  # or any date field you prefer
     ).scalars().all()
@@ -852,9 +757,8 @@ def all_secrets():
     # Decrypt shared and public secrets after fetching them
     for shared in shared_secrets:
         # Check if public_secret is encrypted and decrypt it if necessary
-        if shared.public_secret:
-            if is_encrypted(shared.public_secret.secret):
-                shared.public_secret.secret = decrypt_secret(shared.public_secret.secret)
+        if shared.snapshot_secret and is_encrypted(shared.snapshot_secret):
+            shared.snapshot_secret = decrypt_secret(shared.snapshot_secret)
 
     for shared in shared_secrets:
         if shared.date_to_send and shared.time_to_send:
@@ -966,40 +870,45 @@ def add_secret():
 @main.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
-        return jsonify(error = 'No file part in the request'), 400
+        return jsonify(error='No file part in the request'), 400
 
     file = request.files['file']
     if file.filename == '':
-        return jsonify(error = 'No selected file'), 400
+        return jsonify(error='No selected file'), 400
 
-    # Check if user is authenticated and retrieve their storage limit
     if not current_user.is_authenticated:
-        return jsonify(error = 'User not authenticated'), 401
+        return jsonify(error='User not authenticated'), 401
 
-    # Check file size
     try:
-        file_size = len(file.read())
-        file.seek(0)  # Reset file pointer
+        # Read file content to get size
+        file_bytes = file.read()
+        file_size = len(file_bytes)
+        file.seek(0)  # Reset pointer to save later
+
         if current_user.storage_used + file_size > current_user.plan.storage_limit:
-            return jsonify(error = 'Exceeds storage limit'), 403
-    except Exception as e:
-        return jsonify(error = str(e)), 500
+            return jsonify(error='Exceeds storage limit'), 403
 
-    # Save the file
-    filename = secure_filename(file.filename)
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    if not os.path.exists(upload_folder):
-        os.makedirs(upload_folder)
-    file_path = os.path.join(upload_folder, filename)
+        # Generate secure + unique filename
+        original_filename = secure_filename(file.filename)
+        unique_prefix = uuid.uuid4().hex
+        filename = f"{unique_prefix}_{original_filename}"
 
-    try:
+        upload_folder = current_app.config['UPLOAD_FOLDER']
+        os.makedirs(upload_folder, exist_ok=True)
+        file_path = os.path.join(upload_folder, filename)
+
+        # Save file
         file.save(file_path)
+
         # Update storage usage
         current_user.storage_used += file_size
         db.session.commit()
-        return jsonify(message = 'File successfully uploaded', filename = filename), 200
+
+        return jsonify(message='File successfully uploaded', filename=filename), 200
+
     except Exception as e:
-        return jsonify(error = str(e)), 500
+        print(f"[❌ Upload Error] {str(e)}")
+        return jsonify(error=str(e)), 500
 
 # Route to fetch the user's current storage usage and limit, requiring login.
 @main.route('/get-storage-info', methods=['GET'])
@@ -1081,14 +990,27 @@ def share():
         try:
             if email:
                 token = generate_token()
+
             secret = Secret.query.filter_by(id=request.args.get("secret_id")).first()
 
-            # Add the new shared secret first
+            if not secret:
+                return jsonify(success=False, error="Secret not found"), 404
+
+            # Store a snapshot of the secret in SharedSecret
             new_shared_secret = SharedSecret(
                 user_id=current_user.id,
-                secret_id=request.args.get("secret_id"),
+                secret_id=secret.id,
                 email=email,
+                username=current_user.username,
                 public=public,
+                title=secret.title,
+                snapshot_secret=secret.secret,
+                file=secret.file,
+                share_date=(
+                        time_period if sharing_type == "last_login"
+                        else date_time_combined if sharing_type == "scheduled"
+                        else None
+                    ),
                 last_login=last_login if sharing_type == "last_login" else None,
                 period=date_period if sharing_type == "last_login" else None,
                 time_period=time_period if sharing_type == "last_login" else None,
@@ -1100,32 +1022,22 @@ def share():
                 schedule_delete_confirm=form.scheduled_confirm_deletion.data if sharing_type == "scheduled" else False,
             )
             db.session.add(new_shared_secret)
-            db.session.commit()  # Commit to generate ID
-            if public:
-                # Add the public secret
-                public_secrets = PublicSecrets(
-                    shared_secret_id=new_shared_secret.id,
-                    username=current_user.username,
-                    title=secret.title,
-                    secret=secret.secret,
-                    file=secret.file,
-                    share_date=(
-                        time_period if sharing_type == "last_login"
-                        else date_time_combined if sharing_type == "scheduled"
-                        else None
-                    )
-                )
-                db.session.add(public_secrets)
-                db.session.commit()
+            db.session.commit()
+
             flash(message, "success")
             return jsonify(success=True, message=message), 200
 
         except Exception as e:
             db.session.rollback()
             error_message = str(e)
-            print(f"Error occurred: {error_message}")  # Log the error for debugging
+            print(f"Error occurred: {error_message}")
             flash(f"Error occurred: {error_message}")
-            return jsonify(success= False, message= "An error occurred while sharing the secret", error= error_message), 500
+            return jsonify(
+                success=False,
+                message="An error occurred while sharing the secret",
+                error=error_message
+            ), 500
+
 
     # Log validation errors
     print("Validation errors:", form.errors)
@@ -1184,7 +1096,7 @@ def only_for_you(token):
 #     return jsonify(success=True)    
 
 # Deleting a secret
-@main.route('/delete/<int:sec_id>', methods=['GET', 'POST'])
+@main.route('/delete/<int:sec_id>', methods=['GET', 'DELETE'])
 @login_required
 def delete_secret(sec_id):
     
@@ -1199,8 +1111,8 @@ def delete_secret(sec_id):
         if secret.file:
             file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], secret.file)
 
-            # Check if the file is still referenced in PublicSecrets
-            is_shared_publicly = PublicSecrets.query.filter_by(file=secret.file).first()
+            # Check if the file is still referenced in SharedSecret
+            is_shared_publicly = SharedSecret.query.filter_by(file=secret.file).first()
             if os.path.exists(file_path) and not is_shared_publicly:
                 file_size = os.path.getsize(file_path)
 
@@ -1225,9 +1137,24 @@ def delete_secret(sec_id):
         print(e)
         # Handle error (e.g., notify the user, log the error, etc.)
         return "An error occurred while deleting the secret.", 500
+
+# deleting shared secret by user
+@main.route('/delete-shared-secret/<int:secret_id>', methods=['GET', 'DELETE'])
+@login_required
+def delete_shared_secret(secret_id):
+
+    if not current_user.username != "admin":
+        flash('You are not authorized to delete the secret', 'danger')
+        return redirect(url_for('main.dashboard'))
+    else:
+        secret = SharedSecret.query.get(secret_id)
+        db.session.delete(secret)
+        db.session.commit()
+        flash('Secret has been deleted successfully.', 'success')
+        return redirect(url_for('main.all_secrets'))
     
 
-# User to delete his account
+# Delete account
 @main.route('/delete-account/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def delete_account(user_id):
@@ -1260,7 +1187,7 @@ def delete_account(user_id):
         return redirect(url_for('main.update_profile'))
     
 # Admin can delete published secrets
-@main.route('/delete-pubsecret/<int:pb_secret_id>', methods=['GET', 'POST'])
+@main.route('/delete-pubsecret/<int:pb_secret_id>', methods=['GET', 'DELETE'])
 @login_required
 def delete_published_secret(pb_secret_id):
 
@@ -1268,7 +1195,7 @@ def delete_published_secret(pb_secret_id):
         flash('You are not authorized to delete the secret', 'danger')
         return redirect(url_for('main.dashboard'))
     else:
-        secret = PublicSecrets.query.get(pb_secret_id)
+        secret = SharedSecret.query.get(pb_secret_id)
         db.session.delete(secret)
         db.session.commit()
         flash('Secret has been deleted successfully.', 'success')
@@ -1349,6 +1276,13 @@ def update_secret(secret_id):
             # Update storage and commit changes
             current_user.storage_used = total_new_storage
             secret.date = date.today().strftime("%Y-%m-%d")
+
+            shared_entries = SharedSecret.query.filter_by(secret_id=secret.id).all()
+            for shared in shared_entries:
+                shared.title = secret.title
+                shared.snapshot_secret = secret.secret
+                shared.file = secret.file
+
             db.session.commit()
 
             # Decrypt the secret for display
@@ -1362,7 +1296,7 @@ def update_secret(secret_id):
                     "secret": decrypted_secret,
                     "file": secret.file,
                     "date": secret.date.strftime("%Y-%m-%d %H:%M:%S"),
-                    "file_preview": secret.file.endswith(('.png', '.jpg', '.jpeg', '.gif')),
+                    "file_preview": secret.file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')),
                 }
             ), 200
 
@@ -1422,6 +1356,48 @@ def payment():
     return render_template("card_details.html", show_header=False, show_footer=False,
                            client_id=client_id, paypal_plan_id=paypal_plan_id, currency=currency, amount=amount)
 
+
+@main.route('/create-paypal-order', methods=['POST'])
+def create_paypal_order():
+    try:
+        data = request.get_json()
+        plan_id = data.get('plan_id')
+        amount = data.get('amount')
+        currency = data.get('currency')
+
+        # Configure PayPal SDK
+        paypalrestsdk.configure({
+            'mode': 'sandbox',  # Change to 'live' for production
+            'client_id': os.environ.get('PAYPAL_LIVE_CLIENT_ID'),
+            'client_secret': os.environ.get('PAYPAL_LIVE_CLIENT_SECRET')
+        })
+
+        # Create PayPal order
+        order = paypalrestsdk.Order({
+            'intent': 'CAPTURE',
+            'purchase_units': [{
+                'amount': {
+                    'currency_code': currency,
+                    'value': amount
+                },
+                'description': 'Subscription payment'
+            }],
+            'application_context': {
+                'brand_name': 'Your App Name',  # Replace with your app name
+                'landing_page': 'NO_PREFERENCE',
+                'user_action': 'PAY_NOW'
+            }
+        })
+
+        if order.create():
+            print(f"Created PayPal order: {order.id}")  # Debug
+            return jsonify({'orderId': order.id})
+        else:
+            print(f"Order creation failed: {order.error}")  # Debug
+            return jsonify({'error': 'Failed to create PayPal order', 'details': order.error}), 500
+    except Exception as e:
+        print(f"Error creating PayPal order: {str(e)}")  # Debug
+        return jsonify({'error': 'Server error creating PayPal order', 'details': str(e)}), 500
 
 
 @main.route('/process-subscription', methods=['POST'])
@@ -1675,33 +1651,38 @@ def download_file(filename):
         upload_folder = current_app.config['UPLOAD_FOLDER']
         abs_path = os.path.abspath(os.path.join(upload_folder, filename))
 
-        # Check if file physically exists
+        # ✅ Check if file exists
         if not os.path.exists(abs_path):
             return abort(404, description="File not found.")
 
-        # Check if file is published publicly
-        public = PublicSecrets.query.filter_by(file=filename).first()
-        if public:
-            return serve_file(abs_path, filename)
+        # ✅ Determine MIME type (e.g. video/mp4, image/png, etc.)
+        mimetype, _ = mimetypes.guess_type(abs_path)
+        if mimetype is None:
+            mimetype = 'application/octet-stream'
 
-        # If not public, restrict access
+        # ✅ If public
+        public = SharedSecret.query.filter_by(file=filename).first()
+        if public:
+            return send_file(abs_path, mimetype=mimetype, conditional=True)
+
+        # ✅ If private, check access
         if not current_user.is_authenticated:
             return abort(403, description="Login required.")
 
-        # Is the file owned by the current user?
+        # ✅ File owned by current user?
         owned_secret = Secret.query.filter_by(file=filename, user_id=current_user.id).first()
         if owned_secret:
-            return serve_file(abs_path, filename)
+            return send_file(abs_path, mimetype=mimetype, conditional=True)
 
-        # Was this file shared with the current user via email?
+        # ✅ Shared with user via email?
         shared = SharedSecret.query.join(Secret).filter(
             Secret.file == filename,
             SharedSecret.email == current_user.email
         ).first()
         if shared:
-            return serve_file(abs_path, filename)
+            return send_file(abs_path, mimetype=mimetype, conditional=True)
 
-        # If all checks fail, deny access
+        # ❌ No access
         return abort(403, description="You don't have permission to access this file.")
 
     except Exception as e:

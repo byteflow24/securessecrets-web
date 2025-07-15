@@ -214,13 +214,13 @@
                         {% for public in public_secrets %}
                             <div class="news-content">
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <p class="text-secondary"><strong>@{{ public.username or 'Anonymous' }}</strong></p>
+                                    <p class="text-secondary"><strong>@{{ public.username }}</strong></p>
                                     <p style="font-size: 0.75rem;">{{ public.display_time }}</p>
                                 </div>
                                 <div class="secret-wrapper clickable" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; cursor: pointer;">
-                                    <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.secret|safe }}</p>
+                                    <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.snapshot_secret|safe }}</p>
                                     {% if public.file %}
-                                        {% if public.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
+                                        {% if public.file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) %}
                                             <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="File Preview" style="max-width: 40%; height: auto;">
                                         {% elif public.file.endswith('.pdf') %}
                                             <iframe src="{{ url_for('main.download_file', filename=public.file) }}" 
@@ -240,7 +240,7 @@
                                     {% endif %}
                                     <!-- Action links -->
                                     <div class="mt-2 d-flex justify-content-end gap-3">
-                                        <a class="text-danger report-btn" data-bs-toggle="modal" data-bs-target="#reportSecretModel" data-id="{{ public.id }}" data-secret="{{ public.secret }}" data-file="{{ public.file }}" style="font-size: 0.85rem;">Report</a>
+                                        <a class="text-danger report-btn" data-bs-toggle="modal" data-bs-target="#reportSecretModel" data-id="{{ public.id }}" data-secret="{{ public.snapshot_secret    }}" data-file="{{ public.file }}" style="font-size: 0.85rem;">Report</a>
                                         {% if current_user.username == "admin" %}
                                             <a href="{{ url_for('main.delete_published_secret', pb_secret_id=public.id) }}" class="text-muted" style="font-size: 0.85rem;">Delete</a>
                                         {% endif %}

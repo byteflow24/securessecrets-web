@@ -146,12 +146,13 @@ class Plan(db.Model):
 # Shared Secrets Table
 class SharedSecret(db.Model):
     __tablename__ = 'shared_secrets'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     secret_id = db.Column(db.Integer, db.ForeignKey('secrets.id', ondelete='SET NULL'), nullable=True)
+    username = db.Column(String(50), nullable=True)
     email = db.Column(db.String(255), nullable=True)
-    public = db.Column(db.Boolean, nullable=True, default=False)
+    public = db.Column(db.Boolean, default=False)
     last_login = db.Column(TIMESTAMP, nullable=True)
     period = db.Column(db.String(5), nullable=True)
     time_period = db.Column(TIMESTAMP, nullable=True)
@@ -164,9 +165,15 @@ class SharedSecret(db.Model):
     received_time = db.Column(TIMESTAMP, nullable=True)
     delete_at = db.Column(TIMESTAMP, nullable=True)
 
+    # Snapshot fields
+    title = db.Column(db.String(100), nullable=True)
+    snapshot_secret = db.Column(db.Text, nullable=True)
+    file = db.Column(db.String(255), nullable=True)
+    share_date = db.Column(TIMESTAMP, nullable=True)
+
     user = db.relationship('User', back_populates='shared_secrets')
     secret = db.relationship('Secret', back_populates='shared_secrets')
-    public_secret = db.relationship('PublicSecrets', back_populates='shared_secret', uselist=False)
+
 
 
 class PublicSecrets(db.Model):
@@ -180,5 +187,4 @@ class PublicSecrets(db.Model):
     file = db.Column(String, nullable=True)
     share_date = db.Column(TIMESTAMP, nullable=True)
 
-    # Optional back-reference
-    shared_secret = db.relationship('SharedSecret', back_populates='public_secret', uselist=False)
+

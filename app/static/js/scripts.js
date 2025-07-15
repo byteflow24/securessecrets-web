@@ -577,7 +577,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const saveButton = document.querySelector('button[type="submit"]');
 
         // Constants for file size limits
-        const MAX_FILE_SIZE_MB = 500;
+        const MAX_FILE_SIZE_MB = 250;
         const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
         // Handle file selection
@@ -864,7 +864,7 @@ window.addEventListener('DOMContentLoaded', () => {
             const submitButton = document.getElementById(`updateSecretSubmit-${index}`);
             const secretCardBody = document.querySelector(`.card-body[data-index="${index}"]`);
     
-            const MAX_FILE_SIZE_MB = 500;
+            const MAX_FILE_SIZE_MB = 250;
             const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
     
             if (fileInput) {

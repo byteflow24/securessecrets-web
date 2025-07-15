@@ -154,9 +154,9 @@
                         <p style="font-size: 0.875rem;">{{ public.display_time }}</p>
                     </div>
                     <div class="secret-wrapper clickable" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; cursor: pointer;">
-                        <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.secret|safe }}</p>
+                        <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.snapshot_secret|safe }}</p>
                         {% if public.file %}
-                            {% if public.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
+                            {% if public.file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) %}
                                 <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="Preview of {{ public.file }} attached to secret by {{ public.username }}" style="max-width: 50%; height: auto;" width="150" height="150" loading="lazy">
                             {% elif public.file.endswith('.pdf') %}
                                 <iframe src="{{ url_for('main.download_file', filename=public.file) }}" style="width: 50%; height: auto; border: none;" title="PDF preview of {{ public.file }}"></iframe>
@@ -172,7 +172,7 @@
                             </p>
                         {% endif %}
                         <div class="mt-2 d-flex justify-content-end gap-3">
-                            <a class="text-danger report-btn" data-bs-toggle="modal" data-bs-target="#reportSecretModel-{{ public.id }}" data-id="{{ public.id }}" data-secret="{{ public.secret }}" data-file="{{ public.file }}" style="font-size: 0.875rem;" aria-label="Report secret by {{ public.username }}">Report</a>
+                            <a class="text-danger report-btn" data-bs-toggle="modal" data-bs-target="#reportSecretModel-{{ public.id }}" data-id="{{ public.id }}" data-secret="{{ public.snapshot_secret }}" data-file="{{ public.file }}" style="font-size: 0.875rem;" aria-label="Report secret by {{ public.username }}">Report</a>
                         </div>
                     </div>
                     <hr>

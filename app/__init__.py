@@ -6,6 +6,8 @@ from flask_login import LoginManager
 from flask_migrate import Migrate
 from flask_compress import Compress
 from flask_jwt_extended import JWTManager
+from werkzeug.middleware.proxy_fix import ProxyFix
+import os
 
 db = SQLAlchemy()
 csrf = CSRFProtect()
@@ -23,12 +25,25 @@ def check_if_token_revoked(jwt_header, jwt_payload):
 
 def create_app():
     app = Flask(__name__)
-    app.config.from_object('config.Config')
 
-    # Create the SQLAlchemy engine with pool_pre_ping
+    env = os.getenv('FLASK_ENV', 'development')
+    if env == 'production':
+        app.config.from_object('config.ProductionConfig')
+    else:
+        app.config.from_object('config.DevelopmentConfig')
+
+    # SQLAlchemy engine options
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_pre_ping': True
     }
+
+    # Optional: ProxyFix for production
+    if app.config.get("USE_PROXY_FIX"):
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+    # Ensure upload folder exists in development
+    if env == 'development':
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
     # Initialize extensions
     db.init_app(app)
@@ -39,17 +54,16 @@ def create_app():
     Compress(app)
     jwt.init_app(app)
 
-    # Import inside function to avoid circular import
+    # Import blueprints
     with app.app_context():
         from .routes import main as main_blueprint, paypal_webhook
         from .api import api as api_blueprint
 
-        app.register_blueprint(main_blueprint) #main
-        app.register_blueprint(api_blueprint) #api
+        app.register_blueprint(main_blueprint)
+        app.register_blueprint(api_blueprint)
 
         csrf.exempt(paypal_webhook)
         csrf.exempt(api_blueprint)
 
     return app
-
 

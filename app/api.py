@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, current_app, url_for, abort, send
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan
-from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token
+from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -10,6 +10,7 @@ from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.utils import secure_filename
 import mimetypes, uuid, traceback, time, json, os, requests
+import jwt
 
 api = Blueprint('api', __name__, url_prefix='/api')
 
@@ -1162,7 +1163,7 @@ def api_plan():
 @subscription_ended(api=True)
 def billing_api():
     user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
+    user = db.session.get(User, int(user_id))
 
     if not user:
         return jsonify(success=False, error="User not found."), 404
@@ -1249,6 +1250,101 @@ def api_change_plan():
 
     return jsonify(success=False, error="Failed to update subscription plan. Please try again."), 500
 
+
+# ======  CONFIGURATION  ====== APPLE API ======
+APPLE_ISSUER_ID = os.environ.get("APPLE_ISSUER_ID")
+APPLE_KEY_ID = os.environ.get("APPLE_KEY_ID")
+APPLE_PRIVATE_KEY_PATH = os.environ.get("APPLE_PRIVATE_KEY_PATH")
+APPLE_API_BASE = "https://api.storekit.itunes.apple.com"  # For production
+APPLE_SANDBOX_BASE = "https://api.storekit-sandbox.itunes.apple.com"# For sandbox
+
+# ======  HELPER: GENERATE APPLE JWT  ======
+def generate_apple_jwt():
+    private_key = APPLE_PRIVATE_KEY_PATH.read_text()
+    current_time = int(time.time())
+
+    payload = {
+        "iss": APPLE_ISSUER_ID,
+        "iat": current_time,
+        "exp": current_time + 1200,  # 20 minutes
+        "aud": "appstoreconnect-v1"
+    }
+
+    headers = {
+        "alg": "ES256",
+        "kid": APPLE_KEY_ID,
+        "typ": "JWT"
+    }
+
+    token = jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
+    return token
+
+from datetime import datetime
+
+@api.route('/verify-apple-subscription', methods=['POST'])
+@jwt_required()
+def verify_apple_subscription():
+
+    # Get current user (from JWT)
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    # Get transaction data
+    data = request.get_json()
+    transaction_id = data.get("transaction_id")
+
+    if not transaction_id:
+        return jsonify({"error": "transaction_id is required"}), 400
+
+    # Generate the Apple JWT
+    token = generate_apple_jwt()
+
+    # Verify the transaction, handling sandbox fallback
+    apple_data, status_code, error = verify_transaction(transaction_id, token)
+
+    print("Status Code:", status_code, "\n", "Apple Data:", apple_data)
+
+    if status_code != 200:
+        return jsonify({"error": "Apple API error", "details": apple_data or error}), status_code
+    
+    # Extract needed info from apple_data
+    latest_receipt_info = apple_data.get("transaction", {})
+    product_id = latest_receipt_info.get("productId")  # e.g. "basic_monthly"
+    expires_date_ms = latest_receipt_info.get("expiresDate")  # e.g. "2025-12-31T23:59:59Z"
+
+    # Parse expiration date to datetime
+    expires_date = None
+    if expires_date_ms:
+        try:
+            expires_date = datetime.fromisoformat(expires_date_ms.replace("Z", "+00:00"))
+        except Exception as e:
+            # fallback or log error
+            pass
+
+    # Find the matching plan by Apple product_id
+    plan = Plan.query.filter_by(apple_product_id=product_id).first()
+
+    if not plan:
+        return jsonify({"error": "Plan matching productId not found"}), 400
+
+    ### I will just comment the db now to test the apple data and knows the details will appear
+
+    # Update user subscription info
+    # user.plan_id = plan.id
+    # user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
+    # user.subscription_status = "active"  # or you can parse status from apple_data
+    # user.subscription_start_date = datetime.timezone.utc
+    # user.updated_at = datetime.timezone.utc
+    # user.payment_source = "Apple Pay (App)"
+
+    # # Commit changes
+    # db.session.commit()
+
+    return jsonify({"success": True, "message": "Subscription verified and user updated"}), 200
+
+
 ########################################### FORGOT PASSWORD API ###########################################
 
 @api.route('/forgot-password', methods=['POST'])
@@ -1274,7 +1370,7 @@ def api_forgot_password():
 @jwt_required()
 def api_delete_published_secret(pb_secret_id):
     user_id = get_jwt_identity()
-    user = User.query.get(user_id)
+    user = User.query.get(int(user_id))
 
     # Check admin authorization
     if not user or user.username != "admin":
@@ -1340,3 +1436,28 @@ def download_file_api(filename):
         print("[API Download Error]", str(e))
         traceback.print_exc()
         return abort(500)
+
+########################################### CONTACT US API ###########################################
+
+@api.route('/contact-us', methods=['POST'])
+@jwt_required()
+def contact_us():
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+
+    if not user:
+        return jsonify(success=False, error='User not found'), 404
+
+    data = request.get_json()
+
+    # Validate required fields
+    required_fields = ['name', 'email', 'subject', 'message']
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify(success=False, error=f'Missing field: {field}'), 400
+
+    try:
+        contact_email(data["name"], data["email"], data["subject"], data["message"])
+        return jsonify(success=True, message="Your message has been sent successfully."), 200
+    except Exception as e:
+        return jsonify(success=False, error="An error occurred while sending your message."), 500

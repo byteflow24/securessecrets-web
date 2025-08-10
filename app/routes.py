@@ -1143,7 +1143,7 @@ def delete_secret(sec_id):
 @login_required
 def delete_shared_secret(secret_id):
 
-    if not current_user.username != "admin":
+    if current_user.username == "admin":
         flash('You are not authorized to delete the secret', 'danger')
         return redirect(url_for('main.dashboard'))
     else:
@@ -1191,7 +1191,7 @@ def delete_account(user_id):
 @login_required
 def delete_published_secret(pb_secret_id):
 
-    if not current_user.username == "admin":
+    if current_user.username != "admin":
         flash('You are not authorized to delete the secret', 'danger')
         return redirect(url_for('main.dashboard'))
     else:
@@ -1742,16 +1742,18 @@ def contact():
                 flash('Invalid input detected. Please try again.', 'danger')
                 return redirect(url_for('main.contact'))
             
-            # Get reCAPTCHA token from form (only for non-authenticated users)
-            recaptcha_token = request.form.get('recaptcha_token')
-
-            if not recaptcha_token:
-                logger.error("Missing reCAPTCHA token")
-                flash('reCAPTCHA verification failed. Please try again.', 'danger')
-                return redirect(url_for('main.contact'))
+            
             
             # Verify reCAPTCHA for non-authenticated users
             if not current_user.is_authenticated:
+                # Get reCAPTCHA token from form (only for non-authenticated users)
+                recaptcha_token = request.form.get('recaptcha_token')
+
+                if not recaptcha_token:
+                    logger.error("Missing reCAPTCHA token")
+                    flash('reCAPTCHA verification failed. Please try again.', 'danger')
+                    return redirect(url_for('main.contact'))
+                
                 is_valid, error_msg = create_assessment(recaptcha_token, recaptcha_action='contact_form', flask_request=request)
                 if not is_valid:
                     logger.error(f"reCAPTCHA error: {error_msg}")

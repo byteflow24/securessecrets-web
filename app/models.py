@@ -15,9 +15,7 @@ class User(UserMixin, db.Model):
     country_code = db.Column(String(4), nullable=True)
     phone = db.Column(String(20), nullable=True)
     storage_used = db.Column(Integer, default=0, nullable=False)
-    customer_id = db.Column(String(255), nullable=True)
-    card_id = db.Column(String(255), nullable=True)
-    payment_agreement_id = db.Column(String(255), nullable=True)
+    payment_source = db.Column(String(50), nullable=True)
     verification_sent = db.Column(db.Boolean, default=False)
     is_confirmed = db.Column(db.Boolean, default=False)
     email_token = db.Column(db.String(64), nullable=True)
@@ -138,6 +136,7 @@ class Plan(db.Model):
     storage_limit = db.Column(Integer, nullable=False)
     paypal_plan_id = db.Column(db.JSON, nullable=True)
     product_id = db.Column(String(50), nullable=True)
+    apple_product_id = db.Column(String(100), nullable=True) # [basic_monthly, premium_monthly, basic_yearly, premium_yearly]
 
     users = db.relationship('User', back_populates='plan')
     payments = db.relationship('Payment', back_populates='plan')

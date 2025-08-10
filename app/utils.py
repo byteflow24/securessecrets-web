@@ -1,3 +1,4 @@
+import time
 from flask import abort, request, url_for, session, flash, redirect, jsonify, send_from_directory
 from flask_login import current_user
 from functools import wraps
@@ -1758,6 +1759,54 @@ def generate_access_token(user_id, secret_key, expires_in=3600):
     }
     token = jwt.encode(payload, secret_key, algorithm='HS256')
     return token
+
+# ======  CONFIGURATION  ====== APPLE API ======
+APPLE_ISSUER_ID = os.environ.get("APPLE_ISSUER_ID")
+APPLE_KEY_ID = os.environ.get("APPLE_KEY_ID")
+APPLE_PRIVATE_KEY_PATH = os.environ.get("APPLE_PRIVATE_KEY_PATH")
+APPLE_API_BASE = "https://api.storekit.itunes.apple.com"  # For production
+APPLE_SANDBOX_BASE = "https://api.storekit-sandbox.itunes.apple.com"# For sandbox
+
+# ======  HELPER: GENERATE APPLE JWT  ======
+def generate_apple_jwt():
+    private_key = APPLE_PRIVATE_KEY_PATH.read_text()
+    current_time = int(time.time())
+
+    payload = {
+        "iss": APPLE_ISSUER_ID,
+        "iat": current_time,
+        "exp": current_time + 1200,  # 20 minutes
+        "aud": "appstoreconnect-v1"
+    }
+
+    headers = {
+        "alg": "ES256",
+        "kid": APPLE_KEY_ID,
+        "typ": "JWT"
+    }
+
+    token = jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
+    return token
+
+def verify_transaction(transaction_id, token):
+    try:
+        url = f"{APPLE_API_BASE}/inApps/v1/transactions/{transaction_id}"
+        headers = {"Authorization": f"Bearer {token}"}
+        
+        resp = requests.get(url, headers=headers)
+        apple_data = resp.json()
+        
+        # fallback to sandbox if needed
+        if resp.status_code != 200 or apple_data.get('status') == 21007:
+            url_sandbox = f"{APPLE_SANDBOX_BASE}/inApps/v1/transactions/{transaction_id}"
+            resp = requests.get(url_sandbox, headers=headers)
+            apple_data = resp.json()
+            if resp.status_code != 200:
+                return None, resp.status_code, apple_data
+
+        return apple_data, resp.status_code, None
+    except Exception as e:
+        return None, 500, {"error": str(e)}
 
 
 # Sender details which SS email, and pswd

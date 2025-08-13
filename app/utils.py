@@ -2311,8 +2311,9 @@ def send_report_email(secret_id, secret, secret_file, report_details):
 
     # Include file only if it exists
     if secret_file:
+        file_url = f"{url_for('main.download_file', filename=secret_file, _external=True)}"  # Replace with your file route
         if secret_file.endswith(('.png', '.jpg', '.jpeg', '.gif')):
-            file_url = f"{url_for('main.download_file', filename=secret_file, _external=True)}"  # Replace with your file route
+            print(file_url)
             body += f'<img src="{file_url}" alt="File Preview" style="max-width: 50%; height: auto;">'
         elif secret_file.endswith('.pdf'):
             body += f'<iframe src="{file_url}" style="width: 50%; height: auto; border: none;"></iframe>'

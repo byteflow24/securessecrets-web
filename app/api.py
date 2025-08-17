@@ -1394,6 +1394,9 @@ def download_file_api(filename):
         upload_folder = current_app.config['UPLOAD_FOLDER']
         abs_path = os.path.abspath(os.path.join(upload_folder, filename))
 
+        print("Checking file path:", abs_path, "Exists?", os.path.exists(abs_path))
+
+
         # ✅ Check if file exists
         if not os.path.exists(abs_path):
             return abort(404, description="File not found.")
@@ -1426,7 +1429,6 @@ def download_file_api(filename):
             if shared:
                 return send_file(abs_path, mimetype=mimetype, conditional=True)
             
-        print("Checking file path:", abs_path, "Exists?", os.path.exists(abs_path))
 
         # ❌ If no access
         return abort(403, description="You don't have permission to access this file.")

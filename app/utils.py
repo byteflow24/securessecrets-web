@@ -1769,13 +1769,15 @@ APPLE_SANDBOX_BASE = "https://api.storekit-sandbox.itunes.apple.com"# For sandbo
 
 # ======  HELPER: GENERATE APPLE JWT  ======
 def generate_apple_jwt():
-    private_key = APPLE_PRIVATE_KEY_PATH.replace("\\n", "\n")
-    current_time = int(time.time())
+    # Read private key from file
+    with open(APPLE_PRIVATE_KEY_PATH, "r") as f:
+        private_key = f.read()
 
+    current_time = int(time.time())
     payload = {
         "iss": APPLE_ISSUER_ID,
         "iat": current_time,
-        "exp": current_time + 1200,
+        "exp": current_time + 1200,  # 20 minutes
         "aud": "appstoreconnect-v1"
     }
 
@@ -1786,7 +1788,6 @@ def generate_apple_jwt():
     }
 
     token = jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
-    print("Apple JWT token generated:", token[:20], "...")  # print first 20 chars
     return token
 
 def verify_transaction(transaction_id, token, use_sandbox=False):
@@ -1803,8 +1804,6 @@ def verify_transaction(transaction_id, token, use_sandbox=False):
         # If production returns not found, retry sandbox
         if resp.status_code == 404 and not use_sandbox:
             return verify_transaction(transaction_id, token, use_sandbox=True)
-        
-        print(f"Checking {apple_data} from utls")
 
         return apple_data, resp.status_code, None
 

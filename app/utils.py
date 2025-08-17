@@ -1786,6 +1786,7 @@ def generate_apple_jwt():
     }
 
     token = jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
+    print(token)
     return token
 
 def verify_transaction(transaction_id, token, use_sandbox=False):
@@ -1802,6 +1803,8 @@ def verify_transaction(transaction_id, token, use_sandbox=False):
         # If production returns not found, retry sandbox
         if resp.status_code == 404 and not use_sandbox:
             return verify_transaction(transaction_id, token, use_sandbox=True)
+        
+        print(f"Checking {apple_data} from utls")
 
         return apple_data, resp.status_code, None
 

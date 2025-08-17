@@ -1231,6 +1231,9 @@ def change_plan_apple():
     # Call Apple API to verify transaction
     token = generate_apple_jwt()
     apple_data, status_code, error = verify_transaction(transaction_id, token)
+
+    print("Status Code:", status_code, "\n", "Apple Data:", apple_data)
+    
     if status_code != 200:
         return jsonify(success=False, error="Apple API error", details=apple_data or error), status_code
 

@@ -1236,13 +1236,23 @@ def change_plan_apple():
 
     latest_receipt_info = apple_data.get("transaction", {})
     product_id = latest_receipt_info.get("productId")
-    expires_date_ms = latest_receipt_info.get("expiresDate")
     expires_date = None
-    if expires_date_ms:
+    expires_date_str = latest_receipt_info.get("expiresDate")
+
+    if expires_date_str:
         try:
-            expires_date = datetime.fromisoformat(expires_date_ms.replace("Z", "+00:00"))
-        except:
-            pass
+            # App Store Server API gives ISO 8601
+            expires_date = datetime.fromisoformat(
+                expires_date_str.replace("Z", "+00:00")
+            )
+        except ValueError:
+            try:
+                # fallback if it’s ms since epoch
+                expires_date = datetime.fromtimestamp(
+                    int(expires_date_str) / 1000, tz=timezone.utc
+                )
+            except Exception:
+                expires_date = None
 
     # Ensure the Apple product matches the plan
     if plan.apple_product_id != product_id:
@@ -1292,16 +1302,23 @@ def verify_apple_subscription():
     # Extract needed info from apple_data
     latest_receipt_info = apple_data.get("transaction", {})
     product_id = latest_receipt_info.get("productId")  # e.g. "basic_monthly"
-    expires_date_ms = latest_receipt_info.get("expiresDate")  # e.g. "2025-12-31T23:59:59Z"
-
-    # Parse expiration date to datetime
     expires_date = None
-    if expires_date_ms:
+    expires_date_str = latest_receipt_info.get("expiresDate")
+
+    if expires_date_str:
         try:
-            expires_date = datetime.fromisoformat(expires_date_ms.replace("Z", "+00:00"))
-        except Exception as e:
-            # fallback or log error
-            pass
+            # App Store Server API gives ISO 8601
+            expires_date = datetime.fromisoformat(
+                expires_date_str.replace("Z", "+00:00")
+            )
+        except ValueError:
+            try:
+                # fallback if it’s ms since epoch
+                expires_date = datetime.fromtimestamp(
+                    int(expires_date_str) / 1000, tz=timezone.utc
+                )
+            except Exception:
+                expires_date = None
 
     # Find the matching plan by Apple product_id
     plan = Plan.query.filter_by(apple_product_id=product_id).first()

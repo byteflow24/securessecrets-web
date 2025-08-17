@@ -1788,23 +1788,23 @@ def generate_apple_jwt():
     token = jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
     return token
 
-def verify_transaction(transaction_id, token):
+def verify_transaction(transaction_id, token, use_sandbox=False):
     try:
-        url = f"{APPLE_API_BASE}/inApps/v1/transactions/{transaction_id}"
+        base_url = APPLE_API_BASE if not use_sandbox \
+                   else APPLE_SANDBOX_BASE
+
+        url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
         headers = {"Authorization": f"Bearer {token}"}
         
         resp = requests.get(url, headers=headers)
         apple_data = resp.json()
-        
-        # fallback to sandbox if needed
-        if resp.status_code != 200 or apple_data.get('status') == 21007:
-            url_sandbox = f"{APPLE_SANDBOX_BASE}/inApps/v1/transactions/{transaction_id}"
-            resp = requests.get(url_sandbox, headers=headers)
-            apple_data = resp.json()
-            if resp.status_code != 200:
-                return None, resp.status_code, apple_data
+
+        # If production returns not found, retry sandbox
+        if resp.status_code == 404 and not use_sandbox:
+            return verify_transaction(transaction_id, token, use_sandbox=True)
 
         return apple_data, resp.status_code, None
+
     except Exception as e:
         return None, 500, {"error": str(e)}
 

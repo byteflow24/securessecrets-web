@@ -1769,9 +1769,14 @@ APPLE_SANDBOX_BASE = "https://api.storekit-sandbox.itunes.apple.com"# For sandbo
 
 # ======  HELPER: GENERATE APPLE JWT  ======
 def generate_apple_jwt():
-    # Read private key from file
-    with open(APPLE_PRIVATE_KEY_PATH, "r") as f:
-        private_key = f.read()
+    print("APPLE_PRIVATE_KEY_PATH:", APPLE_PRIVATE_KEY_PATH)
+    try:
+        with open(APPLE_PRIVATE_KEY_PATH, "r") as f:
+            private_key = f.read()
+        print("Private key loaded, first 50 chars:\n", private_key[:50].replace("\n", "\\n"))
+    except Exception as e:
+        print("Error reading Apple private key:", e)
+        raise e  # optional, to stop and see the traceback
 
     current_time = int(time.time())
     payload = {
@@ -1788,7 +1793,9 @@ def generate_apple_jwt():
     }
 
     token = jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
+    print("JWT token generated, first 20 chars:", token[:20])
     return token
+
 
 def verify_transaction(transaction_id, token, use_sandbox=False):
     try:

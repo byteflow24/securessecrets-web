@@ -1425,6 +1425,8 @@ def download_file_api(filename):
             ).first()
             if shared:
                 return send_file(abs_path, mimetype=mimetype, conditional=True)
+            
+        print("Checking file path:", abs_path, "Exists?", os.path.exists(abs_path))
 
         # ❌ If no access
         return abort(403, description="You don't have permission to access this file.")

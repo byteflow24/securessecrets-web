@@ -32,8 +32,8 @@ def create_app():
     else:
         app.config.from_object('config.DevelopmentConfig')
 
-    # ✅ Debug: check which upload folder is being used
-    print("UPLOAD_FOLDER is:", app.config['UPLOAD_FOLDER'])
+    # # ✅ Debug: check which upload folder is being used
+    # print("UPLOAD_FOLDER is:", app.config['UPLOAD_FOLDER'])
 
     # SQLAlchemy engine options
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {

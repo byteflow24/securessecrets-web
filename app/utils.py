@@ -1784,7 +1784,6 @@ def generate_apple_jwt():
         "iss": APPLE_ISSUER_ID,
         "iat": now,
         "exp": now + 1800,  # 30 minutes expiration
-        "aud": "appstoreconnect-v1"  # Required audience for StoreKit API
     }
 
     try:

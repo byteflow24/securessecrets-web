@@ -1777,26 +1777,24 @@ def generate_apple_jwt():
     
     private_key = private_key.replace("\\n", "\n")
 
-    current_time = int(time.time())
-    payload = {
+    now = int(time.time())
+
+    claims = {
         "iss": APPLE_ISSUER_ID,
-        "iat": current_time,
-        "exp": current_time + 1800  # 30 minutes
+        "iat": now,
+        "exp": now + 1800  # max 30 min
     }
 
-    print(f"JWT Payload: {payload}")
+    token = jwt.encode(
+        claims,
+        private_key,
+        algorithm="ES256",
+        headers={"alg": "ES256", "kid": APPLE_KEY_ID, "typ": "JWT"}
+    )
 
-    headers = {
-        "alg": "ES256",
-        "kid": APPLE_KEY_ID,
-        "typ": "JWT"
-    }
-    
-    token = jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
     return token
 
-
-def verify_transaction(transaction_id, token, use_sandbox=False):
+def verify_transaction(transaction_id, token, use_sandbox=True):
 
     base_url = APPLE_API_BASE if not use_sandbox else APPLE_SANDBOX_BASE
     url = f"{base_url}/inApps/v1/transactions/{transaction_id}"

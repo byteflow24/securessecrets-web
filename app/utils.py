@@ -1410,8 +1410,7 @@ def get_subscription_details(subscription_id):
     if response.status_code == 200:
         return response.json()
     else:
-        print("Failed to get user subscription details:")
-        print(response.json())
+        return f"Failed to get user subscription details: {response.json()}"
 
 # Webhook veryfication
 def verify_paypal_webhook(data, request_headers):
@@ -1791,31 +1790,34 @@ def generate_apple_jwt():
         "kid": APPLE_KEY_ID,
         "typ": "JWT"
     }
-
+    private_key = private_key.replace("\\n", "\n")
     token = jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
     print("JWT token generated, first 20 chars:", token[:20])
     return token
 
 
 def verify_transaction(transaction_id, token, use_sandbox=False):
-    try:
-        base_url = APPLE_API_BASE if not use_sandbox \
-                   else APPLE_SANDBOX_BASE
+        
+        base_url = APPLE_API_BASE if not use_sandbox else APPLE_SANDBOX_BASE
 
         url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
-        headers = {"Authorization": f"Bearer {token}"}
+        
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         
         resp = requests.get(url, headers=headers)
-        apple_data = resp.json()
 
-        # If production returns not found, retry sandbox
+        print("Status:", resp.status_code)
+        print("Raw Response:", resp.text[:300])  # show first 300 chars
+
+        try:
+            apple_data = resp.json()
+        except Exception:
+            apple_data = None
+
         if resp.status_code == 404 and not use_sandbox:
             return verify_transaction(transaction_id, token, use_sandbox=True)
 
         return apple_data, resp.status_code, None
-
-    except Exception as e:
-        return None, 500, {"error": str(e)}
 
 
 # Sender details which SS email, and pswd

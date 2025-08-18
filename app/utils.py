@@ -1410,7 +1410,7 @@ def get_subscription_details(subscription_id):
     if response.status_code == 200:
         return response.json()
     else:
-        return f"Failed to get user subscription details: {response.json()}"
+        print(f"Failed to get user subscription details: {response.json()}")
 
 # Webhook veryfication
 def verify_paypal_webhook(data, request_headers):

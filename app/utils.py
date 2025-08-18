@@ -1775,14 +1775,14 @@ def generate_apple_jwt():
     except Exception as e:
         raise e  # optional, to stop and see the traceback
     
-    private_key = private_key.replace("\\n", "\n")
+    # private_key = private_key.replace("\\n", "\n")
 
     now = int(time.time())
 
     claims = {
         "iss": APPLE_ISSUER_ID,
         "iat": now,
-        "exp": now + 1800  # max 30 min
+        "exp": now + 1800
     }
 
     token = jwt.encode(

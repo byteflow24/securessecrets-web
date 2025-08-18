@@ -1802,27 +1802,30 @@ def generate_apple_jwt():
 
 
 def verify_transaction(transaction_id, token, use_sandbox=False):
-        
-        base_url = APPLE_API_BASE if not use_sandbox else APPLE_SANDBOX_BASE
+    base_url = APPLE_API_BASE if not use_sandbox else APPLE_SANDBOX_BASE
+    url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
 
-        url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json"
+    }
 
-        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-        
-        resp = requests.get(url, headers=headers)
+    resp = requests.get(url, headers=headers)
 
-        print("Status:", resp.status_code)
-        print("Raw Response:", resp.text[:300])  # show first 300 chars
+    print("Status:", resp.status_code)
+    print("Raw Response:", resp.text[:300])  # debug first 300 chars
 
-        try:
-            apple_data = resp.json()
-        except Exception:
-            apple_data = None
+    try:
+        apple_data = resp.json()
+    except Exception as e:
+        apple_data = {"error": "Invalid JSON", "details": str(e), "raw": resp.text}
 
-        if resp.status_code == 404 and not use_sandbox:
-            return verify_transaction(transaction_id, token, use_sandbox=True)
+    # if prod returned 404, retry sandbox
+    if resp.status_code == 404 and not use_sandbox:
+        return verify_transaction(transaction_id, token, use_sandbox=True)
 
-        return apple_data, resp.status_code, None
+    # return both success and error payloads
+    return apple_data, resp.status_code, None
 
 
 # Sender details which SS email, and pswd

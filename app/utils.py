@@ -1776,6 +1776,8 @@ def generate_apple_jwt():
     except Exception as e:
         print("Error reading Apple private key:", e)
         raise e  # optional, to stop and see the traceback
+    
+    private_key = private_key.replace("\\n", "\n")
 
     current_time = int(time.time())
     payload = {
@@ -1790,7 +1792,10 @@ def generate_apple_jwt():
         "kid": APPLE_KEY_ID,
         "typ": "JWT"
     }
-    private_key = private_key.replace("\\n", "\n")
+    print("Using ISS:", APPLE_ISSUER_ID)
+    print("Using KID:", APPLE_KEY_ID)
+    print("Private Key starts with:", private_key[:40])
+    
     token = jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
     print("JWT token generated, first 20 chars:", token[:20])
     return token
@@ -1801,7 +1806,7 @@ def verify_transaction(transaction_id, token, use_sandbox=False):
         base_url = APPLE_API_BASE if not use_sandbox else APPLE_SANDBOX_BASE
 
         url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
-        
+
         headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         
         resp = requests.get(url, headers=headers)

@@ -1772,9 +1772,7 @@ def generate_apple_jwt():
     try:
         with open(APPLE_PRIVATE_KEY_PATH, "r") as f:
             private_key = f.read()
-        print("Private key loaded, first 50 chars:\n", private_key[:50])
     except Exception as e:
-        print("Error reading Apple private key:", e)
         raise e  # optional, to stop and see the traceback
     
     private_key = private_key.replace("\\n", "\n")
@@ -1783,7 +1781,7 @@ def generate_apple_jwt():
     payload = {
         "iss": APPLE_ISSUER_ID,
         "iat": current_time,
-        "exp": current_time + 1200,  # 20 minutes
+        "exp": current_time + 1800,  # 30 minutes
         "aud": "appstoreconnect-v1"
     }
 
@@ -1792,12 +1790,8 @@ def generate_apple_jwt():
         "kid": APPLE_KEY_ID,
         "typ": "JWT"
     }
-    print("Using ISS:", APPLE_ISSUER_ID)
-    print("Using KID:", APPLE_KEY_ID)
-    print("Private Key starts with:", private_key[:40])
     
     token = jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
-    print("JWT token generated, first 20 chars:", token[:20])
     return token
 
 
@@ -1818,7 +1812,7 @@ def verify_transaction(transaction_id, token, use_sandbox=False):
     try:
         apple_data = resp.json()
     except Exception as e:
-        apple_data = {"error": "Invalid JSON", "details": str(e), "raw": resp.text}
+        apple_data = {"error": "Invalid JSON", "details": str(e), "raw": resp.body}
 
     # if prod returned 404, retry sandbox
     if resp.status_code == 404 and not use_sandbox:

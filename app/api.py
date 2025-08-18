@@ -1233,7 +1233,7 @@ def change_plan_apple():
     apple_data, status_code, error = verify_transaction(transaction_id, token)
 
     print("Status Code:", status_code, "\n", "Apple Data:", apple_data)
-    
+
     if status_code != 200:
         return jsonify(success=False, error="Apple API error", details=apple_data or error), status_code
 
@@ -1287,6 +1287,8 @@ def verify_apple_subscription():
     # Get transaction data
     data = request.get_json()
     transaction_id = data.get("transaction_id")
+    print(data)
+    print(transaction_id)
 
     if not transaction_id:
         return jsonify({"error": "transaction_id is required"}), 400

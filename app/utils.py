@@ -1768,7 +1768,7 @@ APPLE_SANDBOX_BASE = "https://api.storekit-sandbox.itunes.apple.com"# For sandbo
 
 # ======  HELPER: GENERATE APPLE JWT  ======
 def generate_apple_jwt():
-    print("APPLE_PRIVATE_KEY_PATH:", APPLE_PRIVATE_KEY_PATH)
+
     try:
         with open(APPLE_PRIVATE_KEY_PATH, "r") as f:
             private_key = f.read()
@@ -1781,9 +1781,10 @@ def generate_apple_jwt():
     payload = {
         "iss": APPLE_ISSUER_ID,
         "iat": current_time,
-        "exp": current_time + 1800,  # 30 minutes
-        "aud": "appstoreconnect-v1"
+        "exp": current_time + 1800  # 30 minutes
     }
+
+    print(f"JWT Payload: {payload}")
 
     headers = {
         "alg": "ES256",
@@ -1796,6 +1797,7 @@ def generate_apple_jwt():
 
 
 def verify_transaction(transaction_id, token, use_sandbox=False):
+
     base_url = APPLE_API_BASE if not use_sandbox else APPLE_SANDBOX_BASE
     url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
 
@@ -1812,7 +1814,7 @@ def verify_transaction(transaction_id, token, use_sandbox=False):
     try:
         apple_data = resp.json()
     except Exception as e:
-        apple_data = {"error": "Invalid JSON", "details": str(e), "raw": resp.body}
+        apple_data = {"error": "Invalid JSON", "details": str(e), "raw": resp.text}
 
     # if prod returned 404, retry sandbox
     if resp.status_code == 404 and not use_sandbox:

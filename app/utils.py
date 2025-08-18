@@ -1772,7 +1772,7 @@ def generate_apple_jwt():
     try:
         with open(APPLE_PRIVATE_KEY_PATH, "r") as f:
             private_key = f.read()
-        print("Private key loaded, first 50 chars:\n", private_key[:50].replace("\n", "\\n"))
+        print("Private key loaded, first 50 chars:\n", private_key[:50])
     except Exception as e:
         print("Error reading Apple private key:", e)
         raise e  # optional, to stop and see the traceback

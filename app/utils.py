@@ -1768,35 +1768,39 @@ APPLE_SANDBOX_BASE = "https://api.storekit-sandbox.itunes.apple.com"# For sandbo
 
 # ======  HELPER: GENERATE APPLE JWT  ======
 def generate_apple_jwt():
-
     try:
         with open(APPLE_PRIVATE_KEY_PATH, "r") as f:
-            private_key = f.read()
+            private_key = f.read().strip()  # Remove any trailing/leading whitespace
     except Exception as e:
-        raise e  # optional, to stop and see the traceback
-    
-    # private_key = private_key.replace("\\n", "\n")
+        print(f"Error reading private key: {e}")
+        raise
+
+    if not private_key.startswith("-----BEGIN PRIVATE KEY-----"):
+        print("Invalid private key format")
+        raise ValueError("Private key must be in PEM format")
 
     now = int(time.time())
-
     claims = {
         "iss": APPLE_ISSUER_ID,
         "iat": now,
-        "exp": now + 1800
+        "exp": now + 1800,  # 30 minutes expiration
+        "aud": "appstoreconnect-v1"  # Required audience for StoreKit API
     }
 
-    token = jwt.encode(
-        claims,
-        private_key,
-        algorithm="ES256",
-        headers={"alg": "ES256", "kid": APPLE_KEY_ID, "typ": "JWT"}
-    )
+    try:
+        token = jwt.encode(
+            claims,
+            private_key,
+            algorithm="ES256",
+            headers={"alg": "ES256", "kid": APPLE_KEY_ID, "typ": "JWT"}
+        )
+        return token
+    except Exception as e:
+        print(f"Error generating JWT: {e}")
+        raise
 
-    return token
-
-def verify_transaction(transaction_id, token, use_sandbox=True):
-
-    base_url = APPLE_API_BASE if not use_sandbox else APPLE_SANDBOX_BASE
+def verify_transaction(transaction_id, token, use_sandbox=True):  # Default to sandbox
+    base_url = APPLE_SANDBOX_BASE if use_sandbox else APPLE_API_BASE
     url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
 
     headers = {
@@ -1804,23 +1808,32 @@ def verify_transaction(transaction_id, token, use_sandbox=True):
         "Accept": "application/json"
     }
 
-    resp = requests.get(url, headers=headers)
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+    except requests.RequestException as e:
+        print(f"Request error: {e}")
+        return {"error": "Request failed", "details": str(e)}, 500, str(e)
 
     print("Status:", resp.status_code)
-    print("Raw Response:", resp.text[:300])  # debug first 300 chars
+    print("Response Headers:", resp.headers)
+    print("Full Raw Response:", resp.text)
 
     try:
         apple_data = resp.json()
-    except Exception as e:
+    except ValueError as e:
         apple_data = {"error": "Invalid JSON", "details": str(e), "raw": resp.text}
 
-    # if prod returned 404, retry sandbox
+    # Retry with sandbox if 404 in production
     if resp.status_code == 404 and not use_sandbox:
+        print("Retrying with sandbox...")
         return verify_transaction(transaction_id, token, use_sandbox=True)
 
-    # return both success and error payloads
-    return apple_data, resp.status_code, None
+    # Handle 401 specifically
+    if resp.status_code == 401:
+        print("Authentication failed. Check JWT or API credentials.")
+        return apple_data, resp.status_code, "Authentication error"
 
+    return apple_data, resp.status_code, None
 
 # Sender details which SS email, and pswd
 EMAIL = "support@securessecrets.com"

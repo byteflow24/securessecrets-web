@@ -134,8 +134,7 @@ def api_process_subscription():
 @api.route('/register', methods=['POST'])
 def register_api():
     data = request.get_json()
-
-    required_fields = ['username', 'email', 'password', 'confirm_password', 'code', 'phone', 'plan_id']
+    required_fields = ['username', 'email', 'password', 'confirm_password', 'code', 'phone', 'plan_id', 'transaction_id']
     if not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), 400
 
@@ -146,17 +145,21 @@ def register_api():
     country_code = data['code']
     phone = data['phone']
     plan_id = data['plan_id']
+    transaction_id = data['transaction_id']
 
     if password != confirm_password:
         return jsonify({'error': 'Passwords do not match'}), 400
 
-    existing_user = db.session.execute(db.select(User).where(User.email == email)).scalar()
-    existing_user_name = db.session.execute(db.select(User).where(User.username == username)).scalar()
-
-    if existing_user:
+    # Check uniqueness
+    if User.query.filter_by(email=email).first():
         return jsonify({'error': 'Email already exists. Please log in instead.'}), 409
-    if existing_user_name:
+    if User.query.filter_by(username=username).first():
         return jsonify({'error': 'Username already in use. Please choose another.'}), 409
+
+    # Find the pending subscription
+    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id, plan_id=plan_id, status="PENDING").first()
+    if not pending:
+        return jsonify({'error': 'Pending subscription not found'}), 400
 
     hashed_password = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
     token = generate_token()
@@ -168,10 +171,17 @@ def register_api():
         country_code=country_code,
         phone=phone,
         plan_id=plan_id,
-        email_token=token
+        email_token=token,
+        subscription_start_date=datetime.utcnow(),
+        next_billing_date=pending.expires_date,
+        subscription_status="ACTIVE",
+        payment_source="Apple App Store"
     )
 
     db.session.add(new_user)
+    # Delete pending subscription after moving info
+    db.session.delete(pending)
+
     try:
         db.session.commit()
         send_verification_email(new_user.email, new_user.username, new_user.email_token)
@@ -180,7 +190,6 @@ def register_api():
         db.session.rollback()
         print(f"Registration error: {e}")
         return jsonify({'error': 'An error occurred during registration. Please try again.'}), 500
-    
 
 # === User's timezone ===
 @api.route('/update-timezone', methods=['POST'])
@@ -1251,14 +1260,13 @@ def change_plan_apple():
 
 # ====== APPLE API ======
 
-@api.route('/verify-apple-subscription', methods=['POST'])
-def verify_apple_subscription():
+@api.route('/verify-apple-subscription-pending', methods=['POST'])
+def verify_apple_subscription_pending():
     data = request.get_json()
     transaction_id = data.get("transaction_id")
     if not transaction_id:
         return jsonify({"error": "transaction_id is required"}), 400
 
-    # Generate JWT to talk with Applee
     token = generate_apple_jwt()
     apple_data, status_code, error = verify_transaction(transaction_id, token)
 
@@ -1269,8 +1277,6 @@ def verify_apple_subscription():
     if not transaction_info:
         return jsonify({"error": "Failed to parse Apple transaction"}), 400
 
-    print("Transaction Info:", transaction_info)
-
     product_id = transaction_info.get("productId")
     expires_date = transaction_info.get("expiresDate")
 
@@ -1278,34 +1284,24 @@ def verify_apple_subscription():
     if not plan:
         return jsonify({"error": "Plan matching productId not found"}), 400
 
-    # ✅ Save subscription info temporarily
-    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
-    if not pending:
-        pending = PendingSubscription(
-            transaction_id=transaction_id,
-            product_id=product_id,
-            plan_id=plan.id,
-            expires_date=expires_date,
-            status="PENDING",
-            created_at=datetime.now(timezone.utc)
-        )
-        db.session.add(pending)
-    else:
-        # Update if exists
-        pending.expires_date = expires_date
-        pending.plan_id = plan.id
-        pending.updated_at = datetime.now(timezone.utc)
-
+    # Save as pending subscription
+    pending = PendingSubscription(
+        transaction_id=transaction_id,
+        product_id=product_id,
+        plan_id=plan.id,
+        expires_date=expires_date,
+        status="PENDING",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db.session.add(pending)
     db.session.commit()
 
     return jsonify({
         "success": True,
-        "message": "Subscription verified and stored temporarily",
-        "transaction_id": transaction_id,
-        "product_id": product_id,
+        "plan_id": plan.id,
         "expires_date": str(expires_date)
     }), 200
-
 
 
 ########################################### FORGOT PASSWORD API ###########################################

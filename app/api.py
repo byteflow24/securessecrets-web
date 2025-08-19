@@ -1237,13 +1237,15 @@ def change_plan_apple():
     product_id = transaction_info.get("productId")
     expires_date = transaction_info.get("expiresDate")
 
+    print("Product ID:",product_id)
+
     if plan.apple_product_id != product_id:
         return jsonify(success=False, error="Apple product does not match the selected plan."), 400
 
     # Update subscription
     user.plan_id = plan.id
     user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
-    user.subscription_status = "active"
+    user.subscription_status = "ACTIVE"
     user.subscription_start_date = datetime.now(timezone.utc)
     user.updated_at = datetime.now(timezone.utc)
     user.payment_source = "Apple App Store"
@@ -1290,7 +1292,7 @@ def verify_apple_subscription():
     if user.subscription_status != "ACTIVE":
         user.plan_id = plan.id
         user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
-        user.subscription_status = "ACITVE"
+        user.subscription_status = "ACTIVE"
         user.subscription_start_date = datetime.now(timezone.utc)
         user.updated_at = datetime.now(timezone.utc)
         user.payment_source = "Apple App Store"

@@ -1770,22 +1770,21 @@ APPLE_SANDBOX_BASE = "https://api.storekit-sandbox.itunes.apple.com"# For sandbo
 def generate_apple_jwt():
     try:
         with open(APPLE_PRIVATE_KEY_PATH, "r") as f:
-            private_key = f.read().strip()  # Remove any trailing/leading whitespace
+            private_key = f.read()
     except Exception as e:
         print(f"Error reading private key: {e}")
         raise
 
-    if not private_key.startswith("-----BEGIN PRIVATE KEY-----"):
-        print("Invalid private key format")
-        raise ValueError("Private key must be in PEM format")
-
     now = int(time.time())
     claims = {
-        "iss": APPLE_ISSUER_ID,
+        "iss": APPLE_ISSUER_ID,           # Issuer ID from App Store Connect
         "iat": now,
-        "exp": now + 1800,  # 30 minutes expiration
+        "exp": now + 1800,                # 30 minutes max
+        "aud": "appstoreconnect-v1"       # REQUIRED for StoreKit API
     }
-
+    print("ISSUER:", APPLE_ISSUER_ID[:6])
+    print("KEY ID:", APPLE_KEY_ID)
+    print("PRIVATE KEY starts with:", private_key.splitlines()[0])
     try:
         token = jwt.encode(
             claims,
@@ -1797,6 +1796,7 @@ def generate_apple_jwt():
     except Exception as e:
         print(f"Error generating JWT: {e}")
         raise
+
 
 def verify_transaction(transaction_id, token, use_sandbox=True):  # Default to sandbox
     base_url = APPLE_SANDBOX_BASE if use_sandbox else APPLE_API_BASE

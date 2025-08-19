@@ -42,6 +42,17 @@ class User(UserMixin, db.Model):
     login_history = db.relationship('LoginHistory', back_populates='user', cascade="all, delete-orphan")
 
 
+class PendingSubscription(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    transaction_id = db.Column(db.String(255), unique=True, nullable=False)
+    product_id = db.Column(db.String(255), nullable=False)
+    plan_id = db.Column(db.Integer, db.ForeignKey("plan.id"), nullable=False)
+    expires_date = db.Column(TIMESTAMP, nullable=True)
+    status = db.Column(db.String(50), default="PENDING")
+    created_at = db.Column(TIMESTAMP, nullable=True)
+    updated_at = db.Column(TIMESTAMP, nullable=True)
+
+
 class LoginHistory(db.Model):
     __tablename__ = "login_history"
 

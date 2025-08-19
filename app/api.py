@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app, url_for, abort, send_file
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
-from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan
+from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
 from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
@@ -1249,22 +1249,16 @@ def change_plan_apple():
 
     return jsonify(success=True, message="Plan changed successfully", next_billing_date=user.next_billing_date), 200
 
-
 # ====== APPLE API ======
 
 @api.route('/verify-apple-subscription', methods=['POST'])
-@jwt_required()
 def verify_apple_subscription():
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-
     data = request.get_json()
     transaction_id = data.get("transaction_id")
     if not transaction_id:
         return jsonify({"error": "transaction_id is required"}), 400
 
+    # Generate JWT to talk with Apple
     token = generate_apple_jwt()
     apple_data, status_code, error = verify_transaction(transaction_id, token)
 
@@ -1284,18 +1278,33 @@ def verify_apple_subscription():
     if not plan:
         return jsonify({"error": "Plan matching productId not found"}), 400
 
-    # Update user subscription (only if new user / first subscription)
-    if user.subscription_status != "ACTIVE":
-        user.plan_id = plan.id
-        user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
-        user.subscription_status = "ACTIVE"
-        user.subscription_start_date = datetime.now(timezone.utc)
-        user.updated_at = datetime.now(timezone.utc)
-        user.payment_source = "Apple App Store"
-        user.status = None
-        db.session.commit()
-        print("New commit has been updated!")
-    return jsonify({"success": True, "message": "Subscription verified", "expires_date": str(expires_date)}), 200
+    # ✅ Save subscription info temporarily
+    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
+    if not pending:
+        pending = PendingSubscription(
+            transaction_id=transaction_id,
+            product_id=product_id,
+            plan_id=plan.id,
+            expires_date=expires_date,
+            status="PENDING",
+            created_at=datetime.now(timezone.utc)
+        )
+        db.session.add(pending)
+    else:
+        # Update if exists
+        pending.expires_date = expires_date
+        pending.plan_id = plan.id
+        pending.updated_at = datetime.now(timezone.utc)
+
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "message": "Subscription verified and stored temporarily",
+        "transaction_id": transaction_id,
+        "product_id": product_id,
+        "expires_date": str(expires_date)
+    }), 200
 
 
 

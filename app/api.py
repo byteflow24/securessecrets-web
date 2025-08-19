@@ -1211,141 +1211,93 @@ def billing_api():
 def change_plan_apple():
     user_id = get_jwt_identity()
     user = User.query.get(int(user_id))
-
     if not user:
         return jsonify(success=False, error="User not found."), 404
 
     data = request.get_json()
-    if not data or 'transaction_id' not in data:
-        return jsonify(success=False, error="Missing transaction ID."), 400
-    if 'plan_id' not in data:
-        return jsonify(success=False, error="Missing plan ID."), 400
+    if not data or 'transaction_id' not in data or 'plan_id' not in data:
+        return jsonify(success=False, error="Missing transaction ID or plan ID."), 400
 
     plan_id = data['plan_id']
-    print(plan_id)
     plan = Plan.query.get(plan_id)
     if not plan:
         return jsonify(success=False, error="Plan not found."), 404
 
     transaction_id = data['transaction_id']
-
-    # Call Apple API to verify transaction
     token = generate_apple_jwt()
     apple_data, status_code, error = verify_transaction(transaction_id, token)
-
-    print("Status Code:", status_code, "\n", "Apple Data:", apple_data)
 
     if status_code != 200:
         return jsonify(success=False, error="Apple API error", details=apple_data or error), status_code
 
-    latest_receipt_info = apple_data.get("transaction", {})
-    product_id = latest_receipt_info.get("productId")
-    expires_date = None
-    expires_date_str = latest_receipt_info.get("expiresDate")
+    transaction_info = parse_apple_transaction(apple_data)
+    if not transaction_info:
+        return jsonify(success=False, error="Failed to parse Apple transaction"), 400
 
-    if expires_date_str:
-        try:
-            # App Store Server API gives ISO 8601
-            expires_date = datetime.fromisoformat(
-                expires_date_str.replace("Z", "+00:00")
-            )
-        except ValueError:
-            try:
-                # fallback if it’s ms since epoch
-                expires_date = datetime.fromtimestamp(
-                    int(expires_date_str) / 1000, tz=timezone.utc
-                )
-            except Exception:
-                expires_date = None
+    product_id = transaction_info.get("productId")
+    expires_date = transaction_info.get("expiresDate")
 
-    # Ensure the Apple product matches the plan
     if plan.apple_product_id != product_id:
         return jsonify(success=False, error="Apple product does not match the selected plan."), 400
 
-    # Update user subscription
+    # Update subscription
     user.plan_id = plan.id
     user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
     user.subscription_status = "active"
-    user.subscription_start_date = convert_utc_to_local(datetime.timezone.utc(), user.time_zone)
-    user.updated_at = convert_utc_to_local(datetime.timezone.utc(), user.time_zone)
-    user.payment_source = "Apple Pay (App)"
+    user.subscription_start_date = datetime.now(timezone.utc)
+    user.updated_at = datetime.now(timezone.utc)
+    user.payment_source = "Apple App Store"
     db.session.commit()
 
-    return jsonify(success=True, message="Plan changed successfully.", next_billing_date=user.next_billing_date), 200
+    return jsonify(success=True, message="Plan changed successfully", next_billing_date=user.next_billing_date), 200
+
 
 # ====== APPLE API ======
 
 @api.route('/verify-apple-subscription', methods=['POST'])
 @jwt_required()
 def verify_apple_subscription():
-
-    # Get current user (from JWT)
     user_id = get_jwt_identity()
     user = User.query.get(int(user_id))
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    # Get transaction data
     data = request.get_json()
     transaction_id = data.get("transaction_id")
-
     if not transaction_id:
         return jsonify({"error": "transaction_id is required"}), 400
 
-    # Generate the Apple JWT
     token = generate_apple_jwt()
-
-    # Verify the transaction, handling sandbox fallback
     apple_data, status_code, error = verify_transaction(transaction_id, token)
-    parsed = parse_apple_transaction(apple_data)
-
-    print(parsed)
-
-    print("Status Code:", status_code, "\n", "Apple Data:", apple_data)
 
     if status_code != 200:
         return jsonify({"error": "Apple API error", "details": apple_data or error}), status_code
-    
-    # Extract needed info from apple_data
-    latest_receipt_info = apple_data.get("transaction", {})
-    product_id = latest_receipt_info.get("productId")  # e.g. "basic_monthly"
-    expires_date = None
-    expires_date_str = latest_receipt_info.get("expiresDate")
 
-    if expires_date_str:
-        try:
-            # App Store Server API gives ISO 8601
-            expires_date = datetime.fromisoformat(
-                expires_date_str.replace("Z", "+00:00")
-            )
-        except ValueError:
-            try:
-                # fallback if it’s ms since epoch
-                expires_date = datetime.fromtimestamp(
-                    int(expires_date_str) / 1000, tz=timezone.utc
-                )
-            except Exception:
-                expires_date = None
+    transaction_info = parse_apple_transaction(apple_data)
+    if not transaction_info:
+        return jsonify({"error": "Failed to parse Apple transaction"}), 400
 
-    # Find the matching plan by Apple product_id
+    print("Transaction Info:", transaction_info)
+
+    product_id = transaction_info.get("productId")
+    expires_date = transaction_info.get("expiresDate")
+
     plan = Plan.query.filter_by(apple_product_id=product_id).first()
-    print(plan.id)
-
     if not plan:
         return jsonify({"error": "Plan matching productId not found"}), 400
 
+    # Update user subscription (only if new user / first subscription)
+    if user.subscription_status != "active":
+        user.plan_id = plan.id
+        user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
+        user.subscription_status = "active"
+        user.subscription_start_date = datetime.now(timezone.utc)
+        user.updated_at = datetime.now(timezone.utc)
+        user.payment_source = "Apple App Store"
+        db.session.commit()
 
-    # Update user subscription info #
-    # user.plan_id = plan.id
-    # user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
-    # user.subscription_status = "active"
-    # user.subscription_start_date = datetime.now(timezone.utc)
-    # user.updated_at = datetime.now(timezone.utc)
-    # user.payment_source = "Apple App Store"
-    # # Commit changes
-    # db.session.commit()
+    return jsonify({"success": True, "message": "Subscription verified", "expires_date": str(expires_date)}), 200
 
-    return jsonify({"success": True, "message": "Subscription verified and user updated"}), 200
 
 
 ########################################### FORGOT PASSWORD API ###########################################

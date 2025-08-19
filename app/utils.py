@@ -1828,16 +1828,27 @@ def verify_transaction(transaction_id, token, use_sandbox=True):  # Default to s
 
 
 def parse_apple_transaction(apple_data):
+    """
+    Decodes signedTransactionInfo and returns parsed dict.
+    """
     signed_tx = apple_data.get("signedTransactionInfo")
     if not signed_tx:
         return None
 
     try:
-        # Apple signs with ES256 but you don’t need the key for decoding claims
-        decoded = jwt.decode(signed_tx, options={"verify_signature": False})
-        return decoded
+        parsed_tx = jwt.decode(signed_tx, options={"verify_signature": False})
+        # Convert expiresDate from ms to datetime
+        if "expiresDate" in parsed_tx:
+            parsed_tx["expiresDate"] = datetime.fromtimestamp(
+                int(parsed_tx["expiresDate"]) / 1000, tz=timezone.utc
+            )
+        if "purchaseDate" in parsed_tx:
+            parsed_tx["purchaseDate"] = datetime.fromtimestamp(
+                int(parsed_tx["purchaseDate"]) / 1000, tz=timezone.utc
+            )
+        return parsed_tx
     except Exception as e:
-        print(f"Error decoding signedTransactionInfo: {e}")
+        print("Error decoding signedTransactionInfo:", e)
         return None
 
 # Sender details which SS email, and pswd

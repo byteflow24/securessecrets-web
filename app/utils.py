@@ -1763,7 +1763,7 @@ def generate_access_token(user_id, secret_key, expires_in=3600):
 APPLE_ISSUER_ID = os.environ.get("APPLE_ISSUER_ID")
 APPLE_KEY_ID = os.environ.get("APPLE_KEY_ID")
 APPLE_PRIVATE_KEY_PATH = os.environ.get("APPLE_PRIVATE_KEY_PATH")
-APPLE_API_BASE = "https://api.storekit.itunes.apple.com"  # For production
+# APPLE_API_BASE = "https://api.storekit.itunes.apple.com"  # For production
 APPLE_SANDBOX_BASE = "https://api.storekit-sandbox.itunes.apple.com"# For sandbox
 
 # ======  HELPER: GENERATE APPLE JWT  ======
@@ -1777,14 +1777,11 @@ def generate_apple_jwt():
 
     now = int(time.time())
     claims = {
-        "iss": APPLE_ISSUER_ID,           # Issuer ID from App Store Connect
+        "iss": APPLE_ISSUER_ID,
         "iat": now,
-        "exp": now + 1800,                # 30 minutes max
-        "aud": "appstoreconnect-v1"       # REQUIRED for StoreKit API
+        "exp": now + 1800,
     }
-    print("ISSUER:", APPLE_ISSUER_ID[:6])
-    print("KEY ID:", APPLE_KEY_ID)
-    print("PRIVATE KEY starts with:", private_key.splitlines()[0])
+
     try:
         token = jwt.encode(
             claims,
@@ -1799,7 +1796,7 @@ def generate_apple_jwt():
 
 
 def verify_transaction(transaction_id, token, use_sandbox=True):  # Default to sandbox
-    base_url = APPLE_SANDBOX_BASE if use_sandbox else APPLE_API_BASE
+    base_url = APPLE_SANDBOX_BASE if use_sandbox else None
     url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
 
     headers = {
@@ -1810,12 +1807,7 @@ def verify_transaction(transaction_id, token, use_sandbox=True):  # Default to s
     try:
         resp = requests.get(url, headers=headers, timeout=10)
     except requests.RequestException as e:
-        print(f"Request error: {e}")
         return {"error": "Request failed", "details": str(e)}, 500, str(e)
-
-    print("Status:", resp.status_code)
-    print("Response Headers:", resp.headers)
-    print("Full Raw Response:", resp.text)
 
     try:
         apple_data = resp.json()
@@ -1824,12 +1816,10 @@ def verify_transaction(transaction_id, token, use_sandbox=True):  # Default to s
 
     # Retry with sandbox if 404 in production
     if resp.status_code == 404 and not use_sandbox:
-        print("Retrying with sandbox...")
         return verify_transaction(transaction_id, token, use_sandbox=True)
 
     # Handle 401 specifically
     if resp.status_code == 401:
-        print("Authentication failed. Check JWT or API credentials.")
         return apple_data, resp.status_code, "Authentication error"
 
     return apple_data, resp.status_code, None

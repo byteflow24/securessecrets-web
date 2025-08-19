@@ -1287,8 +1287,6 @@ def verify_apple_subscription():
     # Get transaction data
     data = request.get_json()
     transaction_id = data.get("transaction_id")
-    print(data)
-    print(transaction_id)
 
     if not transaction_id:
         return jsonify({"error": "transaction_id is required"}), 400

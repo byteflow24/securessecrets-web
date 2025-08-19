@@ -1222,6 +1222,7 @@ def change_plan_apple():
         return jsonify(success=False, error="Missing plan ID."), 400
 
     plan_id = data['plan_id']
+    print(plan_id)
     plan = Plan.query.get(plan_id)
     if not plan:
         return jsonify(success=False, error="Plan not found."), 404

@@ -1780,6 +1780,8 @@ def generate_apple_jwt():
         "iss": APPLE_ISSUER_ID,
         "iat": now,
         "exp": now + 1800,
+        "aud": APPLE_SANDBOX_BASE,
+        "bid": "com.byteflowdigital.securessecrets",
     }
 
     try:

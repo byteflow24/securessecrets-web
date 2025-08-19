@@ -1331,18 +1331,17 @@ def verify_apple_subscription():
     if not plan:
         return jsonify({"error": "Plan matching productId not found"}), 400
 
-    ### I will just comment the db now to test the apple data and knows the details will appear
 
     # Update user subscription info
-    # user.plan_id = plan.id
-    # user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
-    # user.subscription_status = "active"  # or you can parse status from apple_data
-    # user.subscription_start_date = datetime.timezone.utc
-    # user.updated_at = datetime.timezone.utc
-    # user.payment_source = "Apple Pay (App)"
+    user.plan_id = plan.id
+    user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
+    user.subscription_status = "active"  # or you can parse status from apple_data
+    user.subscription_start_date = datetime.timezone.utc
+    user.updated_at = datetime.timezone.utc
+    user.payment_source = "Apple Pay (App)"
 
-    # # Commit changes
-    # db.session.commit()
+    # Commit changes
+    db.session.commit()
 
     return jsonify({"success": True, "message": "Subscription verified and user updated"}), 200
 

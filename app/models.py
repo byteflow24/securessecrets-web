@@ -43,14 +43,17 @@ class User(UserMixin, db.Model):
 
 
 class PendingSubscription(db.Model):
+    __tablename__ = "pending_subscription"
     id = db.Column(db.Integer, primary_key=True)
     transaction_id = db.Column(db.String(255), unique=True, nullable=False)
     product_id = db.Column(db.String(255), nullable=False)
-    plan_id = db.Column(db.Integer, db.ForeignKey("plan.id"), nullable=False)
+    plan_id = db.Column(db.Integer, db.ForeignKey('plans.id'), nullable=False)
     expires_date = db.Column(TIMESTAMP, nullable=True)
     status = db.Column(db.String(50), default="PENDING")
     created_at = db.Column(TIMESTAMP, nullable=True)
     updated_at = db.Column(TIMESTAMP, nullable=True)
+
+    plan = db.relationship('Plan', back_populates='pending_subscription')
 
 
 class LoginHistory(db.Model):
@@ -147,11 +150,13 @@ class Plan(db.Model):
     storage_limit = db.Column(Integer, nullable=False)
     paypal_plan_id = db.Column(db.JSON, nullable=True)
     product_id = db.Column(String(50), nullable=True)
-    apple_product_id = db.Column(String(100), nullable=True) # [basic_monthly, premium_monthly, basic_yearly, premium_yearly]
+    apple_product_id = db.Column(String(100), nullable=True)
 
     users = db.relationship('User', back_populates='plan')
     payments = db.relationship('Payment', back_populates='plan')
     history_payments = db.relationship('HistoryPayment', back_populates='plan')
+    pending_subscription = db.relationship('PendingSubscription', back_populates='plan')
+
 
 # Shared Secrets Table
 class SharedSecret(db.Model):

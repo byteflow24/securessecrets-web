@@ -1287,15 +1287,16 @@ def verify_apple_subscription():
         return jsonify({"error": "Plan matching productId not found"}), 400
 
     # Update user subscription (only if new user / first subscription)
-    if user.subscription_status != "active":
+    if user.subscription_status != "ACTIVE":
         user.plan_id = plan.id
         user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
-        user.subscription_status = "active"
+        user.subscription_status = "ACITVE"
         user.subscription_start_date = datetime.now(timezone.utc)
         user.updated_at = datetime.now(timezone.utc)
         user.payment_source = "Apple App Store"
+        user.status = None
         db.session.commit()
-
+        print("New commit has been updated!")
     return jsonify({"success": True, "message": "Subscription verified", "expires_date": str(expires_date)}), 200
 
 

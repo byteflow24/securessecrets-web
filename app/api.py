@@ -1258,7 +1258,7 @@ def verify_apple_subscription():
     if not transaction_id:
         return jsonify({"error": "transaction_id is required"}), 400
 
-    # Generate JWT to talk with Apple
+    # Generate JWT to talk with Applee
     token = generate_apple_jwt()
     apple_data, status_code, error = verify_transaction(transaction_id, token)
 

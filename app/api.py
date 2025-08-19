@@ -1335,7 +1335,7 @@ def verify_apple_subscription():
         return jsonify({"error": "Plan matching productId not found"}), 400
 
 
-    # Update user subscription info
+    # Update user subscription info #
     # user.plan_id = plan.id
     # user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
     # user.subscription_status = "active"

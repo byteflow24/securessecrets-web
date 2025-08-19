@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, current_app, url_for, abort, send
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan
-from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt
+from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -1297,6 +1297,9 @@ def verify_apple_subscription():
 
     # Verify the transaction, handling sandbox fallback
     apple_data, status_code, error = verify_transaction(transaction_id, token)
+    parsed = parse_apple_transaction(apple_data)
+
+    print(parsed)
 
     print("Status Code:", status_code, "\n", "Apple Data:", apple_data)
 
@@ -1333,15 +1336,14 @@ def verify_apple_subscription():
 
 
     # Update user subscription info
-    user.plan_id = plan.id
-    user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
-    user.subscription_status = "active"  # or you can parse status from apple_data
-    user.subscription_start_date = datetime.timezone.utc
-    user.updated_at = datetime.timezone.utc
-    user.payment_source = "Apple Pay (App)"
-
-    # Commit changes
-    db.session.commit()
+    # user.plan_id = plan.id
+    # user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
+    # user.subscription_status = "active"
+    # user.subscription_start_date = datetime.now(timezone.utc)
+    # user.updated_at = datetime.now(timezone.utc)
+    # user.payment_source = "Apple App Store"
+    # # Commit changes
+    # db.session.commit()
 
     return jsonify({"success": True, "message": "Subscription verified and user updated"}), 200
 

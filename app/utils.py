@@ -1826,6 +1826,20 @@ def verify_transaction(transaction_id, token, use_sandbox=True):  # Default to s
 
     return apple_data, resp.status_code, None
 
+
+def parse_apple_transaction(apple_data):
+    signed_tx = apple_data.get("signedTransactionInfo")
+    if not signed_tx:
+        return None
+
+    try:
+        # Apple signs with ES256 but you don’t need the key for decoding claims
+        decoded = jwt.decode(signed_tx, options={"verify_signature": False})
+        return decoded
+    except Exception as e:
+        print(f"Error decoding signedTransactionInfo: {e}")
+        return None
+
 # Sender details which SS email, and pswd
 EMAIL = "support@securessecrets.com"
 PSWD = os.environ.get("EMAIL_PSWD")

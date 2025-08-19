@@ -1326,6 +1326,7 @@ def verify_apple_subscription():
 
     # Find the matching plan by Apple product_id
     plan = Plan.query.filter_by(apple_product_id=product_id).first()
+    print(plan.id)
 
     if not plan:
         return jsonify({"error": "Plan matching productId not found"}), 400

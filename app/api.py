@@ -1215,14 +1215,8 @@ def change_plan_apple():
         return jsonify(success=False, error="User not found."), 404
 
     data = request.get_json()
-    if not data or 'transaction_id' not in data or 'plan_id' not in data:
-        return jsonify(success=False, error="Missing transaction ID or plan ID."), 400
-
-    plan_id = data['plan_id']
-    print(f"PlanID: {plan_id}")
-    plan = Plan.query.get(plan_id)
-    if not plan:
-        return jsonify(success=False, error="Plan not found."), 404
+    if not data or 'transaction_id' not in data:
+        return jsonify(success=False, error="Missing transaction ID."), 400
 
     transaction_id = data['transaction_id']
     token = generate_apple_jwt()
@@ -1238,10 +1232,11 @@ def change_plan_apple():
     product_id = transaction_info.get("productId")
     expires_date = transaction_info.get("expiresDate")
 
-    print("Product ID:",product_id,"\n", "Apple Product ID db:",plan.apple_product_id)
+    print("Product ID:",product_id)
 
-    if plan.apple_product_id != product_id:
-        return jsonify(success=False, error="Apple product does not match the selected plan."), 400
+    plan = Plan.query.filter_by(apple_product_id=product_id).first()
+    if not plan:
+        return jsonify({"error": "Apple product does not match the selected plan."}), 400
 
     # Update subscription
     user.plan_id = plan.id

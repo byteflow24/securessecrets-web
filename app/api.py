@@ -1237,7 +1237,7 @@ def change_plan_apple():
     product_id = transaction_info.get("productId")
     expires_date = transaction_info.get("expiresDate")
 
-    print("Product ID:",product_id)
+    print("Product ID:",product_id,"\n", "Apple Product ID db:",plan.apple_product_id)
 
     if plan.apple_product_id != product_id:
         return jsonify(success=False, error="Apple product does not match the selected plan."), 400

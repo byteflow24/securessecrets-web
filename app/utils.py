@@ -1763,7 +1763,7 @@ def generate_access_token(user_id, secret_key, expires_in=3600):
 APPLE_ISSUER_ID = os.environ.get("APPLE_ISSUER_ID")
 APPLE_KEY_ID = os.environ.get("APPLE_KEY_ID")
 APPLE_PRIVATE_KEY_PATH = os.environ.get("APPLE_PRIVATE_KEY_PATH")
-# APPLE_API_BASE = "https://api.storekit.itunes.apple.com"  # For production
+APPLE_API_BASE = "https://api.storekit.itunes.apple.com"  # For production
 APPLE_SANDBOX_BASE = "https://api.storekit-sandbox.itunes.apple.com"# For sandbox
 
 # ======  HELPER: GENERATE APPLE JWT  ======
@@ -1780,7 +1780,7 @@ def generate_apple_jwt():
         "iss": APPLE_ISSUER_ID,
         "iat": now,
         "exp": now + 1800,
-        "aud": APPLE_SANDBOX_BASE,
+        "aud": "appstoreconnect-v1",
         "bid": "com.byteflowdigital.securessecrets",
     }
 
@@ -1798,7 +1798,7 @@ def generate_apple_jwt():
 
 
 def verify_transaction(transaction_id, token, use_sandbox=True):  # Default to sandbox
-    base_url = APPLE_SANDBOX_BASE if use_sandbox else None
+    base_url = APPLE_SANDBOX_BASE if use_sandbox else APPLE_API_BASE
     url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
 
     headers = {

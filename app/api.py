@@ -172,10 +172,11 @@ def register_api():
         phone=phone,
         plan_id=plan_id,
         email_token=token,
-        subscription_start_date=datetime.utcnow(),
+        subscription_start_date=datetime.now(timezone.utc),
         next_billing_date=pending.expires_date,
         subscription_status="ACTIVE",
-        payment_source="Apple App Store"
+        payment_source="Apple App Store",
+        status=None
     )
 
     db.session.add(new_user)

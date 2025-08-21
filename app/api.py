@@ -1285,18 +1285,20 @@ def verify_apple_subscription_pending():
     if not plan:
         return jsonify({"error": "Plan matching productId not found"}), 400
 
-    # Save as pending subscription
-    pending = PendingSubscription(
-        transaction_id=transaction_id,
-        product_id=product_id,
-        plan_id=plan.id,
-        expires_date=expires_date,
-        status="PENDING",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-    db.session.add(pending)
-    db.session.commit()
+    # Save as pending subscription only if it doesn't exist
+    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
+    if not pending:
+        pending = PendingSubscription(
+            transaction_id=transaction_id,
+            product_id=product_id,
+            plan_id=plan.id,
+            expires_date=expires_date,
+            status="PENDING",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.session.add(pending)
+        db.session.commit()
 
     return jsonify({
         "success": True,

@@ -176,7 +176,7 @@ def register_api():
         next_billing_date=pending.expires_date,
         subscription_status="ACTIVE",
         payment_source="Apple App Store",
-        status=None
+        status=""
     )
 
     db.session.add(new_user)
@@ -279,19 +279,19 @@ def dashboard_api():
         return jsonify({'error': 'User not found'}), 404
 
     # Redirect new users to payment
-    if user.status == "new":
-        token = generate_access_token(
-            user_id=user.id,
-            secret_key=current_app.config['JWT_SECRET_KEY']
-        )
+    # if user.status == "new":
+    #     token = generate_access_token(
+    #         user_id=user.id,
+    #         secret_key=current_app.config['JWT_SECRET_KEY']
+    #     )
 
-        charge_url = url_for('main.payment', token=token, _external=True)
+    #     charge_url = url_for('main.payment', token=token, _external=True)
 
-        return jsonify({
-            'error': 'Payment required',
-            'payment_token': token,
-            'redirect_url': charge_url
-        }), 402
+    #     return jsonify({
+    #         'error': 'Payment required',
+    #         'payment_token': token,
+    #         'redirect_url': charge_url
+    #     }), 402
 
     secrets_count = Secret.query.filter_by(user_id=user.id).count()
     last_login = user.login_history[-1].login_time if user.login_history else None

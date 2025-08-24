@@ -1225,8 +1225,14 @@ def change_plan_apple():
         return jsonify(success=False, error="User not found."), 404
 
     data = request.get_json()
-    if not data or 'transaction_id' not in data:
+    if not data:
+        return jsonify(success=False, error="Missing data."), 400
+    
+    if 'transaction_id' not in data:
         return jsonify(success=False, error="Missing transaction ID."), 400
+    
+    if "plan_id" not in data:
+        return jsonify(success=False, error="Missing plan ID."), 400
 
     transaction_id = data['transaction_id']
     token = generate_apple_jwt()

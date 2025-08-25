@@ -1850,7 +1850,19 @@ def parse_apple_transaction(apple_data):
     except Exception as e:
         print("Error decoding signedTransactionInfo:", e)
         return None
-    
+
+def decode_apple_signed_payload(signed_payload):
+    # JWS format: header.payload.signature
+    parts = signed_payload.split('.')
+    if len(parts) != 3:
+        raise ValueError("Invalid JWS structure")
+
+    # The payload is the 2nd part (base64url encoded)
+    payload_b64 = parts[1]
+    # Pad base64 string if necessary
+    payload_b64 += "=" * ((4 - len(payload_b64) % 4) % 4)
+    payload_json = base64.urlsafe_b64decode(payload_b64).decode("utf-8")
+    return json.loads(payload_json)
 
 def update_user_subscription(original_transaction_id, status, expires_date=None):
     """

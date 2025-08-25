@@ -1850,6 +1850,41 @@ def parse_apple_transaction(apple_data):
     except Exception as e:
         print("Error decoding signedTransactionInfo:", e)
         return None
+    
+
+def update_user_subscription(original_transaction_id, status, expires_date=None):
+    """
+    Update the User subscription fields when Apple sends a notification.
+    """
+    try:
+        print(original_transaction_id)
+        # Find the user by Apple transaction_id
+        user = User.query.filter_by(transaction_id=original_transaction_id).first()
+
+        if not user:
+            print(f"⚠️ No user found with transaction_id={original_transaction_id}")
+            return False
+
+        # Update subscription status
+        user.subscription_status = status
+        user.updated_at = datetime.now(timezone.utc)
+
+        # Update expiration if provided
+        if expires_date:
+            if isinstance(expires_date, str) and expires_date.isdigit():
+                expires_date = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
+            user.next_billing_date = expires_date
+
+        db.session.commit()
+        print(f"✅ Updated subscription for user {user.email} → {status}")
+        return True
+
+    except Exception as e:
+        db.session.rollback()
+        print("❌ Error updating subscription:", e)
+        return False
+
+
 
 # Sender details which SS email, and pswd
 EMAIL = "support@securessecrets.com"

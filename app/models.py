@@ -22,6 +22,7 @@ class User(UserMixin, db.Model):
     reset_pswd_token = db.Column(db.String(64), nullable=True)
 
     # Subscription-related fields
+    transaction_id = db.Column(db.String(20), unique=True, nullable=True)
     paypal_subscription_id = db.Column(String(25), unique=True, nullable=True)
     trial_start_date = db.Column(TIMESTAMP, nullable=True)
     trial_end_date = db.Column(TIMESTAMP, nullable=True)
@@ -45,8 +46,8 @@ class User(UserMixin, db.Model):
 class PendingSubscription(db.Model):
     __tablename__ = "pending_subscription"
     id = db.Column(db.Integer, primary_key=True)
-    transaction_id = db.Column(db.String(255), unique=True, nullable=False)
-    product_id = db.Column(db.String(255), nullable=False)
+    transaction_id = db.Column(db.String(20), unique=True, nullable=False)
+    product_id = db.Column(db.String(20), nullable=False)
     plan_id = db.Column(db.Integer, db.ForeignKey('plans.id'), nullable=False)
     expires_date = db.Column(TIMESTAMP, nullable=True)
     status = db.Column(db.String(50), default="PENDING")

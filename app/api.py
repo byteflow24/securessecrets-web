@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, current_app, url_for, abort, send
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
-from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction
+from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -1311,6 +1311,42 @@ def verify_apple_subscription_pending():
         "plan_id": plan.id,
         "expires_date": str(expires_date)
     }), 200
+
+
+# ====== APPLE NOTIFICATIONS API ======
+
+@api.route('/test-apple-notifications', methods=['POST'])
+def apple_notifications():
+    data = request.get_json()
+    print("📩 Received Apple notification:", data)
+
+    try:
+        notification_type = data.get("notificationType")
+        data_obj = data.get("data", {})
+        original_transaction_id = data_obj.get("originalTransactionId")
+        expires_date = data_obj.get("expiresDate")
+
+        if not original_transaction_id:
+            return jsonify({"error": "Missing transaction_id"}), 400
+
+        # Map Apple events → subscription status
+        status_map = {
+            "DID_RENEW": "active",
+            "DID_CHANGE_RENEWAL_STATUS": "canceled",
+            "EXPIRED": "expired",
+            "REFUND": "refunded",
+            "REVOKE": "revoked",
+        }
+
+        status = status_map.get(notification_type, "unknown")
+
+        update_user_subscription(original_transaction_id, status, expires_date)
+
+        return jsonify({"success": True}), 200
+
+    except Exception as e:
+        print("❌ Error handling Apple notification:", e)
+        return jsonify({"error": "internal server error"}), 500
 
 
 ########################################### FORGOT PASSWORD API ###########################################

@@ -1162,6 +1162,7 @@ def api_plan():
                     "storage_limit": storage_limit_mb,
                     "features": user.plan.description,
                     "apple_product_id": user.plan.apple_product_id,
+                    "payment_source": user.payment_source,
                 }
             ), 200
 
@@ -1260,7 +1261,6 @@ def change_plan_apple():
     user.subscription_status = "ACTIVE"
     user.subscription_start_date = datetime.now(timezone.utc)
     user.updated_at = datetime.now(timezone.utc)
-    user.payment_source = "Apple App Store"
     db.session.commit()
 
     return jsonify(success=True, message="Plan changed successfully", next_billing_date=user.next_billing_date), 200

@@ -1448,6 +1448,7 @@ def process_subscription():
         user.next_billing_date = convert_utc_to_local(next_billing_date, user.time_zone)  # Next billing date
         user.fialed_payments = failed_payments
         user.updated_at = convert_utc_to_local(datetime.now(), user.time_zone)
+        user.payment_source="Site - PayPal"
         user.status = None
 
         db.session.commit()

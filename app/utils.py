@@ -1864,6 +1864,12 @@ def decode_apple_signed_payload(signed_payload):
     payload_json = base64.urlsafe_b64decode(payload_b64).decode("utf-8")
     return json.loads(payload_json)
 
+def decode_jwt(jwt_token):
+    parts = jwt_token.split('.')
+    payload_b64 = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+    payload_json = base64.urlsafe_b64decode(payload_b64).decode("utf-8")
+    return json.loads(payload_json)
+
 def update_user_subscription(original_transaction_id, status, expires_date=None):
     """
     Update the User subscription fields when Apple sends a notification.

@@ -1296,7 +1296,7 @@ def change_plan_apple():
     if not plan:
         return jsonify(success=False, error="Apple product does not match any plan."), 400
 
-    # ⚠️ Do NOT update user subscription directly here. //
+    # ⚠️ Do NOT update user subscription directly here.
     # Apple will send the notification (SUBSCRIBED, DID_CHANGE_RENEWAL_PREF, etc.)
     # which will be handled in /apple-notifications.
 
@@ -1349,7 +1349,7 @@ def apple_notifications():
 
 # ====== TEST APPLE NOTIFICATIONS API ======
 @api.route('/test-apple-notifications', methods=['POST'])
-def apple_notifications():
+def test_apple_notifications():
     data = request.get_json()
     print("📩 Raw Apple notification:", data)
 

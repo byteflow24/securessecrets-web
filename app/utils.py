@@ -1871,9 +1871,10 @@ def decode_jwt(jwt_token):
     return json.loads(payload_json)
 
 
-def update_user_subscription(original_transaction_id, product_id, status, expires_date=None):
+def update_user_subscription(original_transaction_id, product_id, status, expires_date=None, tx_info=None):
     """
     Update the User subscription fields when Apple sends a notification.
+    Includes handling free trials.
     """
     try:
         user = User.query.filter_by(transaction_id=original_transaction_id).first()
@@ -1894,23 +1895,46 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
         user.updated_at = datetime.now(timezone.utc)
 
         # ✅ Convert expires_date from ms → datetime
+        expiry_dt = None
         if expires_date:
             if isinstance(expires_date, (int, float)):
-                expires_date = datetime.fromtimestamp(expires_date / 1000, tz=timezone.utc)
+                expiry_dt = datetime.fromtimestamp(expires_date / 1000, tz=timezone.utc)
             elif isinstance(expires_date, str) and expires_date.isdigit():
-                expires_date = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
+                expiry_dt = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
 
-            user.next_billing_date = expires_date
+            user.next_billing_date = expiry_dt
+
+        # ✅ Handle trial logic if transaction info is provided
+        if tx_info:
+            offer_type = tx_info.get("offerType")  # e.g. FREE_TRIAL / INTRODUCTORY
+            transaction_reason = tx_info.get("transactionReason")
+            price = tx_info.get("price", 0)
+
+            # Case 1: Apple explicitly says it's a trial
+            if offer_type and "TRIAL" in offer_type.upper():
+                user.trial_start_date = datetime.now(timezone.utc)
+                user.trial_end_date = expiry_dt
+
+            # Case 2: First purchase, transactionReason == PURCHASE, price == 0
+            elif transaction_reason == "PURCHASE" and (not price or price == 0):
+                user.trial_start_date = datetime.now(timezone.utc)
+                user.trial_end_date = expiry_dt
+
+            # If expired, clear trial
+            if status == "EXPIRED":
+                user.trial_end_date = datetime.now(timezone.utc)
 
         db.session.commit()
-        print(f"✅ Updated user {user.email} → plan={plan.name if plan else 'N/A'}, "
-              f"status={status}, next billing={user.next_billing_date}")
+        print(f"✅ Updated user {user.email} → plan={plan.plan if plan else 'N/A'}, "
+              f"status={status}, next billing={user.next_billing_date}, "
+              f"trial=({user.trial_start_date} → {user.trial_end_date})")
         return True
 
     except Exception as e:
         db.session.rollback()
         print("❌ Error updating subscription:", e)
         return False
+
     
 
 # Sender details which SS email, and pswd

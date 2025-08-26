@@ -1347,7 +1347,7 @@ def apple_notifications():
 
         status = status_map.get(notification_type, "unknown").upper()
 
-        update_user_subscription(original_transaction_id, product_id, status, expires_date)
+        update_user_subscription(original_transaction_id, product_id, status, expires_date, tx_info)
 
         return jsonify({"success": True}), 200
 

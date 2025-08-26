@@ -1274,14 +1274,13 @@ def change_plan_apple():
     data = request.get_json()
     if not data:
         return jsonify(success=False, error="Missing data."), 400
-    
-    if 'transaction_id' not in data:
-        return jsonify(success=False, error="Missing transaction ID."), 400
-    
-    if "plan_id" not in data:
-        return jsonify(success=False, error="Missing plan ID."), 400
 
-    transaction_id = data['transaction_id']
+    if "transaction_id" not in data:
+        return jsonify(success=False, error="Missing transaction ID."), 400
+
+    transaction_id = data["transaction_id"]
+
+    # ✅ Optional: Verify transaction with Apple API to ensure request is legit
     token = generate_apple_jwt()
     apple_data, status_code, error = verify_transaction(transaction_id, token)
 
@@ -1293,25 +1292,62 @@ def change_plan_apple():
         return jsonify(success=False, error="Failed to parse Apple transaction"), 400
 
     product_id = transaction_info.get("productId")
-    expires_date = transaction_info.get("expiresDate")
-
-    print("Product ID:",product_id)
-
     plan = Plan.query.filter_by(apple_product_id=product_id).first()
     if not plan:
-        return jsonify({"error": "Apple product does not match the selected plan."}), 400
+        return jsonify(success=False, error="Apple product does not match any plan."), 400
 
-    # Update subscription
-    user.plan_id = plan.id
-    user.next_billing_date = convert_utc_to_local(expires_date, user.time_zone)
-    user.subscription_status = "ACTIVE"
-    user.subscription_start_date = datetime.now(timezone.utc)
-    user.updated_at = datetime.now(timezone.utc)
-    db.session.commit()
+    # ⚠️ Do NOT update user subscription directly here.
+    # Apple will send the notification (SUBSCRIBED, DID_CHANGE_RENEWAL_PREF, etc.)
+    # which will be handled in /apple-notifications.
 
-    return jsonify(success=True, message="Plan changed successfully", next_billing_date=user.next_billing_date), 200
+    return jsonify(success=True, message="Plan change requested. Subscription will update once Apple confirms."), 200
 
 # ====== APPLE NOTIFICATIONS API ======
+@api.route('/apple-notifications', methods=['POST'])
+def apple_notifications():
+    data = request.get_json()
+    print("📩 Raw Apple notification:", data)
+
+    try:
+        signed_payload = data.get("signedPayload")
+        decoded = decode_apple_signed_payload(signed_payload)
+        print("📩 Decoded Apple payload:", decoded)
+
+        notification_type = decoded.get("notificationType")
+        subtype = decoded.get("subtype")
+        data_obj = decoded.get("data", {})
+
+        # Decode transaction info
+        signed_tx = data_obj.get("signedTransactionInfo")
+        tx_info = decode_jwt(signed_tx) if signed_tx else {}
+        print("🧾 Transaction Info:", tx_info)
+
+        original_transaction_id = tx_info.get("originalTransactionId")
+        expires_date = tx_info.get("expiresDate")
+        product_id = tx_info.get("productId")
+
+        # Map Apple events → subscription status
+        status_map = {
+            "SUBSCRIBED": "active",
+            "DID_RENEW": "active",
+            "DID_CHANGE_RENEWAL_STATUS": "canceled",  # user turned off auto-renew
+            "DID_CHANGE_RENEWAL_PREF": "active ",
+            "EXPIRED": "expired",
+            "REFUND": "refunded",
+            "REVOKE": "revoked",
+        }
+
+        status = status_map.get(notification_type, "unknown").upper()
+
+        update_user_subscription(original_transaction_id, product_id, status, expires_date, tx_info)
+
+        return jsonify({"success": True}), 200
+
+    except Exception as e:
+        print("❌ Error handling Apple notification:", e)
+        return jsonify({"error": "internal server error"}), 500
+
+# ====== TEST APPLE NOTIFICATIONS API ======
 @api.route('/test-apple-notifications', methods=['POST'])
 def apple_notifications():
     data = request.get_json()

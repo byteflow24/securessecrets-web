@@ -1216,6 +1216,52 @@ def billing_api():
 
     return jsonify(success=True, billing_info=billing_info, payment_history=payment_data, available_plans=plans_data), 200
 
+# ====== APPLE API ======
+@api.route('/verify-apple-subscription-pending', methods=['POST'])
+def verify_apple_subscription_pending():
+    data = request.get_json()
+    transaction_id = data.get("transaction_id")
+    if not transaction_id:
+        return jsonify({"error": "transaction_id is required"}), 400
+
+    token = generate_apple_jwt()
+    apple_data, status_code, error = verify_transaction(transaction_id, token)
+
+    if status_code != 200:
+        return jsonify({"error": "Apple API error", "details": apple_data or error}), status_code
+
+    transaction_info = parse_apple_transaction(apple_data)
+    if not transaction_info:
+        return jsonify({"error": "Failed to parse Apple transaction"}), 400
+
+    product_id = transaction_info.get("productId")
+    expires_date = transaction_info.get("expiresDate")
+
+    plan = Plan.query.filter_by(apple_product_id=product_id).first()
+    if not plan:
+        return jsonify({"error": "Plan matching productId not found"}), 400
+
+    # Save as pending subscription only if it doesn't exist
+    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
+    if not pending:
+        pending = PendingSubscription(
+            transaction_id=transaction_id,
+            product_id=product_id,
+            plan_id=plan.id,
+            expires_date=expires_date,
+            status="PENDING",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.session.add(pending)
+        db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "plan_id": plan.id,
+        "expires_date": str(expires_date)
+    }), 200
+
 # === Change Plan via Apple Subscription ===
 @api.route('/change-plan-apple', methods=['POST'])
 @jwt_required()
@@ -1265,54 +1311,6 @@ def change_plan_apple():
 
     return jsonify(success=True, message="Plan changed successfully", next_billing_date=user.next_billing_date), 200
 
-# ====== APPLE API ======
-
-@api.route('/verify-apple-subscription-pending', methods=['POST'])
-def verify_apple_subscription_pending():
-    data = request.get_json()
-    transaction_id = data.get("transaction_id")
-    if not transaction_id:
-        return jsonify({"error": "transaction_id is required"}), 400
-
-    token = generate_apple_jwt()
-    apple_data, status_code, error = verify_transaction(transaction_id, token)
-
-    if status_code != 200:
-        return jsonify({"error": "Apple API error", "details": apple_data or error}), status_code
-
-    transaction_info = parse_apple_transaction(apple_data)
-    if not transaction_info:
-        return jsonify({"error": "Failed to parse Apple transaction"}), 400
-
-    product_id = transaction_info.get("productId")
-    expires_date = transaction_info.get("expiresDate")
-
-    plan = Plan.query.filter_by(apple_product_id=product_id).first()
-    if not plan:
-        return jsonify({"error": "Plan matching productId not found"}), 400
-
-    # Save as pending subscription only if it doesn't exist
-    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
-    if not pending:
-        pending = PendingSubscription(
-            transaction_id=transaction_id,
-            product_id=product_id,
-            plan_id=plan.id,
-            expires_date=expires_date,
-            status="PENDING",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        )
-        db.session.add(pending)
-        db.session.commit()
-
-    return jsonify({
-        "success": True,
-        "plan_id": plan.id,
-        "expires_date": str(expires_date)
-    }), 200
-
-
 # ====== APPLE NOTIFICATIONS API ======
 @api.route('/test-apple-notifications', methods=['POST'])
 def apple_notifications():
@@ -1335,20 +1333,21 @@ def apple_notifications():
 
         original_transaction_id = tx_info.get("originalTransactionId")
         expires_date = tx_info.get("expiresDate")
+        product_id = tx_info.get("productId")
 
         # Map Apple events → subscription status
         status_map = {
             "SUBSCRIBED": "active",
             "DID_RENEW": "active",
-            "DID_CHANGE_RENEWAL_STATUS": "canceled",
+            "DID_CHANGE_RENEWAL_STATUS": "canceled",  # user turned off auto-renew
             "EXPIRED": "expired",
             "REFUND": "refunded",
             "REVOKE": "revoked",
         }
 
-        status = status_map.get(notification_type, "unknown")
+        status = status_map.get(notification_type, "unknown").upper()
 
-        update_user_subscription(original_transaction_id, status, expires_date)
+        update_user_subscription(original_transaction_id, product_id, status, expires_date)
 
         return jsonify({"success": True}), 200
 
@@ -1356,9 +1355,7 @@ def apple_notifications():
         print("❌ Error handling Apple notification:", e)
         return jsonify({"error": "internal server error"}), 500
 
-
 ########################################### FORGOT PASSWORD API ###########################################
-
 @api.route('/forgot-password', methods=['POST'])
 def api_forgot_password():
     data = request.get_json()

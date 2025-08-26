@@ -1870,26 +1870,32 @@ def decode_jwt(jwt_token):
     payload_json = base64.urlsafe_b64decode(payload_b64).decode("utf-8")
     return json.loads(payload_json)
 
-def update_user_subscription(original_transaction_id, status, expires_date=None):
+
+def update_user_subscription(original_transaction_id, product_id, status, expires_date=None):
     """
     Update the User subscription fields when Apple sends a notification.
     """
     try:
-        print(original_transaction_id)
-        # Find the user by Apple transaction_id
         user = User.query.filter_by(transaction_id=original_transaction_id).first()
 
         if not user:
             print(f"⚠️ No user found with transaction_id={original_transaction_id}")
             return False
 
-        # Update subscription status
+        # 🔎 Map productId to internal plan
+        plan = Plan.query.filter_by(apple_product_id=product_id).first()
+        if not plan:
+            print(f"⚠️ No matching plan found for product_id={product_id}")
+        else:
+            user.plan_id = plan.id
+
+        # ✅ Update subscription status
         user.subscription_status = status
         user.updated_at = datetime.now(timezone.utc)
 
         # ✅ Convert expires_date from ms → datetime
         if expires_date:
-            if isinstance(expires_date, (int, float)):  # already numeric
+            if isinstance(expires_date, (int, float)):
                 expires_date = datetime.fromtimestamp(expires_date / 1000, tz=timezone.utc)
             elif isinstance(expires_date, str) and expires_date.isdigit():
                 expires_date = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
@@ -1897,7 +1903,8 @@ def update_user_subscription(original_transaction_id, status, expires_date=None)
             user.next_billing_date = expires_date
 
         db.session.commit()
-        print(f"✅ Updated subscription for user {user.email} → {status}, next billing: {user.next_billing_date}")
+        print(f"✅ Updated user {user.email} → plan={plan.name if plan else 'N/A'}, "
+              f"status={status}, next billing={user.next_billing_date}")
         return True
 
     except Exception as e:

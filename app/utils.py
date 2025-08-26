@@ -1887,22 +1887,24 @@ def update_user_subscription(original_transaction_id, status, expires_date=None)
         user.subscription_status = status
         user.updated_at = datetime.now(timezone.utc)
 
-        # Update expiration if provided
+        # ✅ Convert expires_date from ms → datetime
         if expires_date:
-            if isinstance(expires_date, str) and expires_date.isdigit():
+            if isinstance(expires_date, (int, float)):  # already numeric
+                expires_date = datetime.fromtimestamp(expires_date / 1000, tz=timezone.utc)
+            elif isinstance(expires_date, str) and expires_date.isdigit():
                 expires_date = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
+
             user.next_billing_date = expires_date
 
         db.session.commit()
-        print(f"✅ Updated subscription for user {user.email} → {status}")
+        print(f"✅ Updated subscription for user {user.email} → {status}, next billing: {user.next_billing_date}")
         return True
 
     except Exception as e:
         db.session.rollback()
         print("❌ Error updating subscription:", e)
         return False
-
-
+    
 
 # Sender details which SS email, and pswd
 EMAIL = "support@securessecrets.com"

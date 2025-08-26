@@ -1797,7 +1797,7 @@ def generate_apple_jwt():
         raise
 
 
-def verify_transaction(transaction_id, token, use_sandbox=True):  # Default to sandbox
+def verify_transaction(transaction_id, token, use_sandbox=False):  # Default to sandbox
     base_url = APPLE_SANDBOX_BASE if use_sandbox else APPLE_API_BASE
     url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
 

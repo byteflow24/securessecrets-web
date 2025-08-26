@@ -1340,6 +1340,7 @@ def apple_notifications():
             "SUBSCRIBED": "active",
             "DID_RENEW": "active",
             "DID_CHANGE_RENEWAL_STATUS": "canceled",  # user turned off auto-renew
+            "DID_CHANGE_RENEWAL_PREF": "active ",
             "EXPIRED": "expired",
             "REFUND": "refunded",
             "REVOKE": "revoked",

@@ -1874,7 +1874,7 @@ def decode_jwt(jwt_token):
 def update_user_subscription(original_transaction_id, product_id, status, expires_date=None, tx_info=None):
     """
     Update the User subscription fields when Apple sends a notification.
-    Includes handling free trials.
+    Includes handling free trials and trial → paid conversion.
     """
     try:
         user = User.query.filter_by(transaction_id=original_transaction_id).first()
@@ -1904,24 +1904,35 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
 
             user.next_billing_date = expiry_dt
 
-        # ✅ Handle trial logic if transaction info is provided
+        # ✅ Handle trial logic
         if tx_info:
-            offer_type = tx_info.get("offerType")  # e.g. FREE_TRIAL / INTRODUCTORY
+            offer_type = tx_info.get("offerType")  # e.g. FREE_TRIAL, INTRODUCTORY
             transaction_reason = tx_info.get("transactionReason")
             price = tx_info.get("price", 0)
 
-            # Case 1: Apple explicitly says it's a trial
+            # --- Case 1: Free Trial purchase ---
             if offer_type and "TRIAL" in offer_type.upper():
-                user.trial_start_date = datetime.now(timezone.utc)
-                user.trial_end_date = expiry_dt
+                if not user.trial_start_date:  # only set once
+                    user.trial_start_date = datetime.now(timezone.utc)
+                    user.trial_end_date = expiry_dt
+                    print(f"🎁 Free Trial started: {user.trial_start_date} → {user.trial_end_date}")
 
-            # Case 2: First purchase, transactionReason == PURCHASE, price == 0
             elif transaction_reason == "PURCHASE" and (not price or price == 0):
-                user.trial_start_date = datetime.now(timezone.utc)
-                user.trial_end_date = expiry_dt
+                if not user.trial_start_date:
+                    user.trial_start_date = datetime.now(timezone.utc)
+                    user.trial_end_date = expiry_dt
+                    print(f"🎁 Free Trial (price=0) started: {user.trial_start_date} → {user.trial_end_date}")
 
-            # If expired, clear trial
+            # --- Case 2: Trial converts to Paid (Renewal with price > 0) ---
+            elif transaction_reason == "RENEWAL" and price and price > 0:
+                # Keep trial_end_date as history, just mark as active paid
+                user.subscription_status = "ACTIVE"
+                print(f"💳 Trial converted to paid subscription for {user.email}")
+
+            # --- Case 3: Expired trial or subscription ---
             if status == "EXPIRED":
+                if user.trial_end_date and user.trial_end_date <= datetime.now(timezone.utc):
+                    print(f"⏰ Trial expired for {user.email}")
                 user.trial_end_date = datetime.now(timezone.utc)
 
         db.session.commit()
@@ -1935,7 +1946,6 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
         print("❌ Error updating subscription:", e)
         return False
 
-    
 
 # Sender details which SS email, and pswd
 EMAIL = "support@securessecrets.com"

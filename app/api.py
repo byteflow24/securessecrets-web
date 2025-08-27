@@ -157,7 +157,7 @@ def register_api():
         return jsonify({'error': 'Username already in use. Please choose another.'}), 409
 
     # Find the pending subscription
-    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id, plan_id=plan_id, status="PENDING").first()
+    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id, plan_id=plan_id).first()
     if not pending:
         return jsonify({'error': 'Pending subscription not found'}), 400
 
@@ -174,17 +174,22 @@ def register_api():
         email_token=token,
         subscription_start_date=datetime.now(timezone.utc),
         next_billing_date=pending.expires_date,
-        subscription_status="ACTIVE",
+        subscription_status=pending.status,  # 🔑 take latest status
         payment_source="Apple App Store",
-        status=""
+        transaction_id=transaction_id,
+
+        # ✅ carry over trial info if it existed in PendingSubscription
+        trial_start_date=pending.trial_start_date,
+        trial_end_date=pending.trial_end_date
     )
 
     db.session.add(new_user)
-    # Delete pending subscription after moving info
-    db.session.delete(pending)
+    # instead of delete, mark as linked
+    pending.status = "LINKED"
+    pending.user_id = new_user.id  # optional: explicit link
+    db.session.commit()
 
     try:
-        db.session.commit()
         send_verification_email(new_user.email, new_user.username, new_user.email_token)
         return jsonify({'message': 'User registered successfully. Please check your email to confirm your account.'}), 200
     except Exception as e:

@@ -4,7 +4,7 @@ from flask_login import current_user
 from functools import wraps
 from urllib.parse import urlparse, urljoin
 from . import db, login_manager
-from .models import User, Secret, Plan, Payment, HistoryPayment
+from .models import User, Secret, Plan, Payment, PendingSubscription
 from sqlalchemy import and_
 from datetime import datetime, timezone, timedelta, date
 from cryptography.fernet import Fernet
@@ -1796,7 +1796,6 @@ def generate_apple_jwt():
         print(f"Error generating JWT: {e}")
         raise
 
-
 def verify_transaction(transaction_id, token, use_sandbox=True):  # Default to sandbox
     base_url = APPLE_SANDBOX_BASE if use_sandbox else APPLE_API_BASE
     url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
@@ -1879,73 +1878,98 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
     try:
         user = User.query.filter_by(transaction_id=original_transaction_id).first()
 
-        if not user:
-            print(f"⚠️ No user found with transaction_id={original_transaction_id}")
-            return False
+        if user:
+            # ✅ Existing user → update subscription
+            plan = Plan.query.filter_by(apple_product_id=product_id).first()
+            if plan:
+                user.plan_id = plan.id
 
-        # 🔎 Map productId to internal plan
-        plan = Plan.query.filter_by(apple_product_id=product_id).first()
-        if not plan:
-            print(f"⚠️ No matching plan found for product_id={product_id}")
-        else:
-            user.plan_id = plan.id
+            user.subscription_status = status
+            user.updated_at = datetime.now(timezone.utc)
 
-        # ✅ Update subscription status
-        user.subscription_status = status
-        user.updated_at = datetime.now(timezone.utc)
+            # convert expiry
+            expiry_dt = None
+            if expires_date:
+                if isinstance(expires_date, (int, float)):
+                    expiry_dt = datetime.fromtimestamp(expires_date / 1000, tz=timezone.utc)
+                elif isinstance(expires_date, str) and expires_date.isdigit():
+                    expiry_dt = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
 
-        # ✅ Convert expires_date from ms → datetime
-        expiry_dt = None
-        if expires_date:
-            if isinstance(expires_date, (int, float)):
-                expiry_dt = datetime.fromtimestamp(expires_date / 1000, tz=timezone.utc)
-            elif isinstance(expires_date, str) and expires_date.isdigit():
-                expiry_dt = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
+                user.next_billing_date = expiry_dt
 
-            user.next_billing_date = expiry_dt
+            # ✅ Handle trial logic
+            if tx_info:
+                offer_type = tx_info.get("offerType")  # e.g. FREE_TRIAL, INTRODUCTORY
+                transaction_reason = tx_info.get("transactionReason")
+                price = tx_info.get("price", 0)
 
-        # ✅ Handle trial logic
-        if tx_info:
-            offer_type = tx_info.get("offerType")  # e.g. FREE_TRIAL, INTRODUCTORY
-            transaction_reason = tx_info.get("transactionReason")
-            price = tx_info.get("price", 0)
+                # --- Case 1: Free Trial purchase ---
+                if offer_type and "TRIAL" in offer_type.upper():
+                    if not user.trial_start_date:  # only set once
+                        user.trial_start_date = datetime.now(timezone.utc)
+                        user.trial_end_date = expiry_dt
+                        print(f"🎁 Free Trial started: {user.trial_start_date} → {user.trial_end_date}")
 
-            # --- Case 1: Free Trial purchase ---
-            if offer_type and "TRIAL" in offer_type.upper():
-                if not user.trial_start_date:  # only set once
-                    user.trial_start_date = datetime.now(timezone.utc)
-                    user.trial_end_date = expiry_dt
-                    print(f"🎁 Free Trial started: {user.trial_start_date} → {user.trial_end_date}")
+                elif transaction_reason == "PURCHASE" and (not price or price == 0):
+                    if not user.trial_start_date:
+                        user.trial_start_date = datetime.now(timezone.utc)
+                        user.trial_end_date = expiry_dt
+                        print(f"🎁 Free Trial (price=0) started: {user.trial_start_date} → {user.trial_end_date}")
 
-            elif transaction_reason == "PURCHASE" and (not price or price == 0):
-                if not user.trial_start_date:
-                    user.trial_start_date = datetime.now(timezone.utc)
-                    user.trial_end_date = expiry_dt
-                    print(f"🎁 Free Trial (price=0) started: {user.trial_start_date} → {user.trial_end_date}")
+                # --- Case 2: Trial converts to Paid (Renewal with price > 0) ---
+                elif transaction_reason == "RENEWAL" and price and price > 0:
+                    # Keep trial_end_date as history, just mark as active paid
+                    user.subscription_status = "ACTIVE"
+                    print(f"💳 Trial converted to paid subscription for {user.email}")
 
-            # --- Case 2: Trial converts to Paid (Renewal with price > 0) ---
-            elif transaction_reason == "RENEWAL" and price and price > 0:
-                # Keep trial_end_date as history, just mark as active paid
-                user.subscription_status = "ACTIVE"
-                print(f"💳 Trial converted to paid subscription for {user.email}")
+                # --- Case 3: Expired trial or subscription ---
+                if status == "EXPIRED":
+                    if user.trial_end_date and user.trial_end_date <= datetime.now(timezone.utc):
+                        print(f"⏰ Trial expired for {user.email}")
+                    user.trial_end_date = datetime.now(timezone.utc)
 
-            # --- Case 3: Expired trial or subscription ---
-            if status == "EXPIRED":
-                if user.trial_end_date and user.trial_end_date <= datetime.now(timezone.utc):
-                    print(f"⏰ Trial expired for {user.email}")
-                user.trial_end_date = datetime.now(timezone.utc)
-
-        db.session.commit()
-        print(f"✅ Updated user {user.email} → plan={plan.plan if plan else 'N/A'}, "
+            db.session.commit()
+            print(f"✅ Updated user {user.email} → plan={plan.plan if plan else 'N/A'}, "
               f"status={status}, next billing={user.next_billing_date}, "
               f"trial=({user.trial_start_date} → {user.trial_end_date})")
-        return True
+            return True
+        else:
+            # ⚠️ No user yet → update PendingSubscription instead
+            pending = PendingSubscription.query.filter_by(transaction_id=original_transaction_id).first()
+            if pending:
+                pending.status = status
+                if expires_date:
+                    expiry_dt = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
+                    pending.expires_date = expiry_dt
+
+                # Handle trial even before user exists
+                if tx_info:
+                    offer_type = tx_info.get("offerType")
+                    price = tx_info.get("price", 0)
+
+                    if offer_type and "TRIAL" in offer_type.upper():
+                        if not pending.trial_start_date:
+                            pending.trial_start_date = datetime.now(timezone.utc)
+                            pending.trial_end_date = expiry_dt
+                            print(f"📌 Pending Free Trial started {pending.trial_start_date} → {pending.trial_end_date}")
+                    elif not price or price == 0:
+                        if not pending.trial_start_date:
+                            pending.trial_start_date = datetime.now(timezone.utc)
+                            pending.trial_end_date = expiry_dt
+                            print(f"📌 Pending Free Trial (price=0) {pending.trial_start_date} → {pending.trial_end_date}")
+
+                pending.updated_at = datetime.now(timezone.utc)
+                db.session.commit()
+                print(f"📌 Updated PendingSubscription {original_transaction_id} → status={status}")
+                return True
+
+            print(f"⚠️ No User or PendingSubscription found for transaction_id={original_transaction_id}")
+            return False
 
     except Exception as e:
         db.session.rollback()
         print("❌ Error updating subscription:", e)
         return False
-
 
 # Sender details which SS email, and pswd
 EMAIL = "support@securessecrets.com"

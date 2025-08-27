@@ -186,7 +186,7 @@ def register_api():
     db.session.add(new_user)
     # instead of delete, mark as linked
     pending.status = "LINKED"
-    pending.user_id = new_user.id  # optional: explicit link
+    # pending.user_id = new_user.id  # optional: explicit link
     db.session.commit()
 
     try:

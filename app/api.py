@@ -134,16 +134,11 @@ def api_process_subscription():
 @api.route('/register', methods=['POST'])
 def register_api():
     data = request.get_json()
-    required_fields = [
-        'username', 'email', 'password', 'confirm_password',
-        'code', 'phone', 'plan_id', 'transaction_id'
-    ]
-    
-    # ✅ Validate required fields
+    required_fields = ['username', 'email', 'password', 'confirm_password', 'code', 'phone', 'plan_id', 'transaction_id']
     if not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), 400
 
-    username = data['username'].lower().strip()
+    username = data['username'].lower()
     email = data['email'].lower().strip()
     password = data['password']
     confirm_password = data['confirm_password']
@@ -152,31 +147,23 @@ def register_api():
     plan_id = data['plan_id']
     transaction_id = data['transaction_id']
 
-    # ✅ Password match check
     if password != confirm_password:
         return jsonify({'error': 'Passwords do not match'}), 400
 
-    # ✅ Uniqueness checks
+    # Check uniqueness
     if User.query.filter_by(email=email).first():
         return jsonify({'error': 'Email already exists. Please log in instead.'}), 409
     if User.query.filter_by(username=username).first():
         return jsonify({'error': 'Username already in use. Please choose another.'}), 409
 
-    # ✅ Ensure pending subscription exists
-    pending = PendingSubscription.query.filter_by(
-        transaction_id=transaction_id,
-        plan_id=plan_id,
-        status="PENDING"
-    ).first()
-
+    # Find the pending subscription
+    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id, plan_id=plan_id, status="PENDING").first()
     if not pending:
         return jsonify({'error': 'Pending subscription not found'}), 400
 
-    # ✅ Hash password & generate token
     hashed_password = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
     token = generate_token()
 
-    # ✅ Create new user
     new_user = User(
         email=email,
         username=username,
@@ -193,7 +180,8 @@ def register_api():
     )
 
     db.session.add(new_user)
-    db.session.delete(pending)  # cleanup pending subscription
+    # Delete pending subscription after moving info
+    db.session.delete(pending)
 
     try:
         db.session.commit()
@@ -201,7 +189,7 @@ def register_api():
         return jsonify({'message': 'User registered successfully. Please check your email to confirm your account.'}), 200
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Registration error: {e}")
+        print(f"Registration error: {e}")
         return jsonify({'error': 'An error occurred during registration. Please try again.'}), 500
 
 # === User's timezone ===
@@ -1371,10 +1359,10 @@ def test_apple_notifications():
         print("📩 Decoded Apple payload:", decoded)
 
         notification_type = decoded.get("notificationType")
-        subtype = decoded.get("subtype")  # optional
+        subtype = decoded.get("subtype")
         data_obj = decoded.get("data", {})
 
-        # ✅ Transaction details
+        # Decode transaction info
         signed_tx = data_obj.get("signedTransactionInfo")
         tx_info = decode_jwt(signed_tx) if signed_tx else {}
         print("🧾 Transaction Info:", tx_info)
@@ -1383,26 +1371,20 @@ def test_apple_notifications():
         expires_date = tx_info.get("expiresDate")
         product_id = tx_info.get("productId")
 
-        # ✅ Normalize Apple events → our subscription status
+        # Map Apple events → subscription status
         status_map = {
-            "SUBSCRIBED": "ACTIVE",
-            "DID_RENEW": "ACTIVE",
-            "DID_CHANGE_RENEWAL_STATUS": "CANCELED",  # user turned off auto-renew
-            "DID_CHANGE_RENEWAL_PREF": "ACTIVE",      # user switched to another plan
-            "EXPIRED": "EXPIRED",
-            "REFUND": "REFUNDED",
-            "REVOKE": "REVOKED",
+            "SUBSCRIBED": "active",
+            "DID_RENEW": "active",
+            "DID_CHANGE_RENEWAL_STATUS": "canceled",  # user turned off auto-renew
+            "DID_CHANGE_RENEWAL_PREF": "active ",
+            "EXPIRED": "expired",
+            "REFUND": "refunded",
+            "REVOKE": "revoked",
         }
 
-        status = status_map.get(notification_type, "UNKNOWN")
+        status = status_map.get(notification_type, "unknown").upper()
 
-        update_user_subscription(
-            original_transaction_id,
-            product_id,
-            status,
-            expires_date,
-            tx_info
-        )
+        update_user_subscription(original_transaction_id, product_id, status, expires_date, tx_info)
 
         return jsonify({"success": True}), 200
 

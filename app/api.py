@@ -1289,11 +1289,15 @@ def verify_apple_subscription():
     purchase_date = transaction_info.get("purchaseDate")
     print("⏰ purchase_date:", purchase_date, "expires_date:", expires_date)
 
+    product_id = transaction_info.get("productId")
+    print("⏰ product_id:", product_id)
+
     # Save PendingSubscription
     try:
         new_pending = PendingSubscription(
             transaction_id=transaction_id,
             plan_id=plan_id,
+            product_id=product_id,
             expires_date=expires_date,
             status="PENDING",
             created_at=datetime.now(timezone.utc),

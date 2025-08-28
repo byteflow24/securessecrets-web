@@ -177,6 +177,7 @@ def register_api():
         subscription_status="ACTIVE",
         payment_source="Apple App Store",
         transaction_id=transaction_id,
+        status="",
 
         # ✅ carry over trial info if it existed in PendingSubscription
         trial_start_date=pending.trial_start_date,

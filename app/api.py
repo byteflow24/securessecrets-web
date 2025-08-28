@@ -155,9 +155,9 @@ def register_api():
         return jsonify({'error': 'Email already exists. Please log in instead.'}), 409
     if User.query.filter_by(username=username).first():
         return jsonify({'error': 'Username already in use. Please choose another.'}), 409
-
+    print(transaction_id)
     # Find the pending subscription
-    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id, plan_id=plan_id).first()
+    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
     if not pending:
         return jsonify({'error': 'Pending subscription not found'}), 400
 

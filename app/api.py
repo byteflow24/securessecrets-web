@@ -1225,32 +1225,50 @@ def billing_api():
 @api.route("/verify-apple-subscription", methods=["POST"])
 def verify_apple_subscription():
     data = request.get_json() or {}
+    print("📩 Incoming data:", data)
+
     transaction_id = data.get("transaction_id")
     plan_id = data.get("plan_id")
+    receipt_data = data.get("receipt_data")  # check if Flutter is sending this
 
-    if not transaction_id or not plan_id:
+    print("🔑 transaction_id:", transaction_id)
+    print("📦 plan_id:", plan_id)
+    print("🧾 receipt_data:", "present" if receipt_data else "missing")
+
+    if not transaction_id or not plan_id or not receipt_data:
         return jsonify({
             "status": "error",
-            "message": "Missing transaction_id or plan_id"
+            "message": "Missing transaction_id, plan_id, or receipt_data"
         }), 400
 
     # 1. Check if already linked to a user
     user = User.query.filter_by(transaction_id=transaction_id).first()
+    print("👤 Existing user:", user)
     if user:
         return jsonify({"status": "existing_user"}), 200
 
     # 2. Check if pending subscription exists
     pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
+    print("⏳ Existing pending subscription:", pending)
     if pending:
         return jsonify({"status": "allow_register"}), 200
 
     # 3. Verify with Apple API
     try:
         token = generate_apple_jwt()
+        print("🛠️ JWT generated successfully")
     except Exception as e:
+        print("❌ JWT generation failed:", e)
         return jsonify({"status": "error", "message": f"JWT generation failed: {e}"}), 500
 
-    apple_data, status_code, error = verify_transaction(transaction_id, token)
+    try:
+        apple_data, status_code, error = verify_transaction(transaction_id, token)
+        print("🍎 Apple API response status:", status_code)
+        print("🍎 Apple API data:", apple_data)
+        print("⚠️ Apple API error:", error)
+    except Exception as e:
+        print("❌ Error calling Apple API:", e)
+        return jsonify({"status": "error", "message": f"Apple API call failed: {e}"}), 500
 
     if status_code != 200 or not apple_data:
         return jsonify({
@@ -1259,6 +1277,8 @@ def verify_apple_subscription():
         }), 400
 
     transaction_info = parse_apple_transaction(apple_data)
+    print("🧾 Parsed transaction info:", transaction_info)
+
     if not transaction_info:
         return jsonify({
             "status": "error",
@@ -1267,6 +1287,7 @@ def verify_apple_subscription():
 
     expires_date = transaction_info.get("expiresDate")
     purchase_date = transaction_info.get("purchaseDate")
+    print("⏰ purchase_date:", purchase_date, "expires_date:", expires_date)
 
     # Save PendingSubscription
     try:
@@ -1280,8 +1301,10 @@ def verify_apple_subscription():
         )
         db.session.add(new_pending)
         db.session.commit()
+        print("✅ PendingSubscription saved successfully")
     except Exception as e:
         db.session.rollback()
+        print("❌ DB error:", e)
         return jsonify({"status": "error", "message": f"DB error: {e}"}), 500
 
     return jsonify({
@@ -1293,6 +1316,7 @@ def verify_apple_subscription():
             "expires_date": expires_date.isoformat() if expires_date else None,
         }
     }), 200
+
 
 # === Change Plan via Apple Subscription ===
 @api.route('/change-plan-apple', methods=['POST'])

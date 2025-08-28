@@ -1247,6 +1247,8 @@ def verify_apple_subscription():
     if user:
         return jsonify({"status": "existing_user"}), 200
 
+    plan = Plan.quqery.filter_by(id=plan_id).first()
+
     # 2. Check if pending subscription exists
     pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
     print("⏳ Existing pending subscription:", pending)
@@ -1258,7 +1260,7 @@ def verify_apple_subscription():
         new_pending = PendingSubscription(
             transaction_id=transaction_id,
             plan_id=plan_id,
-            product_id=None,  # will fill after Apple verification
+            product_id=plan.apple_product_id,  # will fill after Apple verification
             expires_date=None,
             status="PENDING",
             created_at=datetime.now(timezone.utc),

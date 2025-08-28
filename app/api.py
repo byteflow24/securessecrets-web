@@ -1222,49 +1222,76 @@ def billing_api():
     return jsonify(success=True, billing_info=billing_info, payment_history=payment_data, available_plans=plans_data), 200
 
 # ====== APPLE API ======
-@api.route('/verify-apple-subscription-pending', methods=['POST'])
-def verify_apple_subscription_pending():
-    data = request.get_json()
+@api.route("/verify-apple-subscription", methods=["POST"])
+def verify_apple_subscription():
+    data = request.get_json() or {}
     transaction_id = data.get("transaction_id")
-    if not transaction_id:
-        return jsonify({"error": "transaction_id is required"}), 400
+    plan_id = data.get("plan_id")
 
-    token = generate_apple_jwt()
+    if not transaction_id or not plan_id:
+        return jsonify({
+            "status": "error",
+            "message": "Missing transaction_id or plan_id"
+        }), 400
+
+    # 1. Check if already linked to a user
+    user = User.query.filter_by(transaction_id=transaction_id).first()
+    if user:
+        return jsonify({"status": "existing_user"}), 200
+
+    # 2. Check if pending subscription exists
+    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
+    if pending:
+        return jsonify({"status": "allow_register"}), 200
+
+    # 3. Verify with Apple API
+    try:
+        token = generate_apple_jwt()
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"JWT generation failed: {e}"}), 500
+
     apple_data, status_code, error = verify_transaction(transaction_id, token)
 
-    if status_code != 200:
-        return jsonify({"error": "Apple API error", "details": apple_data or error}), status_code
+    if status_code != 200 or not apple_data:
+        return jsonify({
+            "status": "error",
+            "message": f"Apple verification failed: {error or 'Unknown'}"
+        }), 400
 
     transaction_info = parse_apple_transaction(apple_data)
     if not transaction_info:
-        return jsonify({"error": "Failed to parse Apple transaction"}), 400
+        return jsonify({
+            "status": "error",
+            "message": "Failed to parse Apple transaction"
+        }), 400
 
-    product_id = transaction_info.get("productId")
     expires_date = transaction_info.get("expiresDate")
+    purchase_date = transaction_info.get("purchaseDate")
 
-    plan = Plan.query.filter_by(apple_product_id=product_id).first()
-    if not plan:
-        return jsonify({"error": "Plan matching productId not found"}), 400
-
-    # Save as pending subscription only if it doesn't exist
-    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
-    if not pending:
-        pending = PendingSubscription(
+    # Save PendingSubscription
+    try:
+        new_pending = PendingSubscription(
             transaction_id=transaction_id,
-            product_id=product_id,
-            plan_id=plan.id,
+            plan_id=plan_id,
             expires_date=expires_date,
             status="PENDING",
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
-        db.session.add(pending)
+        db.session.add(new_pending)
         db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": f"DB error: {e}"}), 500
 
     return jsonify({
-        "success": True,
-        "plan_id": plan.id,
-        "expires_date": str(expires_date)
+        "status": "new_subscription",
+        "transaction": {
+            "transaction_id": transaction_id,
+            "plan_id": plan_id,
+            "purchase_date": purchase_date.isoformat() if purchase_date else None,
+            "expires_date": expires_date.isoformat() if expires_date else None,
+        }
     }), 200
 
 # === Change Plan via Apple Subscription ===

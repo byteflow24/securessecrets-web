@@ -174,7 +174,7 @@ def register_api():
         email_token=token,
         subscription_start_date=datetime.now(timezone.utc),
         next_billing_date=pending.expires_date,
-        subscription_status=pending.status,  # 🔑 take latest status
+        subscription_status="ACTIVE",
         payment_source="Apple App Store",
         transaction_id=transaction_id,
 

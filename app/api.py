@@ -10,6 +10,8 @@ from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.utils import secure_filename
 import mimetypes, uuid, traceback, time, json, os, requests
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 import jwt
 
 api = Blueprint('api', __name__, url_prefix='/api')
@@ -39,7 +41,7 @@ def api_pricing():
             "billing_cycle": plan.billing_cycle,
             "storage_limit_mb": plan.storage_limit,
             "description": plan.description,
-            "apple_product_id": plan.apple_product_id,
+            "apple_product_id": plan.app_product_id,
         }
         for plan in plans
     ]
@@ -175,7 +177,7 @@ def register_api():
         subscription_start_date=datetime.now(timezone.utc),
         next_billing_date=pending.expires_date,
         subscription_status="ACTIVE",
-        payment_source="Apple App Store",
+        payment_source=pending.payment_source,
         transaction_id=transaction_id,
         status="",
 
@@ -1167,7 +1169,7 @@ def api_plan():
                     "storage_used": storage_used_mb,
                     "storage_limit": storage_limit_mb,
                     "features": user.plan.description,
-                    "apple_product_id": user.plan.apple_product_id,
+                    "apple_product_id": user.plan.app_product_id,
                     "payment_source": user.payment_source,
                 }
             ), 200
@@ -1261,11 +1263,12 @@ def verify_apple_subscription():
         new_pending = PendingSubscription(
             transaction_id=transaction_id,
             plan_id=plan_id,
-            product_id=plan.apple_product_id,  # will fill after Apple verification
+            product_id=plan.app_product_id,  # will fill after Apple verification
             expires_date=None,
             status="PENDING",
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
+            payment_source="Apple Pay"
         )
         db.session.add(new_pending)
         db.session.commit()
@@ -1326,7 +1329,7 @@ def change_plan_apple():
         return jsonify(success=False, error="Failed to parse Apple transaction"), 400
 
     product_id = transaction_info.get("productId")
-    plan = Plan.query.filter_by(apple_product_id=product_id).first()
+    plan = Plan.query.filter_by(app_product_id=product_id).first()
     if not plan:
         return jsonify(success=False, error="Apple product does not match any plan."), 400
 
@@ -1425,6 +1428,92 @@ def test_apple_notifications():
     except Exception as e:
         print("❌ Error handling Apple notification:", e)
         return jsonify({"error": "internal server error"}), 500
+    
+################## GOOGLE PAYMENT METHOD ##################
+    
+# Load service account JSON key
+SERVICE_ACCOUNT_FILE = os.environ.get("SERVICE_ACCOUNT_FILE")  # put path in your backend
+SCOPES = ["https://www.googleapis.com/auth/androidpublisher"]
+
+credentials = service_account.Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE, scopes=SCOPES
+)
+    
+@api.route("/verify-google-subscription", methods=["POST"])
+def verify_google_subscription():
+    data = request.get_json() or {}
+    print("📩 Incoming data:", data)
+
+    transaction_id = data.get("transaction_id")  # You can set this to purchaseToken
+    plan_id = data.get("plan_id")
+    purchase_token = data.get("purchase_token")
+
+    if not transaction_id or not plan_id or not purchase_token:
+        return jsonify({
+            "status": "error",
+            "message": "Missing transaction_id, plan_id, or purchase_token"
+        }), 400
+
+    # 1. Check if already linked
+    user = User.query.filter_by(transaction_id=transaction_id).first()
+    if user:
+        return jsonify({"status": "existing_user"}), 200
+
+    plan = Plan.query.filter_by(id=plan_id).first()
+    if not plan:
+        return jsonify({"status": "error", "message": "Invalid plan"}), 400
+
+    # 2. Check for existing pending subscription
+    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
+    if pending:
+        return jsonify({"status": "allow_register"}), 200
+
+    # 3. Create pending subscription BEFORE verifying (same as Apple)
+    try:
+        new_pending = PendingSubscription(
+            transaction_id=transaction_id,
+            plan_id=plan_id,
+            product_id=plan.google_product_id,  # match with Play Console
+            expires_date=None,
+            status="PENDING",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            payment_source="Google Pay"
+        )
+        db.session.add(new_pending)
+        db.session.commit()
+        print("✅ PendingSubscription saved (pre-verification)")
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": f"DB error: {e}"}), 500
+
+    # 4. Verify with Google Play Developer API
+    try:
+        service = build("androidpublisher", "v3", credentials=credentials)
+        package_name = "com.example.app"  # ⚡️ replace
+        product_id = plan.google_product_id
+
+        result = service.purchases().subscriptions().get(
+            packageName=package_name,
+            subscriptionId=product_id,
+            token=purchase_token
+        ).execute()
+
+        expiry_time_ms = int(result.get("expiryTimeMillis", 0))
+
+        pending.expires_date = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc)
+        db.session.commit()
+        print("✅ PendingSubscription updated with Google data")
+
+    except Exception as e:
+        print("⚠️ Google verification failed, will retry later:", e)
+
+    return jsonify({
+        "status": "new_subscription",
+        "transaction_id": transaction_id,
+        "plan_id": plan_id
+    }), 200
+
 
 ########################################### FORGOT PASSWORD API ###########################################
 @api.route('/forgot-password', methods=['POST'])

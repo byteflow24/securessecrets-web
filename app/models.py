@@ -55,6 +55,7 @@ class PendingSubscription(db.Model):
     updated_at = db.Column(TIMESTAMP, nullable=True)
     trial_start_date = db.Column(TIMESTAMP, nullable=True)
     trial_end_date = db.Column(TIMESTAMP, nullable=True)
+    payment_source = db.Column(String(50), nullable=True)
 
     plan = db.relationship('Plan', back_populates='pending_subscription')
 

@@ -41,7 +41,7 @@ def api_pricing():
             "billing_cycle": plan.billing_cycle,
             "storage_limit_mb": plan.storage_limit,
             "description": plan.description,
-            "apple_product_id": plan.app_product_id,
+            "app_product_id": plan.app_product_id,
         }
         for plan in plans
     ]
@@ -1169,7 +1169,7 @@ def api_plan():
                     "storage_used": storage_used_mb,
                     "storage_limit": storage_limit_mb,
                     "features": user.plan.description,
-                    "apple_product_id": user.plan.app_product_id,
+                    "app_product_id": user.plan.app_product_id,
                     "payment_source": user.payment_source,
                 }
             ), 200

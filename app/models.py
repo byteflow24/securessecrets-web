@@ -154,7 +154,7 @@ class Plan(db.Model):
     storage_limit = db.Column(Integer, nullable=False)
     paypal_plan_id = db.Column(db.JSON, nullable=True)
     product_id = db.Column(String(50), nullable=True)
-    apple_product_id = db.Column(String(100), nullable=True)
+    app_product_id = db.Column(String(100), nullable=True)
 
     users = db.relationship('User', back_populates='plan')
     payments = db.relationship('Payment', back_populates='plan')

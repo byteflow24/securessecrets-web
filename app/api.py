@@ -1490,7 +1490,7 @@ def verify_google_subscription():
     # 4. Verify with Google Play Developer API
     try:
         service = build("androidpublisher", "v3", credentials=credentials)
-        package_name = "com.example.app"  # ⚡️ replace
+        package_name = "com.byteflowdigital.secures_secrets"
         product_id = plan.google_product_id
 
         result = service.purchases().subscriptions().get(

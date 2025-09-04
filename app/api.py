@@ -1473,7 +1473,7 @@ def verify_google_subscription():
         new_pending = PendingSubscription(
             transaction_id=transaction_id,
             plan_id=plan_id,
-            product_id=plan.google_product_id,  # match with Play Console
+            product_id=plan.app_product_id,  # match with Play Console
             expires_date=None,
             status="PENDING",
             created_at=datetime.now(timezone.utc),
@@ -1491,7 +1491,7 @@ def verify_google_subscription():
     try:
         service = build("androidpublisher", "v3", credentials=credentials)
         package_name = "com.byteflowdigital.secures_secrets"
-        product_id = plan.google_product_id
+        product_id = plan.app_product_id
 
         result = service.purchases().subscriptions().get(
             packageName=package_name,

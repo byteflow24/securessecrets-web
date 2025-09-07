@@ -1514,6 +1514,58 @@ def verify_google_subscription():
         "plan_id": plan_id
     }), 200
 
+# === Change Plan via Google Subscription ===
+@api.route('/change-plan-google', methods=['POST'])
+@jwt_required()
+def change_plan_google():
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+    if not user:
+        return jsonify(success=False, error="User not found."), 404
+
+    data = request.get_json()
+    if not data:
+        return jsonify(success=False, error="Missing data."), 400
+
+    transaction_id = data.get("transaction_id")
+    plan_id = data.get("plan_id")
+    purchase_token = data.get("purchase_token")
+
+    if not transaction_id or not plan_id or not purchase_token:
+        return jsonify(success=False, error="Missing transaction_id, plan_id, or purchase_token"), 400
+
+    plan = Plan.query.filter_by(id=plan_id).first()
+    if not plan:
+        return jsonify(success=False, error="Invalid plan"), 400
+
+    # ⚠️ Optional: verify the subscription with Google Play Developer API
+    try:
+        service = build("androidpublisher", "v3", credentials=credentials)
+        package_name = "com.byteflowdigital.secures_secrets"
+        product_id = plan.app_product_id
+
+        result = service.purchases().subscriptions().get(
+            packageName=package_name,
+            subscriptionId=product_id,
+            token=purchase_token
+        ).execute()
+
+        expiry_time_ms = int(result.get("expiryTimeMillis", 0))
+
+        # Here, you can update user's subscription info or create a pending subscription
+        user.plan_id = plan_id
+        user.next_billing_date = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc)
+        user.subscription_status = "ACTIVE"
+        db.session.commit()
+        print("✅ User subscription updated for Google plan")
+
+    except Exception as e:
+        print("⚠️ Google verification failed:", e)
+        return jsonify(success=False, error="Google verification failed", details=str(e)), 500
+
+    return jsonify(success=True, message="Google plan change successful."), 200
+
+
 
 ########################################### FORGOT PASSWORD API ###########################################
 @api.route('/forgot-password', methods=['POST'])

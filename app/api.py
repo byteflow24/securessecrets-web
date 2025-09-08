@@ -1129,11 +1129,11 @@ def api_delete_account():
 
     # Prepare instructions based on subscription type
     subscription_instructions = ""
-    if user.apple_subscription_id:
+    if user.payment_source == "Apple Pay":
         subscription_instructions = "Please cancel your Apple subscription in the App Store before deleting your account."
-    elif user.google_subscription_id:
+    elif user.payment_source == "Google Pay":
         subscription_instructions = "Please cancel your Google subscription in Google Play before deleting your account."
-    elif user.paypal_subscription_id:
+    elif user.payment_source == "PayPal":
         subscription_instructions = "Your PayPal subscription will be automatically canceled when you confirm deletion."
 
     # Send confirmation email

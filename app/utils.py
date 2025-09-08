@@ -2559,7 +2559,7 @@ def send_delete_account_email(user, verification_link, instructions=""):
         <p>You requested to <strong>delete your account</strong>. 
         Once you confirm, <span style="color:#dc3545; font-weight:bold;">your account and all associated data will be permanently deleted immediately</span>.</p>
 
-        {subscription_note}
+        <span style="color:#dc3545; font-weight:bold;"></span><p style="color:#dc3545; font-size:0.75rem;">{subscription_note}</p>
 
         <p style="text-align:center; margin:20px;">
             <a href="{verification_link}" 

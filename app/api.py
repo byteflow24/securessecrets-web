@@ -1125,7 +1125,7 @@ def api_delete_account():
 
     # Generate secure token for email confirmation
     token = generate_delete_token(user.id)
-    verification_link = url_for('api.verify_delete_account', token=token, _external=True)
+    verification_link = url_for('main.verify_delete_account', token=token, _external=True)
 
     # Prepare instructions based on subscription type
     subscription_instructions = ""

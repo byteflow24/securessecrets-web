@@ -6,7 +6,7 @@ from flask_limiter.util import get_remote_address
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -1158,33 +1158,58 @@ def delete_shared_secret(secret_id):
 @main.route('/delete-account/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def delete_account(user_id):
-    
     user = User.query.get(user_id)
     if user is None or user.id != current_user.id:
         flash("User not found or unauthorized action.", "danger")
         return redirect(url_for('main.update_profile'))
-    
+
+    # Generate secure token
+    token = generate_delete_token(user.id)
+    verification_link = url_for('main.verify_delete_account', token=token, _external=True)
+
+    # Send verification email
     try:
-        # Optionally, handle deleting related records if necessary, for example:
-        # db.session.query(SharedSecret).filter_by(user_id=user.id).delete()
-        # db.session.query(Post).filter_by(user_id=user.id).delete()
-        
-        # Delete the user account
-        cancel_subscription(user.paypal_subscription_id, "Deleting my account.") # Will cancel the subscription so user won't keep paying for the subscription
-        time.sleep(5) # Will wait until the subscription beanig canceled
+        send_delete_account_email(current_user, verification_link)
+        flash("A verification email has been sent. Please check your inbox to confirm deletion.", "info")
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        flash("Could not send verification email. Please try again later.", "danger")
+
+    return redirect(url_for('main.update_profile'))
+
+@main.route('/verify-delete-account/<token>', methods=['GET'])
+# @login_required
+def verify_delete_account(token):
+    user_id = confirm_delete_token(token)
+    if not user_id:
+        flash("Invalid or expired deletion link.", "danger")
+        return redirect(url_for('main.login'))
+
+    user = User.query.get(user_id)
+    if user is None:
+        flash("User not found or unauthorized action.", "danger")
+        return redirect(url_for('main.login'))
+
+    try:
+        # Cancel subscription if exists
+        if user.paypal_subscription_id:
+            cancel_subscription(user.paypal_subscription_id, "Deleting my account.")
+            time.sleep(5)  # wait until subscription is canceled
+
+        # Delete account
         db.session.delete(user)
         db.session.commit()
-        # Log out the user before deletion
-        logout_user()
 
-        flash("Your account has been deleted. We're sad to see you leave.", "success")
+        # Log out after deletion
+        logout_user()
+        flash("Your account has been permanently deleted. We're sad to see you go.", "success")
         return redirect(url_for('main.login'))
-    
+
     except SQLAlchemyError as e:
         db.session.rollback()
         flash("An error occurred while deleting your account. Please try again.", "danger")
         print(e)
-        return redirect(url_for('main.update_profile'))
+        return redirect(url_for('main.login'))
     
 # Admin can delete published secrets
 @main.route('/delete-pubsecret/<int:pb_secret_id>', methods=['GET', 'DELETE'])
@@ -1448,7 +1473,7 @@ def process_subscription():
         user.next_billing_date = convert_utc_to_local(next_billing_date, user.time_zone)  # Next billing date
         user.fialed_payments = failed_payments
         user.updated_at = convert_utc_to_local(datetime.now(), user.time_zone)
-        user.payment_source="Site - PayPal"
+        user.payment_source="PayPal"
         user.status = None
 
         db.session.commit()
@@ -1529,7 +1554,7 @@ def billing():
             'html': render_template('partials/billing_content.html', user=user, payments=history_payment, form=form, plans=plans, secret_form=secret_form),
             'title': 'Billing - Secure Secrets'
         })
-    return render_template('billing.html', user=user, payments=history_payment, form=form, plans=plans, secret_form=secret_form, show_header=True, show_footer=True)
+    return render_template('billing.html', user=user, payments=history_payment, form=form, plans=plans, secret_form=secret_form, show_header=True, show_footer=True, current_user=current_user)
 
 # Upgrade/Downgrade plan
 @main.route('/change-plan', methods=['POST'])
@@ -1652,7 +1677,7 @@ def download_file(filename):
         upload_folder = current_app.config['UPLOAD_FOLDER']
         abs_path = os.path.abspath(os.path.join(upload_folder, filename))
         
-        print("Checking file path:", abs_path, "Exists?", os.path.exists(abs_path))
+        # print("Checking file path:", abs_path, "Exists?", os.path.exists(abs_path))
 
         # ✅ Check if file exists
         if not os.path.exists(abs_path):

@@ -11,9 +11,9 @@ class BaseConfig:
     JWT_BLACKLIST_ENABLED = True
     JWT_BLACKLIST_TOKEN_CHECKS = ["access"]
 
-    SERVER_NAME = 'www.securessecrets.com'
-    APPLICATION_ROOT = '/'
-    PREFERRED_URL_SCHEME = 'https'
+    # SERVER_NAME = 'www.securessecrets.com'
+    # APPLICATION_ROOT = '/'
+    # PREFERRED_URL_SCHEME = 'https'
 
 class DevelopmentConfig(BaseConfig):
     UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')

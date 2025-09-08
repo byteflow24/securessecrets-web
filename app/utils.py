@@ -1,5 +1,5 @@
 import time
-from flask import abort, request, url_for, session, flash, redirect, jsonify, send_from_directory
+from flask import abort, request, url_for, session, flash, redirect, jsonify, send_from_directory, current_app
 from flask_login import current_user
 from functools import wraps
 from urllib.parse import urlparse, urljoin
@@ -22,6 +22,7 @@ from email.utils import formataddr
 from email.header import Header
 from google.cloud import recaptchaenterprise_v1
 from google.cloud.recaptchaenterprise_v1 import Assessment
+from itsdangerous import URLSafeTimedSerializer
 import logging
 import uuid
 import json
@@ -1410,7 +1411,7 @@ def get_subscription_details(subscription_id):
     if response.status_code == 200:
         return response.json()
     else:
-        print(f"Failed to get user subscription details: {response.json()}")
+        print() #f"Failed to get user subscription details: {response.json()}"
 
 # Webhook veryfication
 def verify_paypal_webhook(data, request_headers):
@@ -1724,7 +1725,7 @@ def not_paied_reminder():
 
             # will make the user inactive if the subscription ended
             if next_billing_date > current_date:
-                user.subscription_status = "inactive"
+                user.subscription_status = "INACTIVE"
                 db.session.commit()
 
             # Calculate the difference in days
@@ -1970,6 +1971,24 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
         db.session.rollback()
         print("❌ Error updating subscription:", e)
         return False
+
+############## GENERETE TOKEN & CONFIRMATION DELETE ACCOUNT ##############
+    
+def generate_delete_token(user_id):
+    serializer = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+    return serializer.dumps(user_id, salt='delete-account-salt')
+
+def confirm_delete_token(token, expiration=3600):
+    serializer = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+    try:
+        user_id = serializer.loads(
+            token,
+            salt='delete-account-salt',
+            max_age=expiration
+        )
+    except Exception:
+        return None
+    return user_id
 
 # Sender details which SS email, and pswd
 EMAIL = "support@securessecrets.com"
@@ -2514,4 +2533,73 @@ def send_report_email(secret_id, secret, secret_file, report_details):
         raise
     except Exception as e:
         print(f"Unexpected error sending report email: {str(e)}")
+        raise
+
+
+def send_delete_account_email(user, verification_link, instructions=""):
+    """
+    Send account deletion confirmation email with optional platform-specific instructions.
+    :param user: User object
+    :param verification_link: URL for verifying deletion
+    :param instructions: Optional text to instruct user about subscription cancellation
+    """
+    msg = MIMEMultipart("related")
+    msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
+    msg['To'] = user.email
+    msg['Subject'] = Header('Verify Account Deletion', 'utf-8')
+
+    # Default message if no instructions provided
+    subscription_note = f"<p>{instructions}</p>" if instructions else ""
+
+    # Email HTML body
+    body = f"""
+    <html>
+    <body>
+        <p>Hi {user.username},</p>
+        <p>You requested to <strong>delete your account</strong>. 
+        Once you confirm, <span style="color:#dc3545; font-weight:bold;">your account and all associated data will be permanently deleted immediately</span>.</p>
+
+        {subscription_note}
+
+        <p style="text-align:center; margin:20px;">
+            <a href="{verification_link}" 
+            style="background-color:#dc3545;color:white;
+                    padding:12px 24px;text-decoration:none;
+                    border-radius:6px;font-weight:bold;">
+            Verify Deletion
+            </a>
+        </p>
+
+        <p>If you did not request this, please ignore this email. 
+        Your account will not be deleted.</p>
+        <br>
+        <p>Best regards,<br>SecuresSecrets Team</p>
+        <img src="cid:logo_image" style="width:150px; height:auto; margin-top:10px;" alt="SecuresSecrets Logo">
+    </body>
+    </html>
+    """
+
+    msg.attach(MIMEText(body, 'html'))
+
+    # Attach logo
+    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
+    try:
+        with open(logo_path, "rb") as img:
+            image = MIMEImage(img.read(), name=os.path.basename(logo_path))
+            image.add_header('Content-ID', '<logo_image>')
+            msg.attach(image)
+    except FileNotFoundError:
+        print(f"Logo image not found at path: {logo_path}")
+
+    # Send email
+    try:
+        with smtplib.SMTP(SERVER, PORT) as connection:
+            connection.starttls()
+            connection.login(EMAIL, PSWD)
+            connection.send_message(msg)
+    except smtplib.SMTPException as e:
+        print(f"SMTP error: {str(e)}")
+        raise
+    except Exception as e:
+        print(f"Unexpected error sending deletion email: {str(e)}")
         raise

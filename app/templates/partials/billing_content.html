@@ -99,17 +99,31 @@
                                                     <li><i class="bi bi-check-circle text-success me-1"></i>{{ description }}</li>
                                                     {% endfor %}
                                                 </ul>
-                                                <form id="upgrade-form-{{ plan_name|lower }}" method="post" action="{{ url_for('main.change_plan') }}">
-                                                    {{ form.hidden_tag() }}
-                                                    <input type="hidden" name="plan_id" value="{{ monthly_plan.id }}">
-                                                    <button type="button" class="btn btn-primary btn-lg w-100 plan-button" 
-                                                            data-monthly-id="{{ monthly_plan.id }}" 
-                                                            data-yearly-id="{{ yearly_plan.id }}" 
-                                                            data-bs-toggle="modal" 
-                                                            data-bs-target="#confirmUpgradeModal">
-                                                        Change to {{ plan_name }}
+                                                {% if current_user.payment_source == "PayPal" %}
+                                                    <form id="upgrade-form-{{ plan_name|lower }}" method="post" action="{{ url_for('main.change_plan') }}">
+                                                        {{ form.hidden_tag() }}
+                                                        <input type="hidden" name="plan_id" value="{{ monthly_plan.id }}">
+                                                        <button type="button" class="btn btn-primary btn-lg w-100 plan-button" 
+                                                                data-monthly-id="{{ monthly_plan.id }}" 
+                                                                data-yearly-id="{{ yearly_plan.id }}" 
+                                                                data-bs-toggle="modal" 
+                                                                data-bs-target="#confirmUpgradeModal">
+                                                            Change to {{ plan_name }}
+                                                        </button>
+                                                    </form>
+                                                {% elif current_user.payment_source == "Google Pay" %}
+                                                    <button type="button" class="btn btn-secondary btn-lg w-100 plan-button" disabled>
+                                                        Manage your plan in Google Play
                                                     </button>
-                                                </form>
+                                                {% elif current_user.payment_source == "Apple Pay" %}
+                                                    <button type="button" class="btn btn-secondary btn-lg w-100 plan-button" disabled>
+                                                        Manage your plan in the App Store
+                                                    </button>
+                                                {% else %}
+                                                    <button type="button" class="btn btn-secondary btn-lg w-100 plan-button" disabled>
+                                                        Please manage your plan in the app
+                                                    </button>
+                                                {% endif %}
                                             </div>
                                         </div>
                                     </div>

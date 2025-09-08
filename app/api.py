@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, current_app, url_for, abort, send
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
-from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt
+from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -1123,22 +1123,26 @@ def api_delete_account():
     if user is None:
         return jsonify(success=False, error="User not found."), 404
 
+    # Generate secure token for email confirmation
+    token = generate_delete_token(user.id)
+    verification_link = url_for('api.verify_delete_account', token=token, _external=True)
+
+    # Prepare instructions based on subscription type
+    subscription_instructions = ""
+    if user.apple_subscription_id:
+        subscription_instructions = "Please cancel your Apple subscription in the App Store before deleting your account."
+    elif user.google_subscription_id:
+        subscription_instructions = "Please cancel your Google subscription in Google Play before deleting your account."
+    elif user.paypal_subscription_id:
+        subscription_instructions = "Your PayPal subscription will be automatically canceled when you confirm deletion."
+
+    # Send confirmation email
     try:
-        # Cancel PayPal subscription
-        if user.paypal_subscription_id:
-            cancel_subscription(user.paypal_subscription_id, "Deleting my account.")
-            time.sleep(5)
-
-        # Delete the user account
-        db.session.delete(user)
-        db.session.commit()
-
-        return jsonify(success=True, message="Your account has been deleted!"), 200
-
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        print(e)
-        return jsonify(success=False, error="Failed to delete account. Please try again."), 500
+        send_delete_account_email(user, verification_link, instructions=subscription_instructions)
+        return jsonify(success=True, message="A verification email has been sent. Please check your inbox to confirm deletion."), 200
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return jsonify(success=False, error="Could not send verification email. Please try again later."), 500
 
 
 ########################################### BILLING API ###########################################
@@ -1618,7 +1622,7 @@ def download_file_api(filename):
         upload_folder = current_app.config['UPLOAD_FOLDER']
         abs_path = os.path.abspath(os.path.join(upload_folder, filename))
 
-        print("Checking file path:", abs_path, "Exists?", os.path.exists(abs_path))
+        # print("Checking file path:", abs_path, "Exists?", os.path.exists(abs_path))
 
 
         # ✅ Check if file exists

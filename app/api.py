@@ -1503,9 +1503,13 @@ def verify_google_subscription():
             token=purchase_token
         ).execute()
 
-        expiry_time_ms = int(result.get("expiryTimeMillis", 0))
+        print("Google subscription result:", result)
 
-        pending.expires_date = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc)
+        expiry_time_ms = result.get("expiryTimeMillis")
+        if expiry_time_ms:
+            pending.expires_date = datetime.fromtimestamp(int(expiry_time_ms) / 1000, tz=timezone.utc)
+        else:
+            pending.expires_date = None
         db.session.commit()
         print("✅ PendingSubscription updated with Google data")
 

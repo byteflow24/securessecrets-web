@@ -1,0 +1,47 @@
+{% extends 'base_0.html' %}
+{% block title %}Child Safety Standards - Secure Secrets{% endblock %}
+
+{% block content %}
+<!-- Adding new secret modal -->
+{% include "partials/new_secret_modal.html" %}
+<div class="container position-relative px-4 px-lg-5">
+    <div class="row gx-4 gx-lg-5 justify-content-center">
+        <div class="col-md-10 col-lg-8 col-xl-7">
+            <h1 class="text-center text-primary mt-4 mb-3" style="font-weight: bold;">Child Safety Standards</h1>
+            <p class="text-center text-secondary" style="font-size: 1.1rem;">Our commitment to protecting children and preventing exploitation</p>
+            
+            <div class="about-section text-dark" style="line-height: 1.7; font-size: 1.1rem;">
+                
+                <h4 style="font-weight: bold;">Our Policy</h4>
+                <p class="text-dark mt-0" style="font-size:0.8rem;">
+                    SecuresSecrets strictly prohibits any form of child sexual abuse material (CSAM) or exploitation of minors. 
+                    We are committed to maintaining a safe platform and take violations of these standards very seriously.
+                </p>
+                
+                <h4 style="font-weight: bold;">Enforcement</h4>
+                <ul class="text-dark mt-0" style="font-size:0.8rem;">
+                    <li><strong>No CSAM Allowed:</strong> Any attempt to create, store, or share child sexual abuse material is forbidden and will result in immediate action.</li>
+                    <li><strong>Law Enforcement:</strong> We comply with regional and national authorities and report any suspected CSAM as required by law.</li>
+                    <li><strong>User Reports:</strong> Users can report child safety concerns directly through the app or by email.</li>
+                </ul>
+
+                <h4 style="font-weight: bold;">Our Commitment</h4>
+                <p class="text-dark mt-0" style="font-size:0.8rem;">
+                    We are committed to protecting children, supporting safe use of our app, and working with global child protection agencies when necessary. 
+                    All reports are handled promptly and confidentially.
+                </p>
+
+                <h4 style="font-weight: bold;">Contact Us</h4>
+                <p class="text-dark mt-0" style="font-size:0.8rem;">
+                    If you have any questions about our Child Safety Standards or wish to report a concern, 
+                    please contact us at 
+                    <a href="mailto:support@securessecrets.com" style="text-decoration: none; color:rgb(13 110 253);">
+                        support@securessecrets.com
+                    </a>.
+                </p>
+                
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

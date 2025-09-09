@@ -1828,6 +1828,15 @@ def privacy():
     secret_form = SecretForm()
     return render_template('privacy.html', secret_form=secret_form, show_header=True, show_footer=True)
 
+@main.route('/child-safety')
+def safty():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+    
+    secret_form = SecretForm()
+    return render_template('child_safety.html', secret_form=secret_form, show_header=True, show_footer=True)
+
+
 @main.route('/cookie-policy')
 def cookie():
 

@@ -1591,9 +1591,11 @@ def google_notifications():
         decoded_json = json.loads(decoded_bytes)
         print("📩 Decoded Google RTDN payload:", decoded_json)
 
-        subscription_id = decoded_json.get("subscriptionId")
-        purchase_token = decoded_json.get("purchaseToken")
-        notification_type = decoded_json.get("notificationType")
+        subscription_notification = decoded_json.get("subscriptionNotification", {})
+
+        subscription_id = subscription_notification.get("subscriptionId")
+        purchase_token = subscription_notification.get("purchaseToken")
+        notification_type = subscription_notification.get("notificationType")
 
         # Map Google notification types → internal statuses
         status_map = {

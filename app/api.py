@@ -1485,7 +1485,8 @@ def verify_google_subscription():
             status="PENDING",
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
-            payment_source="Google Pay"
+            payment_source="Google Pay",
+            purchase_token = purchase_token
         )
         db.session.add(new_pending)
         db.session.commit()

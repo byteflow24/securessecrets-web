@@ -1990,7 +1990,7 @@ def update_google_subscription(subscription_id, purchase_token, status, expiry_d
             return True
 
         # If no user, update PendingSubscription
-        pending = PendingSubscription.query.filter_by(transaction_id=purchase_token).first()
+        pending = PendingSubscription.query.filter_by(purchase_token=purchase_token).first()
         if pending:
             pending.status = status
             pending.expires_date = expiry_dt

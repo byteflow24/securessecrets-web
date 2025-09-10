@@ -1,8 +1,9 @@
+import base64
 from flask import Blueprint, request, jsonify, current_app, url_for, abort, send_file
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
-from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email
+from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -1573,6 +1574,47 @@ def change_plan_google():
 
     return jsonify(success=True, message="Google plan change successful."), 200
 
+
+@api.route('/google-notifications', methods=['POST'])
+def google_notifications():
+    data = request.get_json()
+    print("📩 Raw Google Play notification:", data)
+
+    try:
+        # Google RTDN wraps the message in `message.data` as base64
+        message_data = data.get("message", {}).get("data")
+        if not message_data:
+            return jsonify({"error": "No message data"}), 400
+
+        decoded_bytes = base64.b64decode(message_data)
+        decoded_json = json.loads(decoded_bytes)
+        print("📩 Decoded Google RTDN payload:", decoded_json)
+
+        # Extract subscription info
+        subscription_id = decoded_json.get("subscriptionId")
+        purchase_token = decoded_json.get("purchaseToken")
+        notification_type = decoded_json.get("notificationType")
+
+        # Map notification types to statuses
+        status_map = {
+            1: "EXPIRED",         # SUBSCRIPTION_RECOVERED
+            2: "CANCELED",        # SUBSCRIPTION_RENEWAL
+            3: "ACTIVE",          # SUBSCRIPTION_PURCHASED
+            4: "PAST_DUE",        # SUBSCRIPTION_ON_HOLD
+            5: "CANCELED",        # SUBSCRIPTION_CANCELED
+            6: "REFUNDED",        # SUBSCRIPTION_RESTARTED
+            7: "ACTIVE",          # SUBSCRIPTION_RENEWED
+            8: "EXPIRED",         # SUBSCRIPTION_REVOKED
+        }
+
+        status = status_map.get(notification_type, "UNKNOWN")
+
+        update_google_subscription(subscription_id, purchase_token, status)
+        return jsonify({"success": True}), 200
+
+    except Exception as e:
+        print("❌ Error handling Google notification:", e)
+        return jsonify({"error": "internal server error"}), 500
 
 
 ########################################### FORGOT PASSWORD API ###########################################

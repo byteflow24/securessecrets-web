@@ -1973,35 +1973,30 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
         return False
     
 
-def update_google_subscription(subscription_id, purchase_token, status):
-    """
-    Update User or PendingSubscription based on Google Play RTDN.
-    """
+def update_google_subscription(subscription_id, purchase_token, status, expiry_dt=None):
     try:
-        # 1. Try existing user
+        # Try updating existing user
         user = User.query.filter_by(transaction_id=purchase_token).first()
         plan = Plan.query.filter_by(app_product_id=subscription_id).first()
-        
-        expiry_dt = None  # You can fetch expiry via Google API if needed
 
         if user:
             if plan:
                 user.plan_id = plan.id
             user.subscription_status = status
-            user.updated_at = datetime.now(timezone.utc)
             user.next_billing_date = expiry_dt
+            user.updated_at = datetime.now(timezone.utc)
             db.session.commit()
-            print(f"✅ Updated User {user.email} → plan={plan.plan if plan else 'N/A'}, status={status}")
+            print(f"✅ Updated User {user.email} → plan={plan.plan if plan else 'N/A'}, status={status}, next billing={expiry_dt}")
             return True
 
-        # 2. PendingSubscription fallback
+        # If no user, update PendingSubscription
         pending = PendingSubscription.query.filter_by(transaction_id=purchase_token).first()
         if pending:
             pending.status = status
-            pending.updated_at = datetime.now(timezone.utc)
             pending.expires_date = expiry_dt
+            pending.updated_at = datetime.now(timezone.utc)
             db.session.commit()
-            print(f"📌 Updated PendingSubscription {purchase_token} → status={status}")
+            print(f"📌 Updated PendingSubscription {purchase_token} → status={status}, expiry={expiry_dt}")
             return True
 
         print(f"⚠️ No User or PendingSubscription found for purchase_token={purchase_token}")
@@ -2009,7 +2004,7 @@ def update_google_subscription(subscription_id, purchase_token, status):
 
     except Exception as e:
         db.session.rollback()
-        print("❌ Error updating Google subscription:", e)
+        print("❌ Error updating subscription:", e)
         return False
 
 ############## GENERETE TOKEN & CONFIRMATION DELETE ACCOUNT ##############

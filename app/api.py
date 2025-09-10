@@ -1443,6 +1443,8 @@ SCOPES = ["https://www.googleapis.com/auth/androidpublisher"]
 credentials = service_account.Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, scopes=SCOPES
 )
+
+PACKAGE_NAME = "com.byteflowdigital.secures_secrets"
     
 @api.route("/verify-google-subscription", methods=["POST"])
 def verify_google_subscription():
@@ -1495,7 +1497,7 @@ def verify_google_subscription():
     # 4. Verify with Google Play Developer API
     try:
         service = build("androidpublisher", "v3", credentials=credentials)
-        package_name = "com.byteflowdigital.secures_secrets"
+        package_name = PACKAGE_NAME
         product_id = plan.app_product_id
 
         result = service.purchases().subscriptions().get(
@@ -1581,7 +1583,6 @@ def google_notifications():
     print("📩 Raw Google Play notification:", data)
 
     try:
-        # Google RTDN wraps the message in `message.data` as base64
         message_data = data.get("message", {}).get("data")
         if not message_data:
             return jsonify({"error": "No message data"}), 400
@@ -1590,12 +1591,11 @@ def google_notifications():
         decoded_json = json.loads(decoded_bytes)
         print("📩 Decoded Google RTDN payload:", decoded_json)
 
-        # Extract subscription info
         subscription_id = decoded_json.get("subscriptionId")
         purchase_token = decoded_json.get("purchaseToken")
         notification_type = decoded_json.get("notificationType")
 
-        # Map notification types to statuses
+        # Map Google notification types → internal statuses
         status_map = {
             1: "EXPIRED",         # SUBSCRIPTION_RECOVERED
             2: "CANCELED",        # SUBSCRIPTION_RENEWAL
@@ -1609,7 +1609,22 @@ def google_notifications():
 
         status = status_map.get(notification_type, "UNKNOWN")
 
-        update_google_subscription(subscription_id, purchase_token, status)
+        # --- Fetch latest subscription info from Google Play ---
+        service = build("androidpublisher", "v3", credentials=credentials)
+        subscription_info = service.purchases().subscriptions().get(
+            packageName=PACKAGE_NAME,
+            subscriptionId=subscription_id,
+            token=purchase_token
+        ).execute()
+
+        print(f"Subscription Info: {subscription_info}")
+
+        expiry_time_ms = int(subscription_info.get("expiryTimeMillis", 0))
+        expiry_dt = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc) if expiry_time_ms else None
+
+        # --- Update User or PendingSubscription ---
+        update_google_subscription(subscription_id, purchase_token, status, expiry_dt)
+
         return jsonify({"success": True}), 200
 
     except Exception as e:

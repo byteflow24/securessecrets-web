@@ -1975,37 +1975,43 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
 
 def update_google_subscription(subscription_id, purchase_token, status, expiry_dt=None):
     try:
-        user = User.query.filter_by(transaction_id=purchase_token).first()
-        plan = Plan.query.filter_by(app_product_id=subscription_id).first()
+        user = User.query.filter_by(transaction_token=purchase_token).first()
+        current_plan = Plan.query.filter_by(app_product_id=subscription_id).first()
 
         if user:
-            if plan:
-                # --- Case: Upgrade ---
-                if not user.plan_id or (plan.price > Plan.query.get(user.plan_id).price):
-                    user.plan_id = plan.id
+            user_plan = Plan.query.get(user.plan_id) if user.plan_id else None
+
+            if current_plan and user_plan:
+                # --- Upgrade: price higher than current → apply immediately ---
+                if current_plan.price > user_plan.price:
+                    user.plan_id = current_plan.id
                     user.next_plan_id = None  # clear any pending downgrade
-                    print(f"⚡ Immediate UPGRADE → {plan.plan}")
+                    print(f"⚡ Immediate UPGRADE → {current_plan.plan}")
 
-                # --- Case: Downgrade (deferred) ---
-                elif plan.price < Plan.query.get(user.plan_id).price:
-                    user.next_plan_id = plan.id
-                    print(f"⏳ Deferred DOWNGRADE scheduled → {plan.plan}")
+                # --- Downgrade: price lower than current → defer to next billing ---
+                elif current_plan.price < user_plan.price:
+                    user.next_plan_id = current_plan.id
+                    print(f"⏳ Deferred DOWNGRADE scheduled → {current_plan.plan}")
 
-                # --- Case: Renewal or same plan ---
+                # --- Same plan or renewal ---
                 else:
-                    user.plan_id = plan.id
-            
-            # ✅ Apply deferred downgrade on renewal
-            if status == "ACTIVE" and user.next_plan_id and plan and plan.id == user.next_plan_id:
-                user.plan_id = user.next_plan_id
-                user.next_plan_id = None
-                print(f"✅ Applied deferred downgrade → {plan.plan}")
+                    user.plan_id = current_plan.id
 
+            # --- Apply deferred downgrade if current billing period ended ---
+            if user.next_plan_id and status == "ACTIVE" and expiry_dt and expiry_dt <= datetime.now(timezone.utc):
+                next_plan = Plan.query.get(user.next_plan_id)
+                if next_plan:
+                    user.plan_id = next_plan.id
+                    user.next_plan_id = None
+                    print(f"✅ Applied deferred downgrade → {next_plan.plan}")
+
+            # --- Always update status & next billing date ---
             user.subscription_status = status
-            user.next_billing_date = expiry_dt
+            if expiry_dt:
+                user.next_billing_date = expiry_dt
             user.updated_at = datetime.now(timezone.utc)
             db.session.commit()
-            print(f"✅ User {user.email} updated → plan={plan.plan if plan else 'N/A'}, status={status}, next billing={expiry_dt}")
+            print(f"✅ User {user.email} updated → plan={user.plan_id}, status={status}, next billing={expiry_dt}")
             return True
 
         # --- PendingSubscription fallback ---

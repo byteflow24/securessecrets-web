@@ -1449,8 +1449,6 @@ PACKAGE_NAME = "com.byteflowdigital.secures_secrets"
 @api.route("/verify-google-subscription", methods=["POST"])
 def verify_google_subscription():
     data = request.get_json() or {}
-    print("📩 Incoming data:", data)
-
     transaction_id = data.get("transaction_id")  # = purchaseToken
     plan_id = data.get("plan_id")
     purchase_token = data.get("purchase_token")
@@ -1462,12 +1460,12 @@ def verify_google_subscription():
     if not plan:
         return jsonify({"status": "error", "message": "Invalid plan"}), 400
 
-    # --- Check if already linked to a user ---
+    # Check if already linked to a user
     user = User.query.filter_by(transaction_id=transaction_id).first()
     if user:
         return jsonify({"status": "existing_user"}), 200
 
-    # --- Create pending subscription (before verification) ---
+    # Create/update PendingSubscription
     pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
     if not pending:
         pending = PendingSubscription(
@@ -1481,10 +1479,12 @@ def verify_google_subscription():
             payment_source="Google Play"
         )
         db.session.add(pending)
-        db.session.commit()
-        print("✅ PendingSubscription saved")
+    else:
+        pending.plan_id = plan_id
+        pending.purchase_token = purchase_token
+        pending.updated_at = datetime.now(timezone.utc)
 
-    # --- Verify directly with Google ---
+    # Verify subscription with Google
     try:
         service = build("androidpublisher", "v3", credentials=credentials)
         result = service.purchases().subscriptions().get(
@@ -1496,14 +1496,18 @@ def verify_google_subscription():
         expiry_time_ms = int(result.get("expiryTimeMillis", 0))
         if expiry_time_ms:
             pending.expires_date = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc)
-        pending.status = "ACTIVE"
-        db.session.commit()
-        print("✅ Verified with Google & updated pending")
+
+        # Optional: trial info
+        if "introductoryPriceInfo" in result or result.get("paymentState") == 0:
+            pending.trial_start_date = datetime.fromtimestamp(int(result.get("startTimeMillis", 0)) / 1000, tz=timezone.utc)
+            pending.trial_end_date = datetime.fromtimestamp(int(result.get("expiryTimeMillis", 0)) / 1000, tz=timezone.utc)
+
     except Exception as e:
         print("⚠️ Google verification failed:", e)
 
+    db.session.commit()
     return jsonify({
-        "status": "new_subscription",
+        "status": "pending_subscription_saved",
         "transaction_id": transaction_id,
         "plan_id": plan_id
     }), 200

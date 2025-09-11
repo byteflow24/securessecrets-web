@@ -1451,74 +1451,56 @@ def verify_google_subscription():
     data = request.get_json() or {}
     print("📩 Incoming data:", data)
 
-    transaction_id = data.get("transaction_id")  # You can set this to purchaseToken
+    transaction_id = data.get("transaction_id")  # = purchaseToken
     plan_id = data.get("plan_id")
     purchase_token = data.get("purchase_token")
 
     if not transaction_id or not plan_id or not purchase_token:
-        return jsonify({
-            "status": "error",
-            "message": "Missing transaction_id, plan_id, or purchase_token"
-        }), 400
-
-    # 1. Check if already linked
-    user = User.query.filter_by(transaction_id=transaction_id).first()
-    if user:
-        return jsonify({"status": "existing_user"}), 200
+        return jsonify({"status": "error", "message": "Missing fields"}), 400
 
     plan = Plan.query.filter_by(id=plan_id).first()
     if not plan:
         return jsonify({"status": "error", "message": "Invalid plan"}), 400
 
-    # 2. Check for existing pending subscription
-    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
-    if pending:
-        return jsonify({"status": "allow_register"}), 200
+    # --- Check if already linked to a user ---
+    user = User.query.filter_by(transaction_id=transaction_id).first()
+    if user:
+        return jsonify({"status": "existing_user"}), 200
 
-    # 3. Create pending subscription BEFORE verifying (same as Apple)
-    try:
-        new_pending = PendingSubscription(
+    # --- Create pending subscription (before verification) ---
+    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
+    if not pending:
+        pending = PendingSubscription(
             transaction_id=transaction_id,
             plan_id=plan_id,
-            product_id=plan.app_product_id,  # match with Play Console
-            expires_date=None,
+            product_id=plan.app_product_id,
             status="PENDING",
+            purchase_token=purchase_token,
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
-            payment_source="Google Pay",
-            purchase_token = purchase_token
+            payment_source="Google Play"
         )
-        db.session.add(new_pending)
+        db.session.add(pending)
         db.session.commit()
-        print("✅ PendingSubscription saved (pre-verification)")
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"status": "error", "message": f"DB error: {e}"}), 500
+        print("✅ PendingSubscription saved")
 
-    # 4. Verify with Google Play Developer API
+    # --- Verify directly with Google ---
     try:
         service = build("androidpublisher", "v3", credentials=credentials)
-        package_name = PACKAGE_NAME
-        product_id = plan.app_product_id
-
         result = service.purchases().subscriptions().get(
-            packageName=package_name,
-            subscriptionId=product_id,
+            packageName=PACKAGE_NAME,
+            subscriptionId=plan.app_product_id,
             token=purchase_token
         ).execute()
 
-        print("Google subscription result:", result)
-
-        expiry_time_ms = result.get("expiryTimeMillis")
+        expiry_time_ms = int(result.get("expiryTimeMillis", 0))
         if expiry_time_ms:
-            pending.expires_date = datetime.fromtimestamp(int(expiry_time_ms) / 1000, tz=timezone.utc)
-        else:
-            pending.expires_date = None
+            pending.expires_date = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc)
+        pending.status = "ACTIVE"
         db.session.commit()
-        print("✅ PendingSubscription updated with Google data")
-
+        print("✅ Verified with Google & updated pending")
     except Exception as e:
-        print("⚠️ Google verification failed, will retry later:", e)
+        print("⚠️ Google verification failed:", e)
 
     return jsonify({
         "status": "new_subscription",
@@ -1578,7 +1560,7 @@ def change_plan_google():
     return jsonify(success=True, message="Google plan change successful."), 200
 
 
-@api.route('/google-notifications', methods=['POST'])
+@api.route("/google-notifications", methods=["POST"])
 def google_notifications():
     data = request.get_json()
     print("📩 Raw Google Play notification:", data)
@@ -1593,26 +1575,24 @@ def google_notifications():
         print("📩 Decoded Google RTDN payload:", decoded_json)
 
         subscription_notification = decoded_json.get("subscriptionNotification", {})
-
         subscription_id = subscription_notification.get("subscriptionId")
         purchase_token = subscription_notification.get("purchaseToken")
         notification_type = subscription_notification.get("notificationType")
 
-        # Map Google notification types → internal statuses
+        # Map Google RTDN notificationType → internal statuses
         status_map = {
-            1: "EXPIRED",         # SUBSCRIPTION_RECOVERED
-            2: "CANCELED",        # SUBSCRIPTION_RENEWAL
-            3: "ACTIVE",          # SUBSCRIPTION_PURCHASED
-            4: "PAST_DUE",        # SUBSCRIPTION_ON_HOLD
-            5: "CANCELED",        # SUBSCRIPTION_CANCELED
-            6: "REFUNDED",        # SUBSCRIPTION_RESTARTED
-            7: "ACTIVE",          # SUBSCRIPTION_RENEWED
-            8: "EXPIRED",         # SUBSCRIPTION_REVOKED
+            1: "RECOVERED",    # SUBSCRIPTION_RECOVERED
+            2: "RENEWAL",      # SUBSCRIPTION_RENEWAL
+            3: "ACTIVE",       # SUBSCRIPTION_PURCHASED
+            4: "ON_HOLD",      # SUBSCRIPTION_IN_GRACE_PERIOD
+            5: "CANCELED",     # SUBSCRIPTION_CANCELED
+            6: "RESTARTED",    # SUBSCRIPTION_RESTARTED
+            7: "ACTIVE",       # SUBSCRIPTION_RENEWED
+            8: "REVOKED",      # SUBSCRIPTION_REVOKED
         }
-
         status = status_map.get(notification_type, "UNKNOWN")
 
-        # --- Fetch latest subscription info from Google Play ---
+        # --- Fetch latest subscription info from Google ---
         service = build("androidpublisher", "v3", credentials=credentials)
         subscription_info = service.purchases().subscriptions().get(
             packageName=PACKAGE_NAME,
@@ -1620,12 +1600,12 @@ def google_notifications():
             token=purchase_token
         ).execute()
 
-        print(f"Subscription Info: {subscription_info}")
+        print("📩 Subscription Info from Google:", subscription_info)
 
         expiry_time_ms = int(subscription_info.get("expiryTimeMillis", 0))
         expiry_dt = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc) if expiry_time_ms else None
 
-        # --- Update User or PendingSubscription ---
+        # --- Update local DB ---
         update_google_subscription(subscription_id, purchase_token, status, expiry_dt)
 
         return jsonify({"success": True}), 200

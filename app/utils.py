@@ -1975,21 +1975,40 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
 
 def update_google_subscription(subscription_id, purchase_token, status, expiry_dt=None):
     try:
-        # Try updating existing user
         user = User.query.filter_by(transaction_id=purchase_token).first()
         plan = Plan.query.filter_by(app_product_id=subscription_id).first()
 
         if user:
             if plan:
-                user.plan_id = plan.id
+                # --- Case: Upgrade ---
+                if not user.plan_id or (plan.price > Plan.query.get(user.plan_id).price):
+                    user.plan_id = plan.id
+                    user.next_plan_id = None  # clear any pending downgrade
+                    print(f"⚡ Immediate UPGRADE → {plan.plan}")
+
+                # --- Case: Downgrade (deferred) ---
+                elif plan.price < Plan.query.get(user.plan_id).price:
+                    user.next_plan_id = plan.id
+                    print(f"⏳ Deferred DOWNGRADE scheduled → {plan.plan}")
+
+                # --- Case: Renewal or same plan ---
+                else:
+                    user.plan_id = plan.id
+            
+            # ✅ Apply deferred downgrade on renewal
+            if status == "ACTIVE" and user.next_plan_id and plan and plan.id == user.next_plan_id:
+                user.plan_id = user.next_plan_id
+                user.next_plan_id = None
+                print(f"✅ Applied deferred downgrade → {plan.plan}")
+
             user.subscription_status = status
             user.next_billing_date = expiry_dt
             user.updated_at = datetime.now(timezone.utc)
             db.session.commit()
-            print(f"✅ Updated User {user.email} → plan={plan.plan if plan else 'N/A'}, status={status}, next billing={expiry_dt}")
+            print(f"✅ User {user.email} updated → plan={plan.plan if plan else 'N/A'}, status={status}, next billing={expiry_dt}")
             return True
 
-        # If no user, update PendingSubscription
+        # --- PendingSubscription fallback ---
         pending = PendingSubscription.query.filter_by(purchase_token=purchase_token).first()
         if pending:
             pending.status = status

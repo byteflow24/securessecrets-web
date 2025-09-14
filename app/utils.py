@@ -1975,7 +1975,7 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
 
 def update_google_subscription(subscription_id, purchase_token, status, expiry_dt=None):
     try:
-        user = User.query.filter_by(transaction_token=purchase_token).first()
+        user = User.query.filter_by(purchase_token=purchase_token).first()
         current_plan = Plan.query.filter_by(app_product_id=subscription_id).first()
 
         if user:

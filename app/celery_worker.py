@@ -81,7 +81,6 @@ def send_email_task(email, token):
 
     # Clean the email by stripping curly braces and any extra spaces
     clean_email = email.strip("{}").strip()  # Strip both curly braces and extra spaces
-    logger.info(f"Sending email to: {clean_email}, Secret URL: {secret_url}")
 
     # Call the email sending function
     send_secret_email(clean_email, secret_url)
@@ -104,7 +103,7 @@ def check_scheduled_secrets():
             # Send each email using the task
             send_email_task.apply_async(args=[email, secret.token])
 
-        secret.received = True  # Mark it as sent
+            secret.received = True  # Mark it as sent
         db.session.commit()
 
 

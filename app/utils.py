@@ -2010,6 +2010,7 @@ def update_google_subscription(subscription_id, purchase_token, status, expiry_d
             if expiry_dt:
                 user.next_billing_date = expiry_dt
             user.updated_at = datetime.now(timezone.utc)
+            user.purchase_token = purchase_token
             db.session.commit()
             print(f"✅ User {user.email} updated → plan={user.plan_id}, status={status}, next billing={expiry_dt}")
             return True

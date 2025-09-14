@@ -8,7 +8,7 @@ class User(UserMixin, db.Model):
     
     id = db.Column(Integer, primary_key=True)
     plan_id = db.Column(Integer, ForeignKey('plans.id'), nullable=True)
-    next_plan_id = db.Column(db.Integer, db.ForeignKey('plan.id'), nullable=True)
+    next_plan_id = db.Column(db.Integer, db.ForeignKey('plans.id'), nullable=True)
     paypal_payer_id = db.Column(String(20), nullable=True)
     email = db.Column(String(255), unique=True, nullable=False)
     password = db.Column(String(255), nullable=False)

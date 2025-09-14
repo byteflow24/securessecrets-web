@@ -39,7 +39,8 @@ class User(UserMixin, db.Model):
 
     secrets = db.relationship('Secret', back_populates='user', cascade="all, delete-orphan")
     payments = db.relationship('Payment', back_populates='user', cascade="all, delete-orphan")
-    plan = db.relationship('Plan', back_populates='users')
+    plan = db.relationship("Plan", foreign_keys=[plan_id], back_populates="users")
+    next_plan = db.relationship("Plan", foreign_keys=[next_plan_id], back_populates="next_users")
     shared_secrets = db.relationship('SharedSecret', back_populates='user', cascade="all, delete-orphan")
     history_payments = db.relationship('HistoryPayment', back_populates='user')
     login_history = db.relationship('LoginHistory', back_populates='user', cascade="all, delete-orphan")

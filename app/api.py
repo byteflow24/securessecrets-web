@@ -1503,11 +1503,10 @@ def verify_google_subscription():
 
     db.session.commit()
     return jsonify({
-        "status": "pending_subscription_saved",
+        "status": "new_subscription",
         "plan_id": plan_id,
         "purchase_token": purchase_token
     }), 200
-
 
 
 @api.route("/google-notifications", methods=["POST"])

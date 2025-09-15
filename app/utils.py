@@ -1973,9 +1973,9 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
         return False
     
 
-def update_google_subscription(subscription_id, purchase_token, status, expiry_dt=None):
+def update_google_subscription(subscription_id, transaction_id, status, expiry_dt=None):
     try:
-        user = User.query.filter_by(purchase_token=purchase_token).first()
+        user = User.query.filter_by(transaction_id=transaction_id).first()
         current_plan = Plan.query.filter_by(app_product_id=subscription_id).first()
 
         if user:
@@ -2010,22 +2010,22 @@ def update_google_subscription(subscription_id, purchase_token, status, expiry_d
             if expiry_dt:
                 user.next_billing_date = expiry_dt
             user.updated_at = datetime.now(timezone.utc)
-            user.purchase_token = purchase_token
+            user.transaction_id = transaction_id
             db.session.commit()
             print(f"✅ User {user.email} updated → plan={user.plan_id}, status={status}, next billing={expiry_dt}")
             return True
 
         # --- PendingSubscription fallback ---
-        pending = PendingSubscription.query.filter_by(purchase_token=purchase_token).first()
+        pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
         if pending:
             pending.status = status
             pending.expires_date = expiry_dt
             pending.updated_at = datetime.now(timezone.utc)
             db.session.commit()
-            print(f"📌 Updated PendingSubscription {purchase_token} → status={status}, expiry={expiry_dt}")
+            print(f"📌 Updated PendingSubscription {transaction_id} → status={status}, expiry={expiry_dt}")
             return True
 
-        print(f"⚠️ No User or PendingSubscription found for purchase_token={purchase_token}")
+        print(f"⚠️ No User or PendingSubscription found for transcatoin_id={transaction_id}")
         return False
 
     except Exception as e:

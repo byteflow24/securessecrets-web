@@ -162,7 +162,9 @@ def register_api():
         return jsonify({'error': 'Email already exists. Please log in instead.'}), 409
     if User.query.filter_by(username=username).first():
         return jsonify({'error': 'Username already in use. Please choose another.'}), 409
+    
     print(transaction_id)
+    transaction_id = data['transaction_id'][:24] if data['transaction_id'] else data['transaction_id']
     # Find the pending subscription
     pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
     if not pending:
@@ -1498,6 +1500,29 @@ def verify_google_subscription():
             token=purchase_token
         ).execute()
 
+        # Use only base transaction id
+        order_id = result.get("orderId")
+        base_transaction_id = order_id[:24] if order_id else order_id
+
+        # Find or create PendingSubscription using base_transaction_id
+        pending = PendingSubscription.query.filter_by(transaction_id=base_transaction_id).first()
+        if not pending:
+            pending = PendingSubscription(
+                transaction_id=base_transaction_id,
+                purchase_token=purchase_token,
+                plan_id=plan_id,
+                product_id=plan.app_product_id,
+                status="PENDING",
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                payment_source="Google Play"
+            )
+            db.session.add(pending)
+        else:
+            pending.plan_id = plan_id
+            pending.purchase_token = purchase_token
+            pending.updated_at = datetime.now(timezone.utc)
+
         expiry_time_ms = int(result.get("expiryTimeMillis", 0))
         if expiry_time_ms:
             pending.expires_date = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc)
@@ -1567,8 +1592,12 @@ def google_notifications():
         expiry_time_ms = int(subscription_info.get("expiryTimeMillis", 0))
         expiry_dt = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc) if expiry_time_ms else None
 
+        # Use only the base transaction id
+        order_id = subscription_info.get("orderId")
+        base_transaction_id = order_id[:24] if order_id else order_id
+
         # --- Update local DB ---
-        update_google_subscription(subscription_id, purchase_token, status, expiry_dt)
+        update_google_subscription(subscription_id, base_transaction_id, status, expiry_dt)
 
         return jsonify({"success": True}), 200
 

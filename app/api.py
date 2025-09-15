@@ -1493,6 +1493,8 @@ def verify_google_subscription():
             token=purchase_token
         ).execute()
 
+        print(result)
+
         expiry_time_ms = int(result.get("expiryTimeMillis", 0))
         if expiry_time_ms:
             pending.expires_date = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc)

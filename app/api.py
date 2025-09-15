@@ -138,7 +138,11 @@ def api_process_subscription():
 def register_api():
     data = request.get_json()
     required_fields = ['username', 'email', 'password', 'confirm_password', 'code', 'phone', 'plan_id', 'purchase_token']
-    if not all(field in data for field in required_fields):
+    
+    missing = [field for field in required_fields if field not in data]
+
+    if missing:
+        print(f"❌ Missing fields: {missing}")
         return jsonify({'error': 'Missing required fields'}), 400
 
     username = data['username'].lower()

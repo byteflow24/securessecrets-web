@@ -49,7 +49,7 @@ class User(UserMixin, db.Model):
 class PendingSubscription(db.Model):
     __tablename__ = "pending_subscription"
     id = db.Column(db.Integer, primary_key=True)
-    transaction_id = db.Column(db.String(35), unique=True, nullable=False)
+    transaction_id = db.Column(db.String(35), unique=True, nullable=True)
     product_id = db.Column(db.String(20), nullable=False)
     plan_id = db.Column(db.Integer, db.ForeignKey('plans.id'), nullable=False)
     expires_date = db.Column(TIMESTAMP, nullable=True)

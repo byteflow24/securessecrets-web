@@ -137,7 +137,7 @@ def api_process_subscription():
 @api.route('/register', methods=['POST'])
 def register_api():
     data = request.get_json()
-    required_fields = ['username', 'email', 'password', 'confirm_password', 'code', 'phone', 'plan_id', 'transaction_id']
+    required_fields = ['username', 'email', 'password', 'confirm_password', 'code', 'phone', 'plan_id', 'purchase_token']
     if not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), 400
 
@@ -148,7 +148,7 @@ def register_api():
     country_code = data['code']
     phone = data['phone']
     plan_id = data['plan_id']
-    transaction_id = data['transaction_id']
+    purchase_token = data['purchase_token']
 
     if password != confirm_password:
         return jsonify({'error': 'Passwords do not match'}), 400
@@ -158,9 +158,9 @@ def register_api():
         return jsonify({'error': 'Email already exists. Please log in instead.'}), 409
     if User.query.filter_by(username=username).first():
         return jsonify({'error': 'Username already in use. Please choose another.'}), 409
-    print(transaction_id)
+    print(purchase_token)
     # Find the pending subscription
-    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
+    pending = PendingSubscription.query.filter_by(purchase_token=purchase_token).first()
     if not pending:
         return jsonify({'error': 'Pending subscription not found'}), 400
 
@@ -179,7 +179,7 @@ def register_api():
         next_billing_date=pending.expires_date,
         subscription_status="ACTIVE",
         payment_source=pending.payment_source,
-        transaction_id=transaction_id,
+        purchase_token=purchase_token,
         status="",
 
         # ✅ carry over trial info if it existed in PendingSubscription
@@ -1449,31 +1449,29 @@ PACKAGE_NAME = "com.byteflowdigital.secures_secrets"
 @api.route("/verify-google-subscription", methods=["POST"])
 def verify_google_subscription():
     data = request.get_json() or {}
-    transaction_id = data.get("transaction_id")  # = purchaseToken
     plan_id = data.get("plan_id")
     purchase_token = data.get("purchase_token")
 
-    if not transaction_id or not plan_id or not purchase_token:
+    if not plan_id or not purchase_token:
         return jsonify({"status": "error", "message": "Missing fields"}), 400
 
     plan = Plan.query.filter_by(id=plan_id).first()
     if not plan:
         return jsonify({"status": "error", "message": "Invalid plan"}), 400
-
+    
     # Check if already linked to a user
-    user = User.query.filter_by(transaction_id=transaction_id).first()
+    user = User.query.filter_by(purchase_token=purchase_token).first()
     if user:
         return jsonify({"status": "existing_user"}), 200
 
     # Create/update PendingSubscription
-    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
+    pending = PendingSubscription.query.filter_by(purchase_token=purchase_token).first()
     if not pending:
         pending = PendingSubscription(
-            transaction_id=transaction_id,
+            purchase_token=purchase_token,
             plan_id=plan_id,
             product_id=plan.app_product_id,
             status="PENDING",
-            purchase_token=purchase_token,
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
             payment_source="Google Play"
@@ -1481,7 +1479,6 @@ def verify_google_subscription():
         db.session.add(pending)
     else:
         pending.plan_id = plan_id
-        pending.purchase_token = purchase_token
         pending.updated_at = datetime.now(timezone.utc)
 
     # Verify subscription with Google
@@ -1493,13 +1490,10 @@ def verify_google_subscription():
             token=purchase_token
         ).execute()
 
-        print(result)
-
         expiry_time_ms = int(result.get("expiryTimeMillis", 0))
         if expiry_time_ms:
             pending.expires_date = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc)
 
-        # Optional: trial info
         if "introductoryPriceInfo" in result or result.get("paymentState") == 0:
             pending.trial_start_date = datetime.fromtimestamp(int(result.get("startTimeMillis", 0)) / 1000, tz=timezone.utc)
             pending.trial_end_date = datetime.fromtimestamp(int(result.get("expiryTimeMillis", 0)) / 1000, tz=timezone.utc)
@@ -1510,9 +1504,10 @@ def verify_google_subscription():
     db.session.commit()
     return jsonify({
         "status": "pending_subscription_saved",
-        "transaction_id": transaction_id,
-        "plan_id": plan_id
+        "plan_id": plan_id,
+        "purchase_token": purchase_token
     }), 200
+
 
 
 @api.route("/google-notifications", methods=["POST"])

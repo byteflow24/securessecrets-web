@@ -1973,9 +1973,19 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
         return False
     
 
-def update_google_subscription(subscription_id, transaction_id, status, expiry_dt=None):
+def update_google_subscription(subscription_id, transaction_id, purchase_token, status, expiry_dt=None):
     try:
-        user = User.query.filter_by(transaction_id=transaction_id).first()
+        base_tx_id = transaction_id[:24] if transaction_id else None
+
+        # --- Try user lookup by transaction_id first ---
+        user = None
+        if base_tx_id:
+            user = User.query.filter_by(transaction_id=base_tx_id).first()
+
+        # --- Fallback: try by purchase_token if no user found ---
+        if not user and purchase_token:
+            user = User.query.filter_by(purchase_token=purchase_token).first()
+
         current_plan = Plan.query.filter_by(app_product_id=subscription_id).first()
 
         if user:
@@ -1985,19 +1995,19 @@ def update_google_subscription(subscription_id, transaction_id, status, expiry_d
                 # --- Upgrade: price higher than current → apply immediately ---
                 if current_plan.price > user_plan.price:
                     user.plan_id = current_plan.id
-                    user.next_plan_id = None  # clear any pending downgrade
+                    user.next_plan_id = None
                     print(f"⚡ Immediate UPGRADE → {current_plan.plan}")
 
-                # --- Downgrade: price lower than current → defer to next billing ---
+                # --- Downgrade: defer until next billing ---
                 elif current_plan.price < user_plan.price:
                     user.next_plan_id = current_plan.id
                     print(f"⏳ Deferred DOWNGRADE scheduled → {current_plan.plan}")
 
-                # --- Same plan or renewal ---
+                # --- Renewal or same plan ---
                 else:
                     user.plan_id = current_plan.id
 
-            # --- Apply deferred downgrade if current billing period ended ---
+            # --- Apply deferred downgrade if billing ended ---
             if user.next_plan_id and status == "ACTIVE" and expiry_dt and expiry_dt <= datetime.now(timezone.utc):
                 next_plan = Plan.query.get(user.next_plan_id)
                 if next_plan:
@@ -2005,33 +2015,43 @@ def update_google_subscription(subscription_id, transaction_id, status, expiry_d
                     user.next_plan_id = None
                     print(f"✅ Applied deferred downgrade → {next_plan.plan}")
 
-            # --- Always update status & next billing date ---
+            # --- Always update subscription info ---
             user.subscription_status = status
             if expiry_dt:
                 user.next_billing_date = expiry_dt
             user.updated_at = datetime.now(timezone.utc)
-            user.transaction_id = transaction_id
+            if base_tx_id:
+                user.transaction_id = base_tx_id
+            if purchase_token:
+                user.purchase_token = purchase_token
             db.session.commit()
+
             print(f"✅ User {user.email} updated → plan={user.plan_id}, status={status}, next billing={expiry_dt}")
             return True
 
         # --- PendingSubscription fallback ---
-        pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
+        pending = None
+        if base_tx_id:
+            pending = PendingSubscription.query.filter_by(transaction_id=base_tx_id).first()
+        if not pending and purchase_token:
+            pending = PendingSubscription.query.filter_by(purchase_token=purchase_token).first()
+
         if pending:
             pending.status = status
             pending.expires_date = expiry_dt
             pending.updated_at = datetime.now(timezone.utc)
             db.session.commit()
-            print(f"📌 Updated PendingSubscription {transaction_id} → status={status}, expiry={expiry_dt}")
+            print(f"📌 Updated PendingSubscription {pending.transaction_id} → status={status}, expiry={expiry_dt}")
             return True
 
-        print(f"⚠️ No User or PendingSubscription found for transcatoin_id={transaction_id}")
+        print(f"⚠️ No User or PendingSubscription found for transaction_id={transaction_id}, purchase_token={purchase_token}")
         return False
 
     except Exception as e:
         db.session.rollback()
         print("❌ Error updating subscription:", e)
         return False
+
 
 ############## GENERETE TOKEN & CONFIRMATION DELETE ACCOUNT ##############
     

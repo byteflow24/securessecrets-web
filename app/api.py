@@ -1453,45 +1453,26 @@ credentials = service_account.Credentials.from_service_account_file(
 PACKAGE_NAME = "com.byteflowdigital.secures_secrets"
     
 @api.route("/verify-google-subscription", methods=["POST"])
+@jwt_required(optional=True) 
 def verify_google_subscription():
     data = request.get_json() or {}
     transaction_id = data.get("transaction_id")
     plan_id = data.get("plan_id")
     purchase_token = data.get("purchase_token")
 
+
     if not transaction_id or not plan_id or not purchase_token: 
         return jsonify({"status": "error", "message": "Missing fields"}), 400
-
 
     plan = Plan.query.filter_by(id=plan_id).first()
     if not plan:
         return jsonify({"status": "error", "message": "Invalid plan"}), 400
     
-    # Check if already linked to a user
-    user = User.query.filter_by(transaction_id=transaction_id).first()
-    if user:
-        return jsonify({"status": "existing_user"}), 200
+    # --- Get user from token if exists ---
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id)) if user_id else None
 
-    # Create/update PendingSubscription
-    pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
-    if not pending:
-        pending = PendingSubscription(
-            transaction_id=transaction_id,
-            purchase_token=purchase_token,
-            plan_id=plan_id,
-            product_id=plan.app_product_id,
-            status="PENDING",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-            payment_source="Google Play"
-        )
-        db.session.add(pending)
-    else:
-        pending.plan_id = plan_id
-        pending.purchase_token = purchase_token
-        pending.updated_at = datetime.now(timezone.utc)
-
-    # Verify subscription with Google
+    # Verify subscription with Google first
     try:
         service = build("androidpublisher", "v3", credentials=credentials)
         result = service.purchases().subscriptions().get(
@@ -1500,45 +1481,68 @@ def verify_google_subscription():
             token=purchase_token
         ).execute()
 
-        # Use only base transaction id
         order_id = result.get("orderId")
-        base_transaction_id = order_id[:24] if order_id else order_id
+        base_tx_id = order_id[:24] if order_id else transaction_id
 
-        # Find or create PendingSubscription using base_transaction_id
-        pending = PendingSubscription.query.filter_by(transaction_id=base_transaction_id).first()
+        expiry_time_ms = int(result.get("expiryTimeMillis", 0))
+        expiry_dt = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc) if expiry_time_ms else None
+
+        trial_start = None
+        trial_end = None
+        if "introductoryPriceInfo" in result or result.get("paymentState") == 0:
+            trial_start = datetime.fromtimestamp(int(result.get("startTimeMillis", 0)) / 1000, tz=timezone.utc)
+            trial_end = datetime.fromtimestamp(int(result.get("expiryTimeMillis", 0)) / 1000, tz=timezone.utc)
+
+    except Exception as e:
+        print("⚠️ Google verification failed:", e)
+        return jsonify({"status": "error", "message": "Google verification failed"}), 400
+
+    # Check if user exists
+    if user:
+        # Update existing user
+        user.transaction_id = base_tx_id
+        user.purchase_token = purchase_token
+        user.plan_id = plan_id
+        user.next_billing_date = expiry_dt
+        user.updated_at = datetime.now(timezone.utc)
+        db.session.commit()
+        print(f"✅ Updated existing user {user.email} with new subscription info")
+        status = "existing_user"
+    else:
+        # Create or update pending subscription
+        pending = PendingSubscription.query.filter_by(transaction_id=base_tx_id).first()
         if not pending:
             pending = PendingSubscription(
-                transaction_id=base_transaction_id,
+                transaction_id=base_tx_id,
                 purchase_token=purchase_token,
                 plan_id=plan_id,
                 product_id=plan.app_product_id,
                 status="PENDING",
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
-                payment_source="Google Play"
+                payment_source="Google Play",
+                expires_date=expiry_dt,
+                trial_start_date=trial_start,
+                trial_end_date=trial_end
             )
             db.session.add(pending)
         else:
             pending.plan_id = plan_id
             pending.purchase_token = purchase_token
             pending.updated_at = datetime.now(timezone.utc)
+            pending.expires_date = expiry_dt
+            pending.trial_start_date = trial_start
+            pending.trial_end_date = trial_end
+        db.session.commit()
+        print(f"📌 Pending subscription created for new user → transactionId={base_tx_id}")
 
-        expiry_time_ms = int(result.get("expiryTimeMillis", 0))
-        if expiry_time_ms:
-            pending.expires_date = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc)
+        status = "new_subscription"
 
-        if "introductoryPriceInfo" in result or result.get("paymentState") == 0:
-            pending.trial_start_date = datetime.fromtimestamp(int(result.get("startTimeMillis", 0)) / 1000, tz=timezone.utc)
-            pending.trial_end_date = datetime.fromtimestamp(int(result.get("expiryTimeMillis", 0)) / 1000, tz=timezone.utc)
-
-    except Exception as e:
-        print("⚠️ Google verification failed:", e)
-
-    db.session.commit()
     return jsonify({
-        "status": "new_subscription",
+        "status": status,
         "plan_id": plan_id,
-        "transaction_id": transaction_id
+        "transaction_id": base_tx_id,
+        "purchase_token": purchase_token
     }), 200
 
 
@@ -1597,7 +1601,7 @@ def google_notifications():
         base_transaction_id = order_id[:24] if order_id else order_id
 
         # --- Update local DB ---
-        update_google_subscription(subscription_id, base_transaction_id, status, expiry_dt)
+        update_google_subscription(subscription_id, base_transaction_id, purchase_token, status, expiry_dt)
 
         return jsonify({"success": True}), 200
 

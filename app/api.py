@@ -1472,6 +1472,8 @@ def verify_google_subscription():
     user_id = get_jwt_identity()
     user = User.query.get(int(user_id)) if user_id else None
 
+    print(f"User is: {user}")
+
     # Verify subscription with Google first
     try:
         service = build("androidpublisher", "v3", credentials=credentials)

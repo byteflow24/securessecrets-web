@@ -5,7 +5,7 @@ class BaseConfig:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret'
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///dev.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    MAX_CONTENT_LENGTH = 1024 * 1024 * 1024  # 1 GB
+    MAX_CONTENT_LENGTH = 1024 * 1024 * 1024  # 1 GB.
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=15)
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'dev-jwt-secret'
     JWT_BLACKLIST_ENABLED = True

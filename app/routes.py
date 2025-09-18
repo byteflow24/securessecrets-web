@@ -880,10 +880,10 @@ def upload_file():
         return jsonify(error='User not authenticated'), 401
 
     try:
-        # Read file content to get size
-        file_bytes = file.read()
-        file_size = len(file_bytes)
-        file.seek(0)  # Reset pointer to save later
+        # Get file size from request (doesn't load into memory)
+        file_size = request.content_length
+        if not file_size:  # fallback if request.content_length is missing
+            return jsonify(error="Could not determine file size"), 400
 
         if current_user.storage_used + file_size > current_user.plan.storage_limit:
             return jsonify(error='Exceeds storage limit'), 403
@@ -897,11 +897,14 @@ def upload_file():
         os.makedirs(upload_folder, exist_ok=True)
         file_path = os.path.join(upload_folder, filename)
 
-        # Save file
+        # Save file directly (streamed, no full memory load)
         file.save(file_path)
 
+        # Double-check actual file size after saving
+        actual_size = os.path.getsize(file_path)
+
         # Update storage usage
-        current_user.storage_used += file_size
+        current_user.storage_used += actual_size
         db.session.commit()
 
         return jsonify(message='File successfully uploaded', filename=filename), 200

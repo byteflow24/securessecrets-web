@@ -620,11 +620,12 @@ def upload_file_api():
         if file.filename == '':
             return jsonify(error='No selected file'), 400
 
-        # Read file size to check against user's limit
-        file_bytes = file.read()
-        file_size = len(file_bytes)
-        file.seek(0)
+        # Get file size without loading into memory
+        file_size = request.content_length
+        if not file_size:  # Fallback if request doesn't include Content-Length
+            return jsonify(error="Could not determine file size"), 400
 
+        # Check against user quota
         if user.storage_used + file_size > user.plan.storage_limit:
             return jsonify(error='Exceeds storage limit'), 403
 
@@ -638,11 +639,14 @@ def upload_file_api():
         os.makedirs(upload_folder, exist_ok=True)
         file_path = os.path.join(upload_folder, filename)
 
-        # Save the file
+        # Save file directly (streamed)
         file.save(file_path)
 
+        # Double-check actual saved size
+        actual_size = os.path.getsize(file_path)
+
         # Update user storage
-        user.storage_used += file_size
+        user.storage_used += actual_size
         db.session.commit()
 
         # Return result

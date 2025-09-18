@@ -1881,7 +1881,7 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
 
         if user:
             # ✅ Existing user → update subscription
-            plan = Plan.query.filter_by(apple_product_id=product_id).first()
+            plan = Plan.query.filter_by(app_product_id=product_id).first()
             if plan:
                 user.plan_id = plan.id
 

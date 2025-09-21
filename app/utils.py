@@ -1,4 +1,3 @@
-import time
 from flask import abort, request, url_for, session, flash, redirect, jsonify, send_from_directory, current_app
 from flask_login import current_user
 from functools import wraps
@@ -9,25 +8,15 @@ from sqlalchemy import and_
 from datetime import datetime, timezone, timedelta, date
 from cryptography.fernet import Fernet
 from wtforms.validators import DataRequired, Email, Regexp, ValidationError
-import base64
-import requests
-import secrets
-import re
-import os
-import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.utils import formataddr
 from email.header import Header
-from google.cloud import recaptchaenterprise_v1
+from google.cloud import recaptchaenterprise_v1, storage
 from google.cloud.recaptchaenterprise_v1 import Assessment
 from itsdangerous import URLSafeTimedSerializer
-import logging
-import uuid
-import json
-import pytz
-import jwt
+import logging, uuid, json, pytz, jwt, base64, requests, secrets, re, os, smtplib, time
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -292,6 +281,26 @@ def serve_file(abs_path, filename):
         as_attachment=ext not in mime_types,
         mimetype=mime_types.get(ext, None)
     )
+
+############################ Storing Users Files ############################
+# Set Google credentials (Render: store JSON as env var or mount it as secret file)
+GOOGLE_APPLICATION_CREDENTIALS = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+GCS_BUCKET = os.environ.get("GCS_BUCKET")
+
+def upload_to_gcs(file, filename):
+    client = storage.Client()
+    bucket = client.bucket(GCS_BUCKET)
+    blob = bucket.blob(filename)
+    blob.upload_from_file(file, content_type=file.mimetype)
+    return blob.public_url  # or blob.name if private
+
+def get_signed_url(filename, expires=300):
+    """Return a signed URL valid for `expires` seconds"""
+    client = storage.Client()
+    bucket = client.bucket(os.environ.get("GCS_BUCKET"))
+    blob = bucket.blob(filename)
+    url = blob.generate_signed_url(expiration=expires)
+    return url
 
 # def as_dict(self):
 #     return {

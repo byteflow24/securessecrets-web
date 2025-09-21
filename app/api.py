@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify, current_app, url_for, abort, send
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
-from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription
+from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -609,52 +609,40 @@ def upload_file_api():
     try:
         user_id = get_jwt_identity()
         user = db.session.get(User, int(user_id))
-
         if not user:
             return jsonify(error='User not authorized'), 401
 
         if 'file' not in request.files:
             return jsonify(error='No file part in the request'), 400
-
         file = request.files['file']
         if file.filename == '':
             return jsonify(error='No selected file'), 400
 
-        # Get file size without loading into memory
+        # File size from request
         file_size = request.content_length
-        if not file_size:  # Fallback if request doesn't include Content-Length
+        if not file_size:
             return jsonify(error="Could not determine file size"), 400
 
-        # Check against user quota
+        # Check quota
         if user.storage_used + file_size > user.plan.storage_limit:
             return jsonify(error='Exceeds storage limit'), 403
 
-        # Generate unique filename
+        # Unique filename
         original_filename = secure_filename(file.filename)
-        unique_prefix = uuid.uuid4().hex
-        filename = f"{unique_prefix}_{original_filename}"
+        filename = f"{uuid.uuid4().hex}_{original_filename}"
 
-        # Save path
-        upload_folder = current_app.config['UPLOAD_FOLDER']
-        os.makedirs(upload_folder, exist_ok=True)
-        file_path = os.path.join(upload_folder, filename)
+        # Upload to GCS
+        file.seek(0)
+        public_url = upload_to_gcs(file, filename)
 
-        # Save file directly (streamed)
-        file.save(file_path)
-
-        # Double-check actual saved size
-        actual_size = os.path.getsize(file_path)
-
-        # Update user storage
-        user.storage_used += actual_size
+        # Update user's storage usage
+        user.storage_used += file_size
         db.session.commit()
 
-        # Return result
-        mime, _ = mimetypes.guess_type(filename)
         return jsonify(
             message='File successfully uploaded',
             filename=filename,
-            mimetype=mime
+            url=public_url
         ), 200
 
     except Exception as e:
@@ -1714,51 +1702,37 @@ def api_delete_published_secret(pb_secret_id):
 @jwt_required(optional=True)
 def download_file_api(filename):
     try:
-        upload_folder = current_app.config['UPLOAD_FOLDER']
-        abs_path = os.path.abspath(os.path.join(upload_folder, filename))
-
-        # print("Checking file path:", abs_path, "Exists?", os.path.exists(abs_path))
-
-
-        # ✅ Check if file exists
-        if not os.path.exists(abs_path):
-            return abort(404, description="File not found.")
-
-        # ✅ Determine MIME type
-        mimetype, _ = mimetypes.guess_type(abs_path)
-        if mimetype is None:
-            mimetype = 'application/octet-stream'
-
-        # ✅ Publicly shared file?
+        # Public file?
         public_entry = SharedSecret.query.filter_by(file=filename, public=True).first()
         if public_entry:
-            return send_file(abs_path, mimetype=mimetype, conditional=True)
+            signed_url = get_signed_url(filename, expires=3600)  # 1 hour
+            return jsonify(url=signed_url)
 
-        # ✅ Get user from token if available
+        # User from token
         user_id = get_jwt_identity()
         user = db.session.get(User, int(user_id)) if user_id else None
+        if not user:
+            return abort(403, description="Login required.")
 
-        if user:
-            # ✅ File owned by user?
-            owned = Secret.query.filter_by(file=filename, user_id=user.id).first()
-            if owned:
-                return send_file(abs_path, mimetype=mimetype, conditional=True)
+        # Owned file?
+        owned = Secret.query.filter_by(file=filename, user_id=user.id).first()
+        if owned:
+            signed_url = get_signed_url(filename, expires=300)  # 5 min
+            return jsonify(url=signed_url)
 
-            # ✅ File shared with user via email?
-            shared = SharedSecret.query.join(Secret).filter(
-                Secret.file == filename,
-                SharedSecret.email == user.email
-            ).first()
-            if shared:
-                return send_file(abs_path, mimetype=mimetype, conditional=True)
-            
+        # Shared with user?
+        shared = SharedSecret.query.join(Secret).filter(
+            Secret.file == filename,
+            SharedSecret.email == user.email
+        ).first()
+        if shared:
+            signed_url = get_signed_url(filename, expires=300)
+            return jsonify(url=signed_url)
 
-        # ❌ If no access
         return abort(403, description="You don't have permission to access this file.")
 
     except Exception as e:
         print("[API Download Error]", str(e))
-        traceback.print_exc()
         return abort(500)
 
 ########################################### CONTACT US API ###########################################

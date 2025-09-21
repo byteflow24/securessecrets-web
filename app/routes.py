@@ -6,7 +6,7 @@ from flask_limiter.util import get_remote_address
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -866,7 +866,6 @@ def add_secret():
     else:
         return jsonify(success=False, error="Form validation failed."), 400
 
-# Uploading file
 @main.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
@@ -880,9 +879,9 @@ def upload_file():
         return jsonify(error='User not authenticated'), 401
 
     try:
-        # Get file size from request (doesn't load into memory)
+        # Get file size from request
         file_size = request.content_length
-        if not file_size:  # fallback if request.content_length is missing
+        if not file_size:
             return jsonify(error="Could not determine file size"), 400
 
         if current_user.storage_used + file_size > current_user.plan.storage_limit:
@@ -893,21 +892,19 @@ def upload_file():
         unique_prefix = uuid.uuid4().hex
         filename = f"{unique_prefix}_{original_filename}"
 
-        upload_folder = current_app.config['UPLOAD_FOLDER']
-        os.makedirs(upload_folder, exist_ok=True)
-        file_path = os.path.join(upload_folder, filename)
-
-        # Save file directly (streamed, no full memory load)
-        file.save(file_path)
-
-        # Double-check actual file size after saving
-        actual_size = os.path.getsize(file_path)
+        # Upload to GCS (stream directly, no full memory load)
+        file.seek(0)  # reset pointer
+        public_url = upload_to_gcs(file, filename)
 
         # Update storage usage
-        current_user.storage_used += actual_size
+        current_user.storage_used += file_size
         db.session.commit()
 
-        return jsonify(message='File successfully uploaded', filename=filename), 200
+        return jsonify(
+            message='File successfully uploaded',
+            filename=filename,
+            url=public_url
+        ), 200
 
     except Exception as e:
         print(f"[❌ Upload Error] {str(e)}")
@@ -1677,49 +1674,37 @@ def paypal_webhook():
 @main.route('/downloads/<filename>')
 def download_file(filename):
     try:
-        upload_folder = current_app.config['UPLOAD_FOLDER']
-        abs_path = os.path.abspath(os.path.join(upload_folder, filename))
-        
-        # print("Checking file path:", abs_path, "Exists?", os.path.exists(abs_path))
-
-        # ✅ Check if file exists
-        if not os.path.exists(abs_path):
-            return abort(404, description="File not found.")
-
-        # ✅ Determine MIME type (e.g. video/mp4, image/png, etc.)
-        mimetype, _ = mimetypes.guess_type(abs_path)
-        if mimetype is None:
-            mimetype = 'application/octet-stream'
-
-        # ✅ If public
+        # ✅ Check if file is public
         public = SharedSecret.query.filter_by(file=filename).first()
         if public:
-            return send_file(abs_path, mimetype=mimetype, conditional=True)
+            # public file → generate signed URL (optional: very long expiry or make bucket public)
+            signed_url = get_signed_url(filename, expires=3600)  # 1 hour
+            return redirect(signed_url)
 
-        # ✅ If private, check access
+        # ✅ For private files, user must be logged in
         if not current_user.is_authenticated:
             return abort(403, description="Login required.")
 
-        # ✅ File owned by current user?
+        # ✅ Check if file is owned by current user
         owned_secret = Secret.query.filter_by(file=filename, user_id=current_user.id).first()
         if owned_secret:
-            return send_file(abs_path, mimetype=mimetype, conditional=True)
+            signed_url = get_signed_url(filename, expires=300)  # 5 min
+            return redirect(signed_url)
 
-        # ✅ Shared with user via email?
+        # ✅ Check if file is shared with user via email
         shared = SharedSecret.query.join(Secret).filter(
             Secret.file == filename,
             SharedSecret.email == current_user.email
         ).first()
         if shared:
-            return send_file(abs_path, mimetype=mimetype, conditional=True)
-        
+            signed_url = get_signed_url(filename, expires=300)  # 5 min
+            return redirect(signed_url)
 
         # ❌ No access
         return abort(403, description="You don't have permission to access this file.")
 
     except Exception as e:
         print("Download error:", str(e))
-        traceback.print_exc()
         return abort(500)
 
 @main.route('/terms-of-services')

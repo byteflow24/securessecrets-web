@@ -14,6 +14,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import desc
 from datetime import date, datetime, timedelta, timezone 
 from twilio.rest import Client
+from google.cloud import storage
 from dateutil.relativedelta import relativedelta
 import pytz, paypalrestsdk, uuid, time, json, os, traceback, requests, logging, jwt, mimetypes
 
@@ -1247,105 +1248,99 @@ def delete_published_secret(pb_secret_id):
 @main.route('/update-secret/<int:secret_id>', methods=['POST'])
 @login_required
 def update_secret(secret_id):
-    
     form = SecretForm()
     secret = db.get_or_404(Secret, secret_id)
 
-    if form.validate_on_submit():
-        try:
-            # Encrypt secret data and calculate its size
-            encrypted_secret = encrypt_secret(form.secret.data.strip())
-            new_text_size = len(encrypted_secret.encode('utf-8'))
-            old_text_size = len(secret.secret.encode('utf-8'))
+    if not form.validate_on_submit():
+        return jsonify(success=False, error="Form validation failed."), 400
 
-            # Track file size changes
-            new_file_size = 0
-            old_file_size = 0
-            file_changed = False
+    try:
+        # Encrypt new secret text
+        encrypted_secret = encrypt_secret(form.secret.data.strip())
+        new_text_size = len(encrypted_secret.encode("utf-8"))
+        old_text_size = len(secret.secret.encode("utf-8"))
 
-            if form.file.data:
-                file = form.file.data
-                filename = secure_filename(file.filename)
+        # File size tracking
+        new_file_size = 0
+        old_file_size = 0
+        filename = secret.file
 
-                if filename != secret.file:
-                    file_changed = True
-                    upload_folder = current_app.config['UPLOAD_FOLDER']
-                    new_file_path = os.path.join(upload_folder, filename)
-                    
-                    # Calculate file size and reset pointer
-                    file_size = file.seek(0, os.SEEK_END)  # Move pointer to end
-                    new_file_size = file_size
-                    file.seek(0)  # Reset pointer to start
+        # Handle file update
+        if form.file.data:
+            file = form.file.data
+            original_filename = secure_filename(file.filename)
 
-                    # Initialize old_file_path and old_file_size
-                    old_file_path = None
-                    old_file_size = 0
+            if original_filename != secret.file:
+                # Calculate new file size
+                file.seek(0, os.SEEK_END)
+                new_file_size = file.tell()
+                file.seek(0)
 
-                    # Handle old file
-                    if secret.file:
-                        old_file_path = os.path.join(upload_folder, secret.file)
-                        old_file_size = os.path.getsize(old_file_path) if os.path.exists(old_file_path) else 0
+                # If there was an old file, check its size
+                if secret.file and gcs_file_exists(secret.file):
+                    # Unfortunately GCS doesn’t give direct os.path.getsize, so we use blob.size
+                    client = storage.Client()
+                    bucket = client.bucket(os.environ.get("GCS_BUCKET"))
+                    blob = bucket.blob(secret.file)
+                    old_file_size = blob.size or 0
 
-                    # Calculate storage
-                    new_storage_used = current_user.storage_used - old_text_size - old_file_size + new_text_size + new_file_size
-                    if new_storage_used > current_user.plan.storage_limit:
-                        return jsonify(success=False, error="Exceeds storage limit."), 403
+                    # Delete old blob
+                    blob.delete()
 
-                    # Save the new file if file has changed
-                    if file_changed:
-                        file.save(new_file_path)
+                # Create new unique filename
+                unique_prefix = uuid.uuid4().hex
+                filename = f"{unique_prefix}_{original_filename}"
 
-                        # Delete old file if it exists
-                        if old_file_path and os.path.exists(old_file_path):
-                            os.remove(old_file_path)
-                    
-                    secret.file = filename
-                else:
-                    new_file_size = old_file_size
+                # Upload new file to GCS
+                upload_to_gcs(file, filename)
 
-            # Check if storage limit will be exceeded
-            total_new_storage = current_user.storage_used - old_text_size - old_file_size + new_text_size + new_file_size
-            if total_new_storage > current_user.plan.storage_limit:
-                return jsonify(success=False, error="Exceeds storage limit."), 403
+        # Storage limit check
+        new_storage_used = (
+            current_user.storage_used
+            - old_text_size - old_file_size
+            + new_text_size + new_file_size
+        )
+        if new_storage_used > current_user.plan.storage_limit:
+            return jsonify(success=False, error="Exceeds storage limit."), 403
 
-            # Update secret fields if changed
-            if form.title.data.strip() != secret.title:
-                secret.title = form.title.data.strip()
-            if encrypted_secret != secret.secret:
-                secret.secret = encrypted_secret
+        # Update secret fields
+        if form.title.data.strip() != secret.title:
+            secret.title = form.title.data.strip()
+        if encrypted_secret != secret.secret:
+            secret.secret = encrypted_secret
+        secret.file = filename
+        secret.date = date.today().strftime("%Y-%m-%d")
 
-            # Update storage and commit changes
-            current_user.storage_used = total_new_storage
-            secret.date = date.today().strftime("%Y-%m-%d")
+        # Update storage
+        current_user.storage_used = new_storage_used
 
-            shared_entries = SharedSecret.query.filter_by(secret_id=secret.id).all()
-            for shared in shared_entries:
-                shared.title = secret.title
-                shared.snapshot_secret = secret.secret
-                shared.file = secret.file
+        # Update shared copies
+        shared_entries = SharedSecret.query.filter_by(secret_id=secret.id).all()
+        for shared in shared_entries:
+            shared.title = secret.title
+            shared.snapshot_secret = secret.secret
+            shared.file = secret.file
 
-            db.session.commit()
+        db.session.commit()
 
-            # Decrypt the secret for display
-            decrypted_secret = decrypt_secret(secret.secret)
+        decrypted_secret = decrypt_secret(secret.secret)
 
-            return jsonify(
-                success=True,
-                flash_message="Secret updated successfully!",
-                secret={
-                    "id": secret.id,
-                    "secret": decrypted_secret,
-                    "file": secret.file,
-                    "date": secret.date.strftime("%Y-%m-%d %H:%M:%S"),
-                    "file_preview": secret.file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')),
-                }
-            ), 200
+        return jsonify(
+            success=True,
+            flash_message="Secret updated successfully!",
+            secret={
+                "id": secret.id,
+                "secret": decrypted_secret,
+                "file": secret.file,
+                "date": secret.date.strftime("%Y-%m-%d %H:%M:%S"),
+                "file_preview": secret.file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
+            },
+        ), 200
 
-        except Exception as e:
-            db.session.rollback()
-            return jsonify(success=False, error=str(e)), 500
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, error=str(e)), 500
 
-    return jsonify(success=False, error="Form validation failed."), 400
 
 # Pricing page
 @main.route('/pricing')

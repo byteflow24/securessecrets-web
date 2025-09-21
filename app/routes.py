@@ -6,7 +6,7 @@ from flask_limiter.util import get_remote_address
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url
+from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -154,14 +154,10 @@ def home():
         SharedSecret.share_date <= datetime.now()
     ).order_by(SharedSecret.share_date.desc()).all()
 
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-
     # Check if files exist; delete secrets with missing files
     for public_secret in public_secrets[:]:
-        if public_secret.file:  # If there's a file associated
-            file_path = os.path.join(upload_folder, public_secret.file)
-            if not os.path.exists(file_path):  # File is missing
-                # Delete the secret from SharedSecret
+        if public_secret.file:
+            if not gcs_file_exists(public_secret.file):  # <- custom helper to check in GCS
                 db.session.delete(public_secret)
                 public_secrets.remove(public_secret)
 
@@ -179,6 +175,11 @@ def home():
 
         # Append the public secret to the list
         decrypted_secrets.append(public_secret)
+    
+    for public_secret in decrypted_secrets:
+        if public_secret.file:
+            public_secret.signed_url = get_signed_url(public_secret.file)  # Your function to generate a GCS signed URL
+
 
     # Report submission
     if request.method == "POST":
@@ -640,14 +641,10 @@ def dashboard():
         SharedSecret.share_date <= datetime.now()
     ).order_by(SharedSecret.share_date.desc()).all()
 
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-
     # Check if files exist; delete secrets with missing files
     for public_secret in public_secrets[:]:
-        if public_secret.file:  # If there's a file associated
-            file_path = os.path.join(upload_folder, public_secret.file)
-            if not os.path.exists(file_path):  # File is missing
-                # Delete the secret from SharedSecret
+        if public_secret.file:
+            if not gcs_file_exists(public_secret.file):  # <- custom helper to check in GCS
                 db.session.delete(public_secret)
                 public_secrets.remove(public_secret)
 
@@ -669,6 +666,10 @@ def dashboard():
         
         # Append the public secret to the list
         decrypted_secrets.append(public_secret)
+    
+    for public_secret in decrypted_secrets:
+        if public_secret.file:
+            public_secret.signed_url = get_signed_url(public_secret.file)  # Your function to generate a GCS signed URL
     
     subscription_approval = get_subscription_details(current_user.paypal_subscription_id)
     if not subscription_approval:
@@ -747,6 +748,11 @@ def all_secrets():
     # Decrypt secrets
     decrypted_secrets = decrypt_secrets(user_secrets)
 
+    # Attach signed URLs for files
+    for secret in decrypted_secrets:
+        if secret.file:
+            secret.signed_url = get_signed_url(secret.file, expires=3600)  # 1 hour URL
+
     # Fetch shared secrets for the current user
     shared_secrets = db.session.execute(
         db.select(SharedSecret)
@@ -759,6 +765,9 @@ def all_secrets():
         # Check if public_secret is encrypted and decrypt it if necessary
         if shared.snapshot_secret and is_encrypted(shared.snapshot_secret):
             shared.snapshot_secret = decrypt_secret(shared.snapshot_secret)
+
+        if shared.secret and shared.secret.file:
+            shared.secret.signed_url = get_signed_url(shared.secret.file, expires=3600)
 
     for shared in shared_secrets:
         if shared.date_to_send and shared.time_to_send:
@@ -817,54 +826,61 @@ def search_secrets():
 def add_secret():
     form = SecretForm()
 
-    if form.validate_on_submit():
-        try:
-            # Check if the user has reached the secret limit
-            secret_limit = 10
-            query = db.select(Secret).where(Secret.user_id == current_user.id)
-            user_secrets = db.session.execute(query).scalars().all()
-            if current_user.plan.plan == 'Basic' and len(user_secrets) >= secret_limit:
-                return jsonify(success=False, error=f"You have reached the maximum limit of {secret_limit} secrets for your Basic plan."), 403
-
-            # Check if both secret and file are missing
-            if not form.secret.data.strip() and not request.form.get("uploadedFileName"):
-                return jsonify(success=False, error="Please provide a secret or upload a file."), 400
-
-            # Handle storage and file limits
-            storage_limit = current_user.plan.storage_limit
-            encrypted_secret = encrypt_secret(form.secret.data)
-            secret_size = len(encrypted_secret.encode('utf-8'))
-
-            if current_user.storage_used + secret_size > storage_limit:
-                return jsonify(success=False, error=f"Adding this secret will exceed your {current_user.plan.plan} plan's storage limit."), 403
-
-            # Generate a unique title
-            unique_title = get_unique_title(form.title.data.strip(), current_user.id)
-            
-            # If a file was uploaded, validate and save it
-            filename = request.form.get("uploadedFileName")
-            current_user.storage_used += secret_size
-
-            # Create and save the new secret
-            new_secret = Secret(
-                title=unique_title,
-                secret=encrypted_secret,
-                file=filename,
-                date=date.today().strftime("%Y-%m-%d"),
-                user_id=current_user.id,
-            )
-            db.session.add(new_secret)
-            db.session.commit()
-            return jsonify(
-                success=True, title=new_secret.title,
-                date=new_secret.date.today().strftime("%Y-%m-%d"),
-                flash_message="New secret has been added successfully."), 200
-        
-        except IntegrityError:
-            db.session.rollback()
-            return jsonify(success=False, error="An error occurred while saving your secret. Please try again."), 500
-    else:
+    if not form.validate_on_submit():
         return jsonify(success=False, error="Form validation failed."), 400
+
+    try:
+        # Secret limit
+        secret_limit = 10
+        user_secrets = db.session.execute(
+            db.select(Secret).where(Secret.user_id == current_user.id)
+        ).scalars().all()
+        if current_user.plan.plan == 'Basic' and len(user_secrets) >= secret_limit:
+            return jsonify(success=False, error=f"You reached the max limit of {secret_limit} secrets for Basic plan."), 403
+
+        # Secret text or file must exist
+        uploaded_filename = request.form.get("uploadedFileName")
+        if not form.secret.data.strip() and not uploaded_filename:
+            return jsonify(success=False, error="Provide a secret or upload a file."), 400
+
+        # Encrypt secret text
+        encrypted_secret = encrypt_secret(form.secret.data)
+        secret_size = len(encrypted_secret.encode('utf-8'))
+
+        # Add file size if available
+        file_size = int(request.form.get("uploadedFileSize", 0))
+
+        if current_user.storage_used + secret_size + file_size > current_user.plan.storage_limit:
+            return jsonify(success=False, error="Adding this secret exceeds your plan's storage."), 403
+
+        # Generate unique title
+        unique_title = get_unique_title(form.title.data.strip(), current_user.id)
+
+        # Update storage usage
+        current_user.storage_used += secret_size + file_size
+
+        # Save secret
+        new_secret = Secret(
+            title=unique_title,
+            secret=encrypted_secret,
+            file=uploaded_filename,
+            date=date.today().strftime("%Y-%m-%d"),
+            user_id=current_user.id
+        )
+        db.session.add(new_secret)
+        db.session.commit()
+
+        return jsonify(
+            success=True,
+            title=new_secret.title,
+            date=new_secret.date,
+            flash_message="New secret added successfully."
+        ), 200
+
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify(success=False, error="Error saving your secret. Please try again."), 500
+
 
 @main.route('/upload', methods=['POST'])
 def upload_file():
@@ -879,7 +895,7 @@ def upload_file():
         return jsonify(error='User not authenticated'), 401
 
     try:
-        # Get file size from request
+        # File size
         file_size = request.content_length
         if not file_size:
             return jsonify(error="Could not determine file size"), 400
@@ -887,14 +903,14 @@ def upload_file():
         if current_user.storage_used + file_size > current_user.plan.storage_limit:
             return jsonify(error='Exceeds storage limit'), 403
 
-        # Generate secure + unique filename
+        # Unique filename
         original_filename = secure_filename(file.filename)
         unique_prefix = uuid.uuid4().hex
         filename = f"{unique_prefix}_{original_filename}"
 
-        # Upload to GCS (stream directly, no full memory load)
+        # Upload to GCS
         file.seek(0)  # reset pointer
-        public_url = upload_to_gcs(file, filename)
+        signed_url = upload_to_gcs(file, filename)  # returns signed URL
 
         # Update storage usage
         current_user.storage_used += file_size
@@ -903,7 +919,7 @@ def upload_file():
         return jsonify(
             message='File successfully uploaded',
             filename=filename,
-            url=public_url
+            signed_url=signed_url
         ), 200
 
     except Exception as e:

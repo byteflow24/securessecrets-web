@@ -156,21 +156,25 @@
                     <div class="secret-wrapper clickable" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; cursor: pointer;">
                         <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.snapshot_secret|safe }}</p>
                         {% if public.file %}
-                            {% if public.file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp', '.heic')) %}
-                                <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="Preview of {{ public.file }} attached to secret by {{ public.username }}" style="max-width: 50%; height: auto;" width="150" height="150" loading="lazy">
+                            {% if public.file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) %}
+                                <img src="{{ public.signed_url }}" alt="File Preview" style="max-width: 40%; height: auto;">
                             {% elif public.file.endswith('.pdf') %}
-                                <iframe src="{{ url_for('main.download_file', filename=public.file) }}" style="width: 50%; height: auto; border: none;" title="PDF preview of {{ public.file }}"></iframe>
+                                <iframe src="{{ public.signed_url }}" style="max-width: 50%; height: auto; border: none;" frameborder="0"></iframe>
                             {% elif public.file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) %}
-                                <iframe src="https://docs.google.com/viewer?url={{ url_for('main.download_file', filename=public.file, _external=True) }}&embedded=true" style="width: 50%; height: auto; border: none;" title="Document preview of {{ public.file }}"></iframe>
+                                <iframe src="https://docs.google.com/viewer?url={{ public.signed_url }}&embedded=true" 
+                                        style="width: 50%; height: auto; border: none;" frameborder="0"></iframe>
                             {% else %}
                                 <p style="font-size: small;">No preview available for this file type.</p>
                             {% endif %}
+
+                            <!-- Download link -->
                             <p><strong>Download Attachment:</strong>
-                                <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
+                                <a href="{{ public.signed_url }}" class="link-primary" download>
                                     <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
                                 </a>
                             </p>
                         {% endif %}
+
                         <div class="mt-2 d-flex justify-content-end gap-3">
                             <a class="text-danger report-btn" data-bs-toggle="modal" data-bs-target="#reportSecretModel-{{ public.id }}" data-id="{{ public.id }}" data-secret="{{ public.snapshot_secret }}" data-file="{{ public.file }}" style="font-size: 0.875rem;" aria-label="Report secret by {{ public.username }}">Report</a>
                         </div>

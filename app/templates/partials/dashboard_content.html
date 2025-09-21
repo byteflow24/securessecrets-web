@@ -221,19 +221,19 @@
                                     <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.snapshot_secret|safe }}</p>
                                     {% if public.file %}
                                         {% if public.file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) %}
-                                            <img src="{{ url_for('main.download_file', filename=public.file) }}" alt="File Preview" style="max-width: 40%; height: auto;">
+                                            <img src="{{ public.signed_url }}" alt="File Preview" style="max-width: 40%; height: auto;">
                                         {% elif public.file.endswith('.pdf') %}
-                                            <iframe src="{{ url_for('main.download_file', filename=public.file) }}" 
-                                                    style="max-width: 50%; height: auto; border: none;" frameborder="0"></iframe>
+                                            <iframe src="{{ public.signed_url }}" style="max-width: 50%; height: auto; border: none;" frameborder="0"></iframe>
                                         {% elif public.file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) %}
-                                            <iframe src="https://docs.google.com/viewer?url={{ url_for('main.download_file', filename=public.file, _external=True) }}&embedded=true" 
+                                            <iframe src="https://docs.google.com/viewer?url={{ public.signed_url }}&embedded=true" 
                                                     style="width: 50%; height: auto; border: none;" frameborder="0"></iframe>
                                         {% else %}
                                             <p style="font-size: small;">No preview available for this file type.</p>
                                         {% endif %}
+
                                         <!-- Download link -->
                                         <p><strong>Download Attachment:</strong>
-                                            <a href="{{ url_for('main.download_file', filename=public.file) }}" class="link-primary" download>
+                                            <a href="{{ public.signed_url }}" class="link-primary" download>
                                                 <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
                                             </a>
                                         </p>

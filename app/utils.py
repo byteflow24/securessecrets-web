@@ -302,6 +302,13 @@ def get_signed_url(filename, expires=300):
     url = blob.generate_signed_url(expiration=expires)
     return url
 
+def gcs_file_exists(filename):
+    client = storage.Client()
+    bucket = client.bucket(current_app.config['GCS_BUCKET'])
+    blob = bucket.blob(filename)
+    return blob.exists()
+
+
 # def as_dict(self):
 #     return {
 #         "id": self.id,

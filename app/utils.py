@@ -304,7 +304,7 @@ def get_signed_url(filename, expires=300):
 
 def gcs_file_exists(filename):
     client = storage.Client()
-    bucket = client.bucket(current_app.config['GCS_BUCKET'])
+    bucket = client.bucket(os.environ.get("GCS_BUCKET"))
     blob = bucket.blob(filename)
     return blob.exists()
 

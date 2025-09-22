@@ -6,7 +6,7 @@ from flask_limiter.util import get_remote_address
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret
-from .utils import get_unique_title, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists
+from .utils import get_unique_title, cipher_suite, storage_client, GCS_BUCKET, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -17,6 +17,7 @@ from twilio.rest import Client
 from google.cloud import storage
 from google.oauth2 import service_account
 from dateutil.relativedelta import relativedelta
+from io import BytesIO
 import pytz, paypalrestsdk, uuid, time, json, os, traceback, requests, logging, jwt, mimetypes
 
 # Handle Google Application Credentials
@@ -180,7 +181,7 @@ def home():
     
     for public_secret in decrypted_secrets:
         if public_secret.file:
-            public_secret.signed_url = get_signed_url(public_secret.file)  # Your function to generate a GCS signed URL
+            public_secret.signed_url = url_for('main.download_file', filename=public_secret.file)
 
 
     # Report submission
@@ -671,7 +672,8 @@ def dashboard():
     
     for public_secret in decrypted_secrets:
         if public_secret.file:
-            public_secret.signed_url = get_signed_url(public_secret.file)  # Your function to generate a GCS signed URL
+            # Use the internal download route so Flask will decrypt the file before sending
+            public_secret.signed_url = url_for('main.download_file', filename=public_secret.file)
     
     subscription_approval = get_subscription_details(current_user.paypal_subscription_id)
     if not subscription_approval:
@@ -753,7 +755,8 @@ def all_secrets():
     # Attach signed URLs for files
     for secret in decrypted_secrets:
         if secret.file:
-            secret.signed_url = get_signed_url(secret.file, expires=3600)  # 1 hour URL
+            # Use internal download route
+            secret.signed_url = url_for('main.download_file', filename=secret.file)
 
     # Fetch shared secrets for the current user
     shared_secrets = db.session.execute(
@@ -769,7 +772,7 @@ def all_secrets():
             shared.snapshot_secret = decrypt_secret(shared.snapshot_secret)
 
         if shared.secret and shared.secret.file:
-            shared.secret.signed_url = get_signed_url(shared.secret.file, expires=3600)
+            shared.secret.signed_url = url_for('main.download_file', filename=shared.secret.file)
 
     for shared in shared_secrets:
         if shared.date_to_send and shared.time_to_send:
@@ -897,7 +900,6 @@ def upload_file():
         return jsonify(error='User not authenticated'), 401
 
     try:
-        # File size
         file_size = request.content_length
         if not file_size:
             return jsonify(error="Could not determine file size"), 400
@@ -905,24 +907,19 @@ def upload_file():
         if current_user.storage_used + file_size > current_user.plan.storage_limit:
             return jsonify(error='Exceeds storage limit'), 403
 
-        # Unique filename
         original_filename = secure_filename(file.filename)
         unique_prefix = uuid.uuid4().hex
         filename = f"{unique_prefix}_{original_filename}"
 
-        # Upload to GCS
-        file.seek(0)  # reset pointer
-        signed_url = upload_to_gcs(file, filename)  # returns signed URL
+        # Encrypt & upload
+        file.seek(0)
+        upload_to_gcs(file, filename)
 
         # Update storage usage
         current_user.storage_used += file_size
         db.session.commit()
 
-        return jsonify(
-            message='File successfully uploaded',
-            filename=filename,
-            signed_url=signed_url
-        ), 200
+        return jsonify(message='File successfully uploaded', filename=filename), 200
 
     except Exception as e:
         print(f"[❌ Upload Error] {str(e)}")
@@ -1266,12 +1263,12 @@ def update_secret(secret_id):
         old_file_size = 0
         filename = secret.file
 
-        # Handle file update
+        # Handle file update (if user uploaded a new file)
         if form.file.data:
             file = form.file.data
             original_filename = secure_filename(file.filename)
 
-            # Always generate a new unique filename
+            # Generate a new unique filename (keep extension for previews)
             unique_prefix = uuid.uuid4().hex
             new_filename = f"{unique_prefix}_{original_filename}"
 
@@ -1280,17 +1277,12 @@ def update_secret(secret_id):
             new_file_size = file.tell()
             file.seek(0)
 
-            # Upload new file first
+            # Upload encrypted file to GCS
             upload_to_gcs(file, new_filename)
 
             # If old file exists in GCS → delete it
             if secret.file and gcs_file_exists(secret.file):
-                credentials = service_account.Credentials.from_service_account_file(
-                    os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-                )
-                storage_client = storage.Client(credentials=credentials)
-                bucket = storage_client.bucket(os.environ.get("GCS_BUCKET"))
-                old_blob = bucket.blob(secret.file)
+                old_blob = storage_client.bucket(GCS_BUCKET).blob(secret.file)
                 old_file_size = old_blob.size or 0
                 old_blob.delete()
 
@@ -1307,14 +1299,12 @@ def update_secret(secret_id):
             return jsonify(success=False, error="Exceeds storage limit."), 403
 
         # Update secret fields
-        if form.title.data.strip() != secret.title:
-            secret.title = form.title.data.strip()
-        if encrypted_secret != secret.secret:
-            secret.secret = encrypted_secret
+        secret.title = form.title.data.strip()
+        secret.secret = encrypted_secret
         secret.file = filename
         secret.date = date.today().strftime("%Y-%m-%d")
 
-        # Update storage
+        # Update user storage
         current_user.storage_used = new_storage_used
 
         # Update shared copies
@@ -1336,7 +1326,9 @@ def update_secret(secret_id):
                 "secret": decrypted_secret,
                 "file": secret.file,
                 "date": secret.date.strftime("%Y-%m-%d %H:%M:%S"),
-                "file_preview": secret.file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
+                "file_preview": secret.file.lower().endswith(
+                    ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.mov')
+                )
             },
         ), 200
 
@@ -1687,34 +1679,48 @@ def paypal_webhook():
 @main.route('/downloads/<filename>')
 def download_file(filename):
     try:
-        # ✅ Check if file is public
-        public = SharedSecret.query.filter_by(file=filename).first()
-        if public:
-            # public file → generate signed URL (optional: very long expiry or make bucket public)
-            signed_url = get_signed_url(filename, expires=3600)  # 1 hour
-            return redirect(signed_url)
-
-        # ✅ For private files, user must be logged in
+        # Check if user is logged in for private files
         if not current_user.is_authenticated:
             return abort(403, description="Login required.")
 
-        # ✅ Check if file is owned by current user
+        # Check ownership or sharing
         owned_secret = Secret.query.filter_by(file=filename, user_id=current_user.id).first()
-        if owned_secret:
-            signed_url = get_signed_url(filename, expires=300)  # 5 min
-            return redirect(signed_url)
-
-        # ✅ Check if file is shared with user via email
-        shared = SharedSecret.query.join(Secret).filter(
+        shared_secret = SharedSecret.query.join(Secret).filter(
             Secret.file == filename,
             SharedSecret.email == current_user.email
         ).first()
-        if shared:
-            signed_url = get_signed_url(filename, expires=300)  # 5 min
-            return redirect(signed_url)
 
-        # ❌ No access
-        return abort(403, description="You don't have permission to access this file.")
+        if not owned_secret and not shared_secret:
+            return abort(403, description="You don't have permission to access this file.")
+
+        # Download encrypted bytes from GCS
+        bucket = storage_client.bucket(GCS_BUCKET)
+        blob = bucket.blob(filename)
+
+        if not blob.exists():
+            return abort(404, description="File not found.")
+
+        encrypted_bytes = blob.download_as_bytes()
+
+        # Decrypt
+        decrypted_bytes = cipher_suite.decrypt(encrypted_bytes)
+
+        # Determine MIME type from filename
+        ext = filename.split('.')[-1].lower()
+        mimetypes = {
+            'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+            'gif': 'image/gif', 'webp': 'image/webp',
+            'mp4': 'video/mp4', 'mov': 'video/quicktime',
+            'pdf': 'application/pdf', 'mp3': 'audio/mpeg'
+        }
+        mime_type = mimetypes.get(ext, 'application/octet-stream')
+
+        # Stream decrypted file to user
+        return send_file(
+            BytesIO(decrypted_bytes),
+            download_name=filename,
+            mimetype=mime_type
+        )
 
     except Exception as e:
         print("Download error:", str(e))

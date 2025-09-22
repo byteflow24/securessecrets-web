@@ -285,18 +285,36 @@ def serve_file(abs_path, filename):
 
 ############################ Storing Users Files ############################
 # Set Google credentials (Render: store JSON as env var or mount it as secret file)
-GOOGLE_APPLICATION_CREDENTIALS = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+# Load credentials
+SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
 GCS_BUCKET = os.environ.get("GCS_BUCKET")
 
-credentials = service_account.Credentials.from_service_account_file(GOOGLE_APPLICATION_CREDENTIALS)
+if not SERVICE_ACCOUNT_FILE or not GCS_BUCKET:
+    raise ValueError("Missing GOOGLE_APPLICATION_CREDENTIALS or GCS_BUCKET env vars")
+
+credentials = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE)
 storage_client = storage.Client(credentials=credentials)
 
 def upload_to_gcs(file, filename):
+    """
+    Encrypts the file bytes and uploads them to GCS.
+    Returns the blob name (do NOT use public URL directly!)
+    """
+    from io import BytesIO
+
+    # Read raw bytes
+    file_bytes = file.read()
+    
+    # Encrypt bytes
+    encrypted_bytes = cipher_suite.encrypt(file_bytes)
+    
+    # Upload encrypted bytes to GCS
     bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
-    blob.upload_from_file(file, content_type=file.mimetype)
+    blob.upload_from_file(BytesIO(encrypted_bytes), content_type="application/octet-stream")
+
     print("Using client:", storage_client._credentials.service_account_email)
-    return blob.public_url  # or blob.name if private
+    return blob.name  # return filename, NOT public URL
 
 def get_signed_url(filename, expires=300):
     """Return a signed URL valid for `expires` seconds"""

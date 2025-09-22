@@ -1271,30 +1271,31 @@ def update_secret(secret_id):
             file = form.file.data
             original_filename = secure_filename(file.filename)
 
-            if original_filename != secret.file:
-                # Calculate new file size
-                file.seek(0, os.SEEK_END)
-                new_file_size = file.tell()
-                file.seek(0)
+            # Always generate a new unique filename
+            unique_prefix = uuid.uuid4().hex
+            new_filename = f"{unique_prefix}_{original_filename}"
 
-                # If there was an old file, check its size
-                credentials = service_account.Credentials.from_service_account_file(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
+            # Calculate new file size
+            file.seek(0, os.SEEK_END)
+            new_file_size = file.tell()
+            file.seek(0)
+
+            # Upload new file first
+            upload_to_gcs(file, new_filename)
+
+            # If old file exists in GCS → delete it
+            if secret.file and gcs_file_exists(secret.file):
+                credentials = service_account.Credentials.from_service_account_file(
+                    os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+                )
                 storage_client = storage.Client(credentials=credentials)
-                if secret.file and gcs_file_exists(secret.file):
-                    # Unfortunately GCS doesn’t give direct os.path.getsize, so we use blob.size
-                    bucket = storage_client.bucket(os.environ.get("GCS_BUCKET"))
-                    blob = bucket.blob(secret.file)
-                    old_file_size = blob.size or 0
+                bucket = storage_client.bucket(os.environ.get("GCS_BUCKET"))
+                old_blob = bucket.blob(secret.file)
+                old_file_size = old_blob.size or 0
+                old_blob.delete()
 
-                    # Delete old blob
-                    blob.delete()
-
-                # Create new unique filename
-                unique_prefix = uuid.uuid4().hex
-                filename = f"{unique_prefix}_{original_filename}"
-
-                # Upload new file to GCS
-                upload_to_gcs(file, filename)
+            # Replace with new filename
+            filename = new_filename
 
         # Storage limit check
         new_storage_used = (

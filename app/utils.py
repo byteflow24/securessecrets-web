@@ -14,6 +14,7 @@ from email.mime.image import MIMEImage
 from email.utils import formataddr
 from email.header import Header
 from google.cloud import recaptchaenterprise_v1, storage
+from google.oauth2 import service_account
 from google.cloud.recaptchaenterprise_v1 import Assessment
 from itsdangerous import URLSafeTimedSerializer
 import logging, uuid, json, pytz, jwt, base64, requests, secrets, re, os, smtplib, time
@@ -287,24 +288,25 @@ def serve_file(abs_path, filename):
 GOOGLE_APPLICATION_CREDENTIALS = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
 GCS_BUCKET = os.environ.get("GCS_BUCKET")
 
+credentials = service_account.Credentials.from_service_account_file(GOOGLE_APPLICATION_CREDENTIALS)
+storage_client = storage.Client(credentials=credentials)
+
 def upload_to_gcs(file, filename):
-    client = storage.Client()
-    bucket = client.bucket(GCS_BUCKET)
+    bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
     blob.upload_from_file(file, content_type=file.mimetype)
+    print("Using client:", storage_client._credentials.service_account_email)
     return blob.public_url  # or blob.name if private
 
 def get_signed_url(filename, expires=300):
     """Return a signed URL valid for `expires` seconds"""
-    client = storage.Client()
-    bucket = client.bucket(os.environ.get("GCS_BUCKET"))
+    bucket = storage_client.bucket(os.environ.get("GCS_BUCKET"))
     blob = bucket.blob(filename)
     url = blob.generate_signed_url(expiration=expires)
     return url
 
 def gcs_file_exists(filename):
-    client = storage.Client()
-    bucket = client.bucket(os.environ.get("GCS_BUCKET"))
+    bucket = storage_client.bucket(os.environ.get("GCS_BUCKET"))
     blob = bucket.blob(filename)
     return blob.exists()
 

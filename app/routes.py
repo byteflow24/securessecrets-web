@@ -15,6 +15,7 @@ from sqlalchemy import desc
 from datetime import date, datetime, timedelta, timezone 
 from twilio.rest import Client
 from google.cloud import storage
+from google.oauth2 import service_account
 from dateutil.relativedelta import relativedelta
 import pytz, paypalrestsdk, uuid, time, json, os, traceback, requests, logging, jwt, mimetypes
 
@@ -1277,10 +1278,11 @@ def update_secret(secret_id):
                 file.seek(0)
 
                 # If there was an old file, check its size
+                credentials = service_account.Credentials.from_service_account_file(os.env.get("GOOGLE_APPLICATION_CREDENTIALS"))
+                storage_client = storage.Client(credentials=credentials)
                 if secret.file and gcs_file_exists(secret.file):
                     # Unfortunately GCS doesn’t give direct os.path.getsize, so we use blob.size
-                    client = storage.Client()
-                    bucket = client.bucket(os.environ.get("GCS_BUCKET"))
+                    bucket = storage_client.bucket(os.environ.get("GCS_BUCKET"))
                     blob = bucket.blob(secret.file)
                     old_file_size = blob.size or 0
 

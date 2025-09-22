@@ -770,8 +770,11 @@ def all_secrets():
         # Check if public_secret is encrypted and decrypt it if necessary
         if shared.snapshot_secret and is_encrypted(shared.snapshot_secret):
             shared.snapshot_secret = decrypt_secret(shared.snapshot_secret)
-
-        if shared.secret and shared.secret.file:
+        # Attach signed URL for the file in the SharedSecret record itself
+        if shared.file:
+            shared.signed_url = url_for('main.download_file', filename=shared.file)
+        # Optional: also attach signed URL for the original secret's file (if needed)
+        elif shared.secret and shared.secret.file:
             shared.secret.signed_url = url_for('main.download_file', filename=shared.secret.file)
 
     for shared in shared_secrets:

@@ -300,13 +300,14 @@ def upload_to_gcs(file, filename):
 
 def get_signed_url(filename, expires=300):
     """Return a signed URL valid for `expires` seconds"""
-    bucket = storage_client.bucket(os.environ.get("GCS_BUCKET"))
+    bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
-    url = blob.generate_signed_url(expiration=expires)
+    url = blob.generate_signed_url(expiration=timedelta(seconds=expires))
+    print(f"[Signed URL] filename={filename}, url={url}")
     return url
 
 def gcs_file_exists(filename):
-    bucket = storage_client.bucket(os.environ.get("GCS_BUCKET"))
+    bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
     return blob.exists()
 

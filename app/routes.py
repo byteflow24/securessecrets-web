@@ -1278,7 +1278,7 @@ def update_secret(secret_id):
                 file.seek(0)
 
                 # If there was an old file, check its size
-                credentials = service_account.Credentials.from_service_account_file(os.env.get("GOOGLE_APPLICATION_CREDENTIALS"))
+                credentials = service_account.Credentials.from_service_account_file(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
                 storage_client = storage.Client(credentials=credentials)
                 if secret.file and gcs_file_exists(secret.file):
                     # Unfortunately GCS doesn’t give direct os.path.getsize, so we use blob.size
@@ -1342,7 +1342,6 @@ def update_secret(secret_id):
     except Exception as e:
         db.session.rollback()
         return jsonify(success=False, error=str(e)), 500
-
 
 # Pricing page
 @main.route('/pricing')

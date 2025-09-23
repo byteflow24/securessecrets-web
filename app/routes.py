@@ -176,12 +176,16 @@ def home():
         if public_secret.snapshot_secret and is_encrypted(public_secret.snapshot_secret):
             public_secret.snapshot_secret = decrypt_secret(public_secret.snapshot_secret)
 
+        if public_secret.file:
+            # Use the internal download route so Flask will decrypt the file before sending
+            public_secret.signed_url = url_for('main.download_file', filename=public_secret.file)
+
         # Append the public secret to the list
         decrypted_secrets.append(public_secret)
     
-    for public_secret in decrypted_secrets:
-        if public_secret.file:
-            public_secret.signed_url = url_for('main.download_file', filename=public_secret.file)
+    # for public_secret in decrypted_secrets:
+    #     if public_secret.file:
+    #         public_secret.signed_url = url_for('main.download_file', filename=public_secret.file)
 
 
     # Report submission
@@ -666,14 +670,19 @@ def dashboard():
         if public_secret.snapshot_secret and is_encrypted(public_secret.snapshot_secret):
             public_secret.snapshot_secret = decrypt_secret(public_secret.snapshot_secret)
 
+        if public_secret.file:
+            # Use the internal download route so Flask will decrypt the file before sending
+            public_secret.signed_url = url_for('main.download_file', filename=public_secret.file)
+
         
         # Append the public secret to the list
         decrypted_secrets.append(public_secret)
     
-    for public_secret in decrypted_secrets:
-        if public_secret.file:
-            # Use the internal download route so Flask will decrypt the file before sending
-            public_secret.signed_url = url_for('main.download_file', filename=public_secret.file)
+    # for public_secret in decrypted_secrets:
+    #     if public_secret.file:
+    #         # Use the internal download route so Flask will decrypt the file before sending
+    #         public_secret.signed_url = url_for('main.download_file', filename=public_secret.file)
+            
     
     subscription_approval = get_subscription_details(current_user.paypal_subscription_id)
     if not subscription_approval:

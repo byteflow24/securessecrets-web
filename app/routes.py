@@ -176,10 +176,7 @@ def home():
         if public_secret.snapshot_secret and is_encrypted(public_secret.snapshot_secret):
             public_secret.snapshot_secret = decrypt_secret(public_secret.snapshot_secret)
 
-        if public_secret.file:
-            if public_secret.public:  # or check your condition
-                public_secret.signed_url = get_signed_url(public_secret.file, expires=3600)
-            else:
+        if public_secret.file and public_secret.public:
                 public_secret.signed_url = url_for('main.download_file', filename=public_secret.file)
 
         # Append the public secret to the list

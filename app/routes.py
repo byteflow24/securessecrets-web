@@ -1683,11 +1683,16 @@ def paypal_webhook():
 @main.route('/downloads/<filename>')
 def download_file(filename):
     try:
-        # Check if user is logged in for private files
+        # ✅ Step 1: check if file is public
+        public_secret = SharedSecret.query.filter_by(file=filename, public=True).first()
+        if public_secret:
+            return _serve_file(filename)
+
+        # ✅ Step 2: if not public, require login
         if not current_user.is_authenticated:
             return abort(403, description="Login required.")
 
-        # Check ownership or sharing
+        # ✅ Step 3: check ownership or private sharing
         owned_secret = Secret.query.filter_by(file=filename, user_id=current_user.id).first()
         shared_secret = SharedSecret.query.join(Secret).filter(
             Secret.file == filename,
@@ -1697,38 +1702,40 @@ def download_file(filename):
         if not owned_secret and not shared_secret:
             return abort(403, description="You don't have permission to access this file.")
 
-        # Download encrypted bytes from GCS
-        bucket = storage_client.bucket(GCS_BUCKET)
-        blob = bucket.blob(filename)
-
-        if not blob.exists():
-            return abort(404, description="File not found.")
-
-        encrypted_bytes = blob.download_as_bytes()
-
-        # Decrypt
-        decrypted_bytes = cipher_suite.decrypt(encrypted_bytes)
-
-        # Determine MIME type from filename
-        ext = filename.split('.')[-1].lower()
-        mimetypes = {
-            'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-            'gif': 'image/gif', 'webp': 'image/webp',
-            'mp4': 'video/mp4', 'mov': 'video/quicktime',
-            'pdf': 'application/pdf', 'mp3': 'audio/mpeg'
-        }
-        mime_type = mimetypes.get(ext, 'application/octet-stream')
-
-        # Stream decrypted file to user
-        return send_file(
-            BytesIO(decrypted_bytes),
-            download_name=filename,
-            mimetype=mime_type
-        )
+        # ✅ Step 4: serve file
+        return _serve_file(filename)
 
     except Exception as e:
         print("Download error:", str(e))
         return abort(500)
+
+
+def _serve_file(filename):
+    """Helper to fetch, decrypt, and stream file from GCS."""
+    bucket = storage_client.bucket(GCS_BUCKET)
+    blob = bucket.blob(filename)
+
+    if not blob.exists():
+        return abort(404, description="File not found.")
+
+    encrypted_bytes = blob.download_as_bytes()
+    decrypted_bytes = cipher_suite.decrypt(encrypted_bytes)
+
+    # Detect MIME
+    ext = filename.split('.')[-1].lower()
+    mimetypes = {
+        'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+        'gif': 'image/gif', 'webp': 'image/webp',
+        'mp4': 'video/mp4', 'mov': 'video/quicktime',
+        'pdf': 'application/pdf', 'mp3': 'audio/mpeg'
+    }
+    mime_type = mimetypes.get(ext, 'application/octet-stream')
+
+    return send_file(
+        BytesIO(decrypted_bytes),
+        download_name=filename,
+        mimetype=mime_type
+    )
 
 @main.route('/terms-of-services')
 def terms():

@@ -6,7 +6,7 @@ from flask_limiter.util import get_remote_address
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret
-from .utils import get_unique_title, cipher_suite, storage_client, GCS_BUCKET, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists
+from .utils import get_unique_title, storage_client, GCS_BUCKET, admin_only, current_user_only, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists, _serve_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -1707,32 +1707,7 @@ def download_file(filename):
         return abort(500)
 
 
-def _serve_file(filename):
-    """Helper to fetch, decrypt, and stream file from GCS."""
-    bucket = storage_client.bucket(GCS_BUCKET)
-    blob = bucket.blob(filename)
 
-    if not blob.exists():
-        return abort(404, description="File not found.")
-
-    encrypted_bytes = blob.download_as_bytes()
-    decrypted_bytes = cipher_suite.decrypt(encrypted_bytes)
-
-    # Detect MIME
-    ext = filename.split('.')[-1].lower()
-    mimetypes = {
-        'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-        'gif': 'image/gif', 'webp': 'image/webp',
-        'mp4': 'video/mp4', 'mov': 'video/quicktime',
-        'pdf': 'application/pdf', 'mp3': 'audio/mpeg'
-    }
-    mime_type = mimetypes.get(ext, 'application/octet-stream')
-
-    return send_file(
-        BytesIO(decrypted_bytes),
-        download_name=filename,
-        mimetype=mime_type
-    )
 
 @main.route('/terms-of-services')
 def terms():

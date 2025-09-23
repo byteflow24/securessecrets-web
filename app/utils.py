@@ -1,4 +1,5 @@
-from flask import abort, request, url_for, session, flash, redirect, jsonify, send_from_directory, current_app
+from io import BytesIO
+from flask import abort, request, url_for, session, send_file, flash, redirect, jsonify, send_from_directory, current_app
 from flask_login import current_user
 from functools import wraps
 from urllib.parse import urlparse, urljoin
@@ -328,6 +329,33 @@ def gcs_file_exists(filename):
     bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
     return blob.exists()
+
+def _serve_file(filename):
+    """Helper to fetch, decrypt, and stream file from GCS."""
+    bucket = storage_client.bucket(GCS_BUCKET)
+    blob = bucket.blob(filename)
+
+    if not blob.exists():
+        return abort(404, description="File not found.")
+
+    encrypted_bytes = blob.download_as_bytes()
+    decrypted_bytes = cipher_suite.decrypt(encrypted_bytes)
+
+    # Detect MIME
+    ext = filename.split('.')[-1].lower()
+    mimetypes = {
+        'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+        'gif': 'image/gif', 'webp': 'image/webp',
+        'mp4': 'video/mp4', 'mov': 'video/quicktime',
+        'pdf': 'application/pdf', 'mp3': 'audio/mpeg'
+    }
+    mime_type = mimetypes.get(ext, 'application/octet-stream')
+
+    return send_file(
+        BytesIO(decrypted_bytes),
+        download_name=filename,
+        mimetype=mime_type
+    )
 
 
 # def as_dict(self):

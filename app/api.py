@@ -1,9 +1,10 @@
 import base64
+from io import BytesIO
 from flask import Blueprint, request, jsonify, current_app, url_for, abort, send_file
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
-from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs
+from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -399,13 +400,11 @@ def public_secrets_api():
         SharedSecret.share_date <= now
     ).order_by(SharedSecret.share_date.desc()).all()
 
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    for ps in public_secrets[:]:
-        if ps.file:
-            file_path = os.path.join(upload_folder, ps.file)
-            if not os.path.exists(file_path):
-                db.session.delete(ps)
-                public_secrets.remove(ps)
+    for public_secret in public_secrets[:]:
+        if public_secret.file:
+            if not gcs_file_exists(public_secret.file):  # <- custom helper to check in GCS
+                db.session.delete(public_secret)
+                public_secrets.remove(public_secret)
 
     db.session.commit()
 
@@ -415,13 +414,17 @@ def public_secrets_api():
             secret_text = decrypt_secret(ps.snapshot_secret) if is_encrypted(ps.snapshot_secret) else ps.snapshot_secret
         else:
             secret_text = ""
+        
+        file_url = None
+        if ps.file and ps.public:
+            file_url = url_for('api.download_file_api', filename=ps.file, _external=True)
 
         decrypted_secrets.append({
             "id": ps.id,
             "title": ps.title,
             "secret": secret_text,
             "display_time": ps.share_date.strftime('%H:%M') if ps.share_date else '',
-            "file": ps.file,
+            "file": file_url,
             "username": ps.username if ps.username else 'Unknown'
         })
 
@@ -453,13 +456,19 @@ def all_secrets_api():
     decrypted_user_secrets = decrypt_secrets(user_secrets)
 
     # Serialize user secrets
-    user_secrets_data = [{
-        'id': s.id,
-        'title': s.title,
-        'secret': s.secret,
-        'date': s.date.isoformat(),
-        'filename': s.file,
-    } for s in decrypted_user_secrets]
+    user_secrets_data = []
+    for s in decrypted_user_secrets:
+        signed_url = None
+        if s.file:
+            signed_url = url_for('main.download_file', filename=s.file, _external=True)
+
+        user_secrets_data.append({
+            'id': s.id,
+            'title': s.title,
+            'secret': s.secret,
+            'date': s.date.isoformat(),
+            'filename': signed_url,  # ✅ new preview/download URL
+        })
 
     # Fetch shared secrets
     shared_secrets = db.session.execute(
@@ -479,6 +488,12 @@ def all_secrets_api():
             status = 'shared' if combined <= datetime.now() else 'pending'
         else:
             status = 'shared' if shared.received else 'pending'
+        
+        signed_url = None
+        if shared.file:
+            signed_url = url_for('main.download_file', filename=shared.file, _external=True)
+        elif shared.secret and shared.secret.file:
+            signed_url = url_for('main.download_file', filename=shared.secret.file, _external=True)
 
         shared_secrets_data.append({
             'id': shared.id,
@@ -486,7 +501,7 @@ def all_secrets_api():
             'email': shared.email,
             'title': shared.title if shared.title else '',
             'secret': shared.snapshot_secret if shared.snapshot_secret else '',
-            'file': shared.file if shared.file else None,
+            'file': signed_url if signed_url else None,
             'date_to_send': shared.date_to_send.isoformat() if shared.date_to_send else None,
             'time_to_send': shared.time_to_send.isoformat() if shared.time_to_send else None,
             "share_date": shared.share_date.isoformat() if shared and shared.share_date else None,
@@ -618,31 +633,34 @@ def upload_file_api():
         if file.filename == '':
             return jsonify(error='No selected file'), 400
 
-        # File size from request
+        # Determine file size
         file_size = request.content_length
         if not file_size:
             return jsonify(error="Could not determine file size"), 400
 
-        # Check quota
+        # Check user's storage quota
         if user.storage_used + file_size > user.plan.storage_limit:
             return jsonify(error='Exceeds storage limit'), 403
 
-        # Unique filename
+        # Generate unique filename
         original_filename = secure_filename(file.filename)
         filename = f"{uuid.uuid4().hex}_{original_filename}"
 
-        # Upload to GCS
+        # Encrypt & upload to GCS
         file.seek(0)
-        public_url = upload_to_gcs(file, filename)
+        encrypted_bytes = file.read()  # If you want encryption, do it here
+        # Example: encrypted_bytes = cipher_suite.encrypt(file.read())
+        upload_to_gcs(BytesIO(encrypted_bytes), filename)
 
-        # Update user's storage usage
+        # Update storage usage
         user.storage_used += file_size
         db.session.commit()
 
+        # Return success with filename (and optionally URL for API clients)
         return jsonify(
             message='File successfully uploaded',
             filename=filename,
-            url=public_url
+            url=get_signed_url(filename)  # Optional: if you want to return signed URL
         ), 200
 
     except Exception as e:
@@ -681,66 +699,75 @@ def update_secret_api(secret_id):
     if not secret:
         return jsonify(success=False, error="Secret not found."), 404
 
-    # Accept both JSON and multipart/form-data (for file upload)
+    # Accept both JSON and multipart/form-data
     form_data = request.form or request.json
     file = request.files.get('file')
 
-    title = form_data.get('title', '').strip()
-    secret_text = form_data.get('secret', '').strip()
+    title = (form_data.get('title') or '').strip()
+    secret_text = (form_data.get('secret') or '').strip()
 
     if not title or not secret_text:
         return jsonify(success=False, error="Title and secret are required."), 400
 
     try:
+        # Encrypt new secret
         encrypted_secret = encrypt_secret(secret_text)
         new_text_size = len(encrypted_secret.encode('utf-8'))
         old_text_size = len(secret.secret.encode('utf-8'))
 
-        upload_folder = current_app.config['UPLOAD_FOLDER']
         new_file_size = 0
         old_file_size = 0
-        file_changed = False
+        filename = secret.file  # default to old file
 
+        # Handle file update (if provided)
         if file:
-            filename = secure_filename(file.filename)
-            if filename != secret.file:
-                file_changed = True
-                new_file_path = os.path.join(upload_folder, filename)
+            original_filename = secure_filename(file.filename)
+            unique_prefix = uuid.uuid4().hex
+            new_filename = f"{unique_prefix}_{original_filename}"
 
-                file_size = file.seek(0, os.SEEK_END)
-                new_file_size = file_size
-                file.seek(0)
+            # Calculate new file size
+            file.seek(0, os.SEEK_END)
+            new_file_size = file.tell()
+            file.seek(0)
 
-                old_file_path = os.path.join(upload_folder, secret.file) if secret.file else None
-                old_file_size = os.path.getsize(old_file_path) if old_file_path and os.path.exists(old_file_path) else 0
+            # Upload new file to GCS
+            upload_to_gcs(file, new_filename)
 
-                new_storage_used = user.storage_used - old_text_size - old_file_size + new_text_size + new_file_size
-                if new_storage_used > user.plan.storage_limit:
-                    return jsonify(success=False, error="Exceeds storage limit."), 403
+            # Delete old file from GCS if exists
+            if secret.file and gcs_file_exists(secret.file):
+                old_blob = storage_client.bucket(GCS_BUCKET).blob(secret.file)
+                old_file_size = old_blob.size or 0
+                old_blob.delete()
 
-                file.save(new_file_path)
+            filename = new_filename
 
-                if old_file_path and os.path.exists(old_file_path):
-                    os.remove(old_file_path)
-
-                secret.file = filename
-        else:
-            old_file_size = os.path.getsize(os.path.join(upload_folder, secret.file)) if secret.file else 0
-
-        total_new_storage = user.storage_used - old_text_size - old_file_size + new_text_size + new_file_size
-        if total_new_storage > user.plan.storage_limit:
+        # Storage limit check
+        new_storage_used = user.storage_used - old_text_size - old_file_size + new_text_size + new_file_size
+        if new_storage_used > user.plan.storage_limit:
             return jsonify(success=False, error="Exceeds storage limit."), 403
 
-        if title != secret.title:
-            secret.title = title
-        if encrypted_secret != secret.secret:
-            secret.secret = encrypted_secret
-
-        user.storage_used = total_new_storage
+        # Update secret fields
+        secret.title = title
+        secret.secret = encrypted_secret
+        secret.file = filename
         secret.date = date.today().strftime("%Y-%m-%d")
+        user.storage_used = new_storage_used
+
+        # Update shared copies
+        shared_entries = SharedSecret.query.filter_by(secret_id=secret.id).all()
+        for shared in shared_entries:
+            shared.title = secret.title
+            shared.snapshot_secret = secret.secret
+            shared.file = secret.file
+
         db.session.commit()
 
         decrypted_secret = decrypt_secret(secret.secret)
+
+        # Detect file preview
+        file_preview = filename.lower().endswith(
+            ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.mov')
+        ) if filename else False
 
         return jsonify(
             success=True,
@@ -750,13 +777,14 @@ def update_secret_api(secret_id):
                 "title": secret.title,
                 "secret": decrypted_secret,
                 "file": secret.file,
-                "date": secret.date.strftime("%Y-%m-%d"),
-                "file_preview": secret.file.endswith(('.png', '.jpg', '.jpeg', '.gif')) if secret.file else False,
+                "date": secret.date,
+                "file_preview": file_preview
             }
         ), 200
 
     except Exception as e:
         db.session.rollback()
+        print("[❌ Update Secret API Error]", e)
         return jsonify(success=False, error=str(e)), 500
     
 # === Deleting secret === 
@@ -1702,38 +1730,36 @@ def api_delete_published_secret(pb_secret_id):
 @jwt_required(optional=True)
 def download_file_api(filename):
     try:
-        # Public file?
-        public_entry = SharedSecret.query.filter_by(file=filename, public=True).first()
-        if public_entry:
-            signed_url = get_signed_url(filename, expires=3600)  # 1 hour
-            return jsonify(url=signed_url)
+        # ✅ Step 1: check if file is public
+        public_secret = SharedSecret.query.filter_by(file=filename, public=True).first()
+        if public_secret:
+            return _serve_file(filename)
 
-        # User from token
+        # ✅ Step 2: require login for private
         user_id = get_jwt_identity()
-        user = db.session.get(User, int(user_id)) if user_id else None
-        if not user:
+        if not user_id:
             return abort(403, description="Login required.")
+        user = db.session.get(User, int(user_id))
+        if not user:
+            return abort(403, description="Invalid user.")
 
-        # Owned file?
-        owned = Secret.query.filter_by(file=filename, user_id=user.id).first()
-        if owned:
-            signed_url = get_signed_url(filename, expires=300)  # 5 min
-            return jsonify(url=signed_url)
-
-        # Shared with user?
-        shared = SharedSecret.query.join(Secret).filter(
+        # ✅ Step 3: check ownership or private sharing
+        owned_secret = Secret.query.filter_by(file=filename, user_id=user.id).first()
+        shared_secret = SharedSecret.query.join(Secret).filter(
             Secret.file == filename,
             SharedSecret.email == user.email
         ).first()
-        if shared:
-            signed_url = get_signed_url(filename, expires=300)
-            return jsonify(url=signed_url)
 
-        return abort(403, description="You don't have permission to access this file.")
+        if not owned_secret and not shared_secret:
+            return abort(403, description="You don't have permission to access this file.")
+
+        # ✅ Step 4: serve file
+        return _serve_file(filename)
 
     except Exception as e:
         print("[API Download Error]", str(e))
         return abort(500)
+
 
 ########################################### CONTACT US API ###########################################
 

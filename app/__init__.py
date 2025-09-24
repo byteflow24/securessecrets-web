@@ -56,38 +56,7 @@ def create_app():
     bootstrap.init_app(app)
     Compress(app)
     jwt.init_app(app)
-
-    # --- ✅ Add Security Headers ---
-    @app.after_request
-    def add_security_headers(response):
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
-                "https://code.jquery.com "
-                "https://cdn.jsdelivr.net "
-                "https://www.googletagmanager.com "
-                "https://www.google-analytics.com "
-                "https://pagead2.googlesyndication.com "
-                "https://use.fontawesome.com; "
-            "style-src 'self' 'unsafe-inline' "
-                "https://cdn.jsdelivr.net "
-                "https://fonts.googleapis.com; "
-            "font-src 'self' https://fonts.gstatic.com https://use.fontawesome.com; "
-            "img-src 'self' data: https://www.google-analytics.com https://pagead2.googlesyndication.com; "
-            "connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com; "
-            "frame-src https://www.googletagmanager.com https://pagead2.googlesyndication.com; "
-            "frame-ancestors 'self'; "
-            "base-uri 'self'; "
-            "form-action 'self'; "
-            "object-src 'none'; "
-            "media-src 'self';"
-        )
-        response.headers["X-Frame-Options"] = "SAMEORIGIN"
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-        return response
+    
 
     # Import blueprints
     with app.app_context():

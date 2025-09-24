@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify, current_app, url_for, abort, send
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
-from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists
+from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -810,15 +810,14 @@ def delete_secret_api(sec_id):
 
         # Handle file deletion if exists
         if secret.file:
-            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], secret.file)
-
             is_shared_publicly = db.session.execute(
                 db.select(SharedSecret).filter_by(file=secret.file)
             ).scalar()
-
-            if os.path.exists(file_path) and not is_shared_publicly:
-                file_size = os.path.getsize(file_path)
-                os.remove(file_path)
+            if not is_shared_publicly:
+                deleted, file_size = delete_from_gcs(
+                    current_app.config["GCS_BUCKET_NAME"], 
+                    secret.file
+                )
 
         # Update user's storage
         total_size = text_size + file_size

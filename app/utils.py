@@ -330,6 +330,25 @@ def gcs_file_exists(filename):
     blob = bucket.blob(filename)
     return blob.exists()
 
+def delete_from_gcs(bucket_name, blob_name):
+    """Deletes a blob (file) from the GCS bucket."""
+    try:
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+
+        # Get file size from metadata
+        blob.reload()  # fetch latest metadata
+        file_size = blob.size or 0  
+
+        # Delete file
+        blob.delete()
+        print(f"Deleted {blob_name} from GCS (size: {file_size} bytes)")
+        return True, file_size
+    except Exception as e:
+        print(f"Error deleting {blob_name} from GCS: {e}")
+        return False, 0
+
 def _serve_file(filename):
     """Helper to fetch, decrypt, and stream file from GCS."""
     bucket = storage_client.bucket(GCS_BUCKET)

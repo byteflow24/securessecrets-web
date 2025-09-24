@@ -333,8 +333,7 @@ def gcs_file_exists(filename):
 def delete_from_gcs(blob_name):
     """Deletes a blob (file) from the GCS bucket."""
     try:
-        client = storage.Client()
-        bucket = client.bucket(GCS_BUCKET)
+        bucket = storage_client.bucket(GCS_BUCKET)
         blob = bucket.blob(blob_name)
 
         # Get file size from metadata

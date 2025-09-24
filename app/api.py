@@ -415,16 +415,16 @@ def public_secrets_api():
         else:
             secret_text = ""
         
-        file_url = None
+        file_is = None
         if ps.file and ps.public:
-            file_url = url_for('api.download_file_api', filename=ps.file, _external=True)
+            file_is = ps.file
 
         decrypted_secrets.append({
             "id": ps.id,
             "title": ps.title,
             "secret": secret_text,
             "display_time": ps.share_date.strftime('%H:%M') if ps.share_date else '',
-            "file": file_url,
+            "file": file_is,
             "username": ps.username if ps.username else 'Unknown'
         })
 

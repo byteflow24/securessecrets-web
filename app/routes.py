@@ -1129,7 +1129,9 @@ def delete_secret(sec_id):
             is_shared_publicly = SharedSecret.query.filter_by(file=secret.file).first()
             if not is_shared_publicly:
                 # ✅ Delete from GCS
-                file_size = delete_from_gcs(secret.file)
+                success, file_size = delete_from_gcs(secret.file)
+                if not success:
+                    file_size = 0
 
         # Update the user's storage used
         total_size = text_size + file_size

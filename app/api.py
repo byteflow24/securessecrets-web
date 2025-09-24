@@ -458,16 +458,16 @@ def all_secrets_api():
     # Serialize user secrets
     user_secrets_data = []
     for s in decrypted_user_secrets:
-        signed_url = None
+        file_is = None
         if s.file:
-            signed_url = url_for('main.download_file', filename=s.file, _external=True)
+            file_is = s.file
 
         user_secrets_data.append({
             'id': s.id,
             'title': s.title,
             'secret': s.secret,
             'date': s.date.isoformat(),
-            'filename': signed_url,  # ✅ new preview/download URL
+            'filename': file_is,  # ✅ new preview/download URL
         })
 
     # Fetch shared secrets
@@ -489,11 +489,11 @@ def all_secrets_api():
         else:
             status = 'shared' if shared.received else 'pending'
         
-        signed_url = None
+        file_is = None
         if shared.file:
-            signed_url = url_for('main.download_file', filename=shared.file, _external=True)
+            file_is = s.file
         elif shared.secret and shared.secret.file:
-            signed_url = url_for('main.download_file', filename=shared.secret.file, _external=True)
+            file_is = s.file
 
         shared_secrets_data.append({
             'id': shared.id,
@@ -501,7 +501,7 @@ def all_secrets_api():
             'email': shared.email,
             'title': shared.title if shared.title else '',
             'secret': shared.snapshot_secret if shared.snapshot_secret else '',
-            'file': signed_url if signed_url else None,
+            'file': file_is if file_is else None,
             'date_to_send': shared.date_to_send.isoformat() if shared.date_to_send else None,
             'time_to_send': shared.time_to_send.isoformat() if shared.time_to_send else None,
             "share_date": shared.share_date.isoformat() if shared and shared.share_date else None,

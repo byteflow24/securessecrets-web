@@ -66,6 +66,7 @@ def create_app():
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
                 "https://code.jquery.com "
                 "https://cdn.jsdelivr.net "
+                "https://cdnjs.cloudflare.com "
                 "https://www.googletagmanager.com "
                 "https://www.google-analytics.com "
                 "https://pagead2.googlesyndication.com "

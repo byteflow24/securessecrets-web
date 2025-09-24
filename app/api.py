@@ -814,10 +814,7 @@ def delete_secret_api(sec_id):
                 db.select(SharedSecret).filter_by(file=secret.file)
             ).scalar()
             if not is_shared_publicly:
-                deleted, file_size = delete_from_gcs(
-                    current_app.config["GCS_BUCKET_NAME"], 
-                    secret.file
-                )
+                file_size = delete_from_gcs(secret.file)
 
         # Update user's storage
         total_size = text_size + file_size

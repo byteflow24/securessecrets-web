@@ -1129,10 +1129,7 @@ def delete_secret(sec_id):
             is_shared_publicly = SharedSecret.query.filter_by(file=secret.file).first()
             if not is_shared_publicly:
                 # ✅ Delete from GCS
-                deleted, file_size = delete_from_gcs(
-                    current_app.config["GCS_BUCKET_NAME"], 
-                    secret.file
-                )
+                file_size = delete_from_gcs(secret.file)
 
         # Update the user's storage used
         total_size = text_size + file_size
@@ -1218,11 +1215,8 @@ def verify_delete_account(token):
                 is_shared_publicly = SharedSecret.query.filter_by(file=secret.file).first()
                 if not is_shared_publicly:
                     # Delete file from GCS
-                    delete_from_gcs(
-                        current_app.config["GCS_BUCKET_NAME"],
-                        secret.file
-                    )
-                    
+                    delete_from_gcs(secret.file)
+
         # Delete account
         db.session.delete(user)
         db.session.commit()

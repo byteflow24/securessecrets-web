@@ -1725,6 +1725,15 @@ def terms():
     secret_form = SecretForm()
     return render_template('terms.html', secret_form=secret_form, show_header=True, show_footer=True)
 
+@main.route('/terms-of-use')
+def terms_use():
+
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+    
+    secret_form = SecretForm()
+    return render_template('terms_use.html', secret_form=secret_form, show_header=True, show_footer=True)
+
 @main.route('/about-us')
 def about():
 

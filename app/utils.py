@@ -1880,34 +1880,31 @@ def generate_apple_jwt():
         print(f"Error generating JWT: {e}")
         raise
 
-def verify_transaction(transaction_id, token, use_sandbox=True):  # Default to sandbox
-    base_url = APPLE_SANDBOX_BASE if use_sandbox else APPLE_API_BASE
-    url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
+def verify_transaction(transaction_id, token):
+    base_urls = [APPLE_API_BASE, APPLE_SANDBOX_BASE]  # production first
+    # payload = {"transactionId": transaction_id}
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json"
-    }
+    for base_url in base_urls:
+        url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
-    try:
-        resp = requests.get(url, headers=headers, timeout=10)
-    except requests.RequestException as e:
-        return {"error": "Request failed", "details": str(e)}, 500, str(e)
+        try:
+            resp = requests.get(url, headers=headers, timeout=10)
+            data = resp.json()
+        except requests.RequestException as e:
+            return {"error": "Request failed", "details": str(e)}, 500, str(e)
+        except ValueError:
+            data = {"error": "Invalid JSON", "raw": resp.text}
 
-    try:
-        apple_data = resp.json()
-    except ValueError as e:
-        apple_data = {"error": "Invalid JSON", "details": str(e), "raw": resp.text}
+        # Apple returns 21007 in the JSON if it's sandbox receipt sent to production
+        if data.get("status") == 21007 and base_url == APPLE_API_BASE:
+            print("➡️ Sandbox receipt detected, retrying in sandbox...")
+            continue
 
-    # Retry with sandbox if 404 in production
-    if resp.status_code == 404 and not use_sandbox:
-        return verify_transaction(transaction_id, token, use_sandbox=True)
+        return data, resp.status_code, None
 
-    # Handle 401 specifically
-    if resp.status_code == 401:
-        return apple_data, resp.status_code, "Authentication error"
+    return {"error": "Could not verify receipt"}, 400, "Failed both prod and sandbox"
 
-    return apple_data, resp.status_code, None
 
 
 def parse_apple_transaction(apple_data):

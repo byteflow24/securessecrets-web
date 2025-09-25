@@ -71,6 +71,7 @@ def create_app():
                 "https://www.google-analytics.com "
                 "https://pagead2.googlesyndication.com "
                 "https://use.fontawesome.com; "
+                "https://ep2.adtrafficquality.google; "
             "style-src 'self' 'unsafe-inline' "
                 "https://cdn.jsdelivr.net "
                 "https://fonts.googleapis.com; "

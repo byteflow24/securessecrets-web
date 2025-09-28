@@ -1881,29 +1881,49 @@ def generate_apple_jwt():
         raise
 
 def verify_transaction(transaction_id, token):
-    base_urls = [APPLE_API_BASE, APPLE_SANDBOX_BASE]  # production first
-    # payload = {"transactionId": transaction_id}
+    """
+    Verify Apple transaction by ID.
+    Tries production first, falls back to sandbox if necessary.
+    """
+    urls = [
+        APPLE_API_BASE,      # production
+        APPLE_SANDBOX_BASE,  # sandbox
+    ]
 
-    for base_url in base_urls:
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
+
+    for base_url in urls:
         url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
-        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-
         try:
             resp = requests.get(url, headers=headers, timeout=10)
-            data = resp.json()
+
+            # Retry sandbox if production gives 404
+            if resp.status_code == 404 and base_url == APPLE_API_BASE:
+                print("➡️ Prod 404, retrying in Sandbox...")
+                continue
+
+            try:
+                data = resp.json()
+            except ValueError:
+                print(f"⚠️ Invalid JSON from {base_url}, body: {resp.text}")
+                data = None
+
+            if resp.status_code == 200 and data and data.get("signedTransactionInfo"):
+                return data, 200, None
+
+            # Fallback to error
+            return data or {"error": "Apple API error"}, resp.status_code, "Apple API error"
+
         except requests.RequestException as e:
+            print(f"❌ Request error {base_url}: {e}")
+            if base_url == APPLE_API_BASE:
+                continue  # try sandbox
             return {"error": "Request failed", "details": str(e)}, 500, str(e)
-        except ValueError:
-            data = {"error": "Invalid JSON", "raw": resp.text}
 
-        # Apple returns 21007 in the JSON if it's sandbox receipt sent to production
-        if data.get("status") == 21007 and base_url == APPLE_API_BASE:
-            print("➡️ Sandbox receipt detected, retrying in sandbox...")
-            continue
-
-        return data, resp.status_code, None
-
-    return {"error": "Could not verify receipt"}, 400, "Failed both prod and sandbox"
+    return {"error": "Apple transaction verification failed"}, 500, "Verification failed"
 
 
 

@@ -1881,50 +1881,39 @@ def generate_apple_jwt():
         raise
 
 def verify_transaction(transaction_id, token):
-    """
-    Verify Apple transaction by ID.
-    Tries production first, falls back to sandbox if necessary.
-    """
-    urls = [
-        APPLE_API_BASE,      # production
-        APPLE_SANDBOX_BASE,  # sandbox
-    ]
-
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json",
-    }
+    urls = [APPLE_API_BASE, APPLE_SANDBOX_BASE]
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
     for base_url in urls:
         url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
         try:
             resp = requests.get(url, headers=headers, timeout=10)
-
-            # Retry sandbox if production gives 404
-            if resp.status_code == 404 and base_url == APPLE_API_BASE:
-                print("➡️ Prod 404, retrying in Sandbox...")
-                continue
-
             try:
                 data = resp.json()
             except ValueError:
                 print(f"⚠️ Invalid JSON from {base_url}, body: {resp.text}")
                 data = None
 
+            # ✅ Log the raw response always
+            print(f"📦 Apple response from {base_url}: {resp.status_code} {resp.text}")
+
+            # Retry sandbox if production gives 404
+            if resp.status_code == 404 and base_url == APPLE_API_BASE:
+                print("➡️ Prod 404, retrying in Sandbox...")
+                continue
+
             if resp.status_code == 200 and data and data.get("signedTransactionInfo"):
                 return data, 200, None
 
-            # Fallback to error
             return data or {"error": "Apple API error"}, resp.status_code, "Apple API error"
 
         except requests.RequestException as e:
             print(f"❌ Request error {base_url}: {e}")
             if base_url == APPLE_API_BASE:
-                continue  # try sandbox
+                continue
             return {"error": "Request failed", "details": str(e)}, 500, str(e)
 
     return {"error": "Apple transaction verification failed"}, 500, "Verification failed"
-
 
 
 def parse_apple_transaction(apple_data):

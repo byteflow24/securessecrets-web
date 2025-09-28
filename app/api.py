@@ -1346,7 +1346,7 @@ def change_plan_apple():
 
     transaction_id = data["transaction_id"]
 
-    # ✅ Optional: Verify transaction with Apple API to ensure request is legit
+    # 🔑 Verify with Apple API
     token = generate_apple_jwt()
     apple_data, status_code, error = verify_transaction(transaction_id, token)
 
@@ -1362,11 +1362,30 @@ def change_plan_apple():
     if not plan:
         return jsonify(success=False, error="Apple product does not match any plan."), 400
 
-    # ⚠️ Do NOT update user subscription directly here.
-    # Apple will send the notification (SUBSCRIBED, DID_CHANGE_RENEWAL_PREF, etc.)
-    # which will be handled in /apple-notifications.
+    # ✅ Check if change is immediate or deferred
+    renewal_info = transaction_info.get("pendingRenewalInfo", {})
+    new_product_id = renewal_info.get("auto_renew_product_id")
+    will_renew = renewal_info.get("auto_renew_status") == "1"
+    expires_date = transaction_info.get("expiresDate")
 
-    return jsonify(success=True, message="Plan change requested. Subscription will update once Apple confirms."), 200
+    if new_product_id and new_product_id != product_id:
+        # Downgrade case: queued for next renewal
+        return jsonify(
+            success=True,
+            message="Your plan will change to {} on {}".format(
+                new_product_id, expires_date
+            ),
+            immediate=False,
+            effectiveDate=expires_date
+        ), 200
+    else:
+        # Upgrade case: immediate
+        return jsonify(
+            success=True,
+            message="Plan changed immediately to {}".format(plan.name),
+            immediate=True
+        ), 200
+
 
 # ====== APPLE NOTIFICATIONS API ======
 @api.route('/apple-notifications', methods=['POST'])

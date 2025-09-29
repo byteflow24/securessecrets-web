@@ -1382,12 +1382,18 @@ def change_plan_apple():
     # Normal upgrade / immediate change
     if expires_date:
         try:
-            exp_dt = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
+            if isinstance(expires_date, datetime):
+                exp_dt = expires_date  # already a datetime
+            else:
+                # Apple sometimes gives ms-since-epoch
+                exp_dt = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
+
             if exp_dt < datetime.now(timezone.utc):
                 return jsonify(
                     success=False,
                     error="This subscription has expired. Please resubscribe in the app."
                 ), 400
+
         except Exception as e:
             print(f"⚠️ Could not parse expiresDate: {expires_date}, {e}")
     if plan:

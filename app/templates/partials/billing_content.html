@@ -20,46 +20,54 @@
 
             <!-- Current Plan Section -->
             <div class="row mb-4">
-                <div class="col-md-6 mx-auto">
-                    <div class="card shadow-sm current-plan-card">
-                        <div class="card-header text-white bg-primary text-center py-2">
-                            <h6 class="mb-0 fw-bold">Current Plan</h6>
-                        </div>
-                        <div class="card-body text-center p-3">
-                            <h5 class="fw-bold mb-2">{{ user.plan.plan }} ({{ user.plan.billing_cycle|capitalize }})</h5>
-                            <p class="mb-0">Status: 
-                                <span class="badge {% if user.subscription_status == 'ACTIVE' %}bg-success{% else %}bg-danger{% endif %} text-white">
-                                    {{ user.subscription_status }}
-                                </span>
-                            </p>
-                        </div>
-                        <!-- Pay Now Section -->
-                        {% if user.subscription_status != 'ACTIVE' %}
-                        <div class="col-md-12">
-                            <div class="text-center mb-4">
-                                {% if current_user.payment_source == "PayPal" %}
-                                    <p class="text-danger">Your bill has not paid yet. 
-                                        <a href="{{ url_for('main.payment') }}" class="link link-secondary small">Pay Now</a>
-                                    </p>
-                                {% elif current_user.payment_source == "Google Pay" %}
-                                    <p class="text-danger">Your bill has not paid yet. 
-                                        <a href="{{ url_for('main.payment') }}" class="link link-secondary small" disabled>Manage the payment from the App</a>
-                                    </p>
-                                {% elif current_user.payment_source == "Apple Pay" %}
-                                    <p class="text-danger">Your bill has not paid yet. 
-                                        <a href="{{ url_for('main.payment') }}" class="link link-secondary small" disabled>Manage the payment from the App</a>
-                                    </p>
-                                {% else %}
-                                    <p class="text-danger">Your bill has not paid yet. 
-                                        <a href="{{ url_for('main.payment') }}" class="link link-secondary small" disabled>Manage the payment from the App</a>
-                                    </p>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% endif %}
-                    </div>
+            <div class="col-md-6 mx-auto">
+                <div class="card shadow-sm current-plan-card">
+                <div class="card-header text-white bg-primary text-center py-2">
+                    <h6 class="mb-0 fw-bold">Current Plan</h6>
+                </div>
+                <div class="card-body text-center p-3">
+                    <h5 class="fw-bold mb-2">
+                    {{ user.plan.plan }} ({{ user.plan.billing_cycle|capitalize }})
+                    </h5>
+                    <p class="mb-0">
+                    Status:
+                    <span
+                        class="badge {% if user.subscription_status == 'ACTIVE' %}bg-success{% else %}bg-danger{% endif %} text-white"
+                    >
+                        {{ user.subscription_status }}
+                    </span>
+                    </p>
+                </div>
+
+                <!-- Pay Now Section -->
+                {% if user.subscription_status|trim|lower != 'active' %}
+                <div class="card-footer text-center py-3">
+                    {% if current_user.payment_source == "PayPal" %}
+                    <p class="text-danger mb-0">
+                        Your bill has not been paid yet.
+                        <a href="{{ url_for('main.payment') }}" class="small fw-semibold link-primary">Pay Now</a>
+                    </p>
+                    {% elif current_user.payment_source in ["Google Pay", "Apple Pay"] %}
+                    <p class="text-danger mb-0">
+                        Your bill has not been paid yet.
+                        <a href="#" class="small fw-semibold link-secondary disabled" aria-disabled="true">
+                        Manage the payment from the App
+                        </a>
+                    </p>
+                    {% else %}
+                    <p class="text-danger mb-0">
+                        Your bill has not been paid yet.
+                        <a href="#" class="small fw-semibold link-secondary disabled" aria-disabled="true">
+                        Manage the payment from the App
+                        </a>
+                    </p>
+                    {% endif %}
+                </div>
+                {% endif %}
                 </div>
             </div>
+            </div>
+
 
             <!-- Plan Selection Section -->
             <div class="row mb-4">

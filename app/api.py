@@ -1380,6 +1380,16 @@ def change_plan_apple():
         ), 200
 
     # Normal upgrade / immediate change
+    if expires_date:
+        try:
+            exp_dt = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
+            if exp_dt < datetime.now(timezone.utc):
+                return jsonify(
+                    success=False,
+                    error="This subscription has expired. Please resubscribe in the app."
+                ), 400
+        except Exception as e:
+            print(f"⚠️ Could not parse expiresDate: {expires_date}, {e}")
     if plan:
         return jsonify(
             success=True,
@@ -1467,10 +1477,10 @@ def test_apple_notifications():
 
         # Map Apple events → subscription status
         status_map = {
-            "SUBSCRIBED": "active",
-            "DID_RENEW": "active",
+            "SUBSCRIBED": "ACTIVE",
+            "DID_RENEW": "ACTIVE",
             "DID_CHANGE_RENEWAL_STATUS": "canceled",  # user turned off auto-renew
-            "DID_CHANGE_RENEWAL_PREF": "active ",
+            "DID_CHANGE_RENEWAL_PREF": "ACTIVE ",
             "EXPIRED": "expired",
             "REFUND": "refunded",
             "REVOKE": "revoked",

@@ -34,7 +34,7 @@
                             </p>
                         </div>
                         <!-- Pay Now Section -->
-                        {% if user.subscription_status != 'active' %}
+                        {% if user.subscription_status != 'ACTIVE' %}
                         <div class="col-md-12">
                             <div class="text-center mb-4">
                                 {% if current_user.payment_source == "PayPal" %}

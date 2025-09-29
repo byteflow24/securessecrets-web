@@ -70,7 +70,7 @@ def api_payment_info():
     return jsonify({
         "client_id": client_id,
         "paypal_plan_id": paypal_plan_id,
-        "plan_name": user.plan.name,
+        "plan_name": user.plan.plan,
         "price": user.plan.price
     }), 200
 
@@ -1230,13 +1230,13 @@ def billing_api():
         'status': payment.status,
         'payment_date': payment.payment_date.strftime('%Y-%m-%d %H:%M:%S'),
         'transaction_id': payment.transaction_id,
-        'plan_name': payment.plan.name if payment.plan else None
+        'plan_name': payment.plan.plan if payment.plan else None
     } for payment in history_payment]
 
     # Serialize plan details
     plans_data = [{
         'id': plan.id,
-        'name': plan.name,
+        'name': plan.plan,
         'price': plan.price,
         'storage_limit': plan.storage_limit,
         'features': plan.features
@@ -1248,7 +1248,7 @@ def billing_api():
         'subscription_status': user.subscription_status,
         'next_billing_date': user.next_billing_date.strftime('%Y-%m-%d') if user.next_billing_date else None,
         'plan_id': user.plan_id,
-        'plan_name': user.plan.name if user.plan else None
+        'plan_name': user.plan.plan if user.plan else None
     }
 
     return jsonify(success=True, billing_info=billing_info, payment_history=payment_data, available_plans=plans_data), 200
@@ -1383,7 +1383,7 @@ def change_plan_apple():
     if plan:
         return jsonify(
             success=True,
-            message=f"Plan changed immediately to {plan.name}",
+            message=f"Plan changed immediately to {plan.plan}",
             immediate=True
         ), 200
 

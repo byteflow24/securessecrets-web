@@ -1406,6 +1406,7 @@ def change_plan_apple():
 
         # Check if subscription expired
         if current_expiry and current_expiry < datetime.now(timezone.utc):
+            print(f"current_expiry: {current_expiry} date_now: {datetime.now(timezone.utc)}")
             return jsonify(
                 success=False,
                 error="This subscription has expired. Please resubscribe in the app."

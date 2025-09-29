@@ -1438,10 +1438,10 @@ def apple_notifications():
 
         # Map Apple events → subscription status
         status_map = {
-            "SUBSCRIBED": "active",
-            "DID_RENEW": "active",
+            "SUBSCRIBED": "ACTIVE",
+            "DID_RENEW": "ACTIVE",
             "DID_CHANGE_RENEWAL_STATUS": "canceled",  # user turned off auto-renew
-            "DID_CHANGE_RENEWAL_PREF": "active ",
+            "DID_CHANGE_RENEWAL_PREF": "ACTIVE ",
             "EXPIRED": "expired",
             "REFUND": "refunded",
             "REVOKE": "revoked",

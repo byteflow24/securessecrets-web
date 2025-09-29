@@ -32,7 +32,7 @@
                     <p class="mb-0">
                     Status:
                     <span
-                        class="badge {% if user.subscription_status == 'ACTIVE' %}bg-success{% else %}bg-danger{% endif %} text-white"
+                        class="badge {% if user.subscription_status|trim|lower == 'active' %}bg-success{% else %}bg-danger{% endif %} text-white"
                     >
                         {{ user.subscription_status }}
                     </span>

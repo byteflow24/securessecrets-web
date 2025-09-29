@@ -29,17 +29,31 @@
                             <h5 class="fw-bold mb-2">{{ user.plan.plan }} ({{ user.plan.billing_cycle|capitalize }})</h5>
                             <p class="mb-0">Status: 
                                 <span class="badge {% if user.subscription_status == 'ACTIVE' %}bg-success{% else %}bg-danger{% endif %} text-white">
-                                    {{ user.subscription_status|capitalize }}
+                                    {{ user.subscription_status }}
                                 </span>
                             </p>
                         </div>
                         <!-- Pay Now Section -->
-                        {% if user.subscription_status != 'ACTIVE' %}
+                        {% if user.subscription_status != 'active' %}
                         <div class="col-md-12">
                             <div class="text-center mb-4">
-                                <p class="text-danger">Your bill has not paid yet. 
-                                    <a href="{{ url_for('main.payment') }}" class="link link-secondary small">Pay Now</a>
-                                </p>
+                                {% if current_user.payment_source == "PayPal" %}
+                                    <p class="text-danger">Your bill has not paid yet. 
+                                        <a href="{{ url_for('main.payment') }}" class="link link-secondary small">Pay Now</a>
+                                    </p>
+                                {% elif current_user.payment_source == "Google Pay" %}
+                                    <p class="text-danger">Your bill has not paid yet. 
+                                        <a href="{{ url_for('main.payment') }}" class="link link-secondary small" disabled>Manage the payment from the App</a>
+                                    </p>
+                                {% elif current_user.payment_source == "Apple Pay" %}
+                                    <p class="text-danger">Your bill has not paid yet. 
+                                        <a href="{{ url_for('main.payment') }}" class="link link-secondary small" disabled>Manage the payment from the App</a>
+                                    </p>
+                                {% else %}
+                                    <p class="text-danger">Your bill has not paid yet. 
+                                        <a href="{{ url_for('main.payment') }}" class="link link-secondary small" disabled>Manage the payment from the App</a>
+                                    </p>
+                                {% endif %}
                             </div>
                         </div>
                         {% endif %}

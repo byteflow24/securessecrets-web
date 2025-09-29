@@ -1888,21 +1888,24 @@ def verify_transaction(transaction_id, token):
         url = f"{base_url}/inApps/v1/transactions/{transaction_id}"
         try:
             resp = requests.get(url, headers=headers, timeout=10)
+            if resp.status_code == 404 and base_url == APPLE_API_BASE:
+                print("➡️ Prod says 404, retrying Sandbox…")
+                continue
+
+            # Sometimes prod returns empty body
+            if not resp.text.strip():
+                print(f"⚠️ Empty response from {base_url}, retrying if Sandbox left…")
+                continue
+
             try:
                 data = resp.json()
             except ValueError:
-                print(f"⚠️ Invalid JSON from {base_url}, body: {resp.json()}")
+                print(f"⚠️ Invalid JSON from {base_url}, body: {resp.text}")
                 data = None
 
-            # ✅ Log the raw response always
             print(f"📦 Apple response from {base_url}: {resp.status_code} {resp.text}")
 
-            # Retry sandbox if production gives 404
-            if resp.status_code == 404 and base_url == APPLE_API_BASE:
-                print("➡️ Prod 404, retrying in Sandbox...")
-                continue
-
-            if resp.status_code == 200 and data and data.get("signedTransactionInfo"):
+            if resp.status_code == 200 and data:
                 return data, 200, None
 
             return data or {"error": "Apple API error"}, resp.status_code, "Apple API error"
@@ -1914,6 +1917,7 @@ def verify_transaction(transaction_id, token):
             return {"error": "Request failed", "details": str(e)}, 500, str(e)
 
     return {"error": "Apple transaction verification failed"}, 500, "Verification failed"
+
 
 
 def parse_apple_transaction(apple_data):

@@ -1391,12 +1391,18 @@ def change_plan_apple():
     if plan:
         # Get current expiry from DB first
         current_expiry = user.next_billing_date
-        if not current_expiry and expires_date:
+        if current_expiry:
+            # Make it UTC-aware if naive
+            if current_expiry.tzinfo is None:
+                current_expiry = current_expiry.replace(tzinfo=timezone.utc)
+        elif expires_date:
             # fallback to Apple transaction
             if not isinstance(expires_date, datetime):
                 current_expiry = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
             else:
                 current_expiry = expires_date
+                if current_expiry.tzinfo is None:
+                    current_expiry = current_expiry.replace(tzinfo=timezone.utc)
 
         # Check if subscription expired
         if current_expiry and current_expiry < datetime.now(timezone.utc):
@@ -1416,6 +1422,7 @@ def change_plan_apple():
             nextBillingUTC=next_billing_utc,
             nextBillingLocal=next_billing_local
         ), 200
+
 
     # Fallback if plan not found
     return jsonify(

@@ -1367,10 +1367,17 @@ def change_plan_apple():
     new_product_id = renewal_info.get("auto_renew_product_id")
     expires_date = transaction_info.get("expiresDate")
 
+    # Handle queued downgrade/change
     if new_product_id and new_product_id != product_id:
-        # Only send UTC and local for display
-        expires_utc = expires_date if isinstance(expires_date, str) else expires_date.isoformat()
-        expires_local = convert_utc_to_local(expires_date, user.time_zone) if expires_date else None
+        expires_utc = None
+        expires_local = None
+        if expires_date:
+            if not isinstance(expires_date, datetime):
+                expires_utc = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc).isoformat()
+                expires_local = convert_utc_to_local(datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc), user.time_zone)
+            else:
+                expires_utc = expires_date.isoformat()
+                expires_local = convert_utc_to_local(expires_date, user.time_zone)
 
         return jsonify(
             success=True,
@@ -1381,26 +1388,26 @@ def change_plan_apple():
         ), 200
 
     # Normal upgrade / immediate change
-    if expires_date:
-        try:
-            if not isinstance(expires_date, datetime):
-                exp_dt = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
-            else:
-                exp_dt = expires_date
-
-            if exp_dt < datetime.now(timezone.utc):
-                return jsonify(
-                    success=False,
-                    error="This subscription has expired. Please resubscribe in the app."
-                ), 400
-
-        except Exception as e:
-            print(f"⚠️ Could not parse expiresDate: {expires_date}, {e}")
-
     if plan:
-        # Send both UTC and local to frontend
-        next_billing_utc = expires_date.isoformat() if isinstance(expires_date, datetime) else None
-        next_billing_local = convert_utc_to_local(expires_date, user.time_zone) if expires_date else None
+        # Get current expiry from DB first
+        current_expiry = user.next_billing_date
+        if not current_expiry and expires_date:
+            # fallback to Apple transaction
+            if not isinstance(expires_date, datetime):
+                current_expiry = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
+            else:
+                current_expiry = expires_date
+
+        # Check if subscription expired
+        if current_expiry and current_expiry < datetime.now(timezone.utc):
+            return jsonify(
+                success=False,
+                error="This subscription has expired. Please resubscribe in the app."
+            ), 400
+
+        # Send both UTC and local for frontend
+        next_billing_utc = current_expiry.isoformat() if current_expiry else None
+        next_billing_local = convert_utc_to_local(current_expiry, user.time_zone) if current_expiry else None
 
         return jsonify(
             success=True,
@@ -1410,7 +1417,7 @@ def change_plan_apple():
             nextBillingLocal=next_billing_local
         ), 200
 
-    # Fallback
+    # Fallback if plan not found
     return jsonify(
         success=True,
         message="Plan change registered. Apple will confirm it shortly.",

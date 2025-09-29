@@ -1890,6 +1890,7 @@ def verify_transaction(transaction_id, token):
             resp = requests.get(url, headers=headers, timeout=10)
             try:
                 data = resp.json()
+                print(data)
             except ValueError:
                 print(f"⚠️ Invalid JSON from {base_url}, body: {resp.text}")
                 data = None

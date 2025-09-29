@@ -1347,15 +1347,12 @@ def change_plan_apple():
     token = generate_apple_jwt()
     apple_data, status_code, error = verify_transaction(transaction_id, token)
 
-    # Always log raw response
     print(f"🍏 Apple verification raw data: {apple_data}")
 
     if status_code != 200:
         return jsonify(success=False, error="Apple API error", details=apple_data or error), status_code
 
     transaction_info = parse_apple_transaction(apple_data)
-
-    # If we cannot parse, it might be a queued downgrade; just return queued
     if not transaction_info:
         return jsonify(
             success=True,
@@ -1366,27 +1363,30 @@ def change_plan_apple():
     product_id = transaction_info.get("productId")
     plan = Plan.query.filter_by(app_product_id=product_id).first()
 
-    # Downgrade queued: no plan mapping required
     renewal_info = transaction_info.get("pendingRenewalInfo", {})
     new_product_id = renewal_info.get("auto_renew_product_id")
     expires_date = transaction_info.get("expiresDate")
 
     if new_product_id and new_product_id != product_id:
+        # Only send UTC and local for display
+        expires_utc = expires_date if isinstance(expires_date, str) else expires_date.isoformat()
+        expires_local = convert_utc_to_local(expires_date, user.time_zone) if expires_date else None
+
         return jsonify(
             success=True,
-            message=f"Your plan will change to {new_product_id} on {expires_date}",
+            message=f"Your plan will change to {new_product_id} on {expires_local}",
             immediate=False,
-            effectiveDate=expires_date
+            effectiveDateUTC=expires_utc,
+            effectiveDateLocal=expires_local
         ), 200
 
     # Normal upgrade / immediate change
     if expires_date:
         try:
-            if isinstance(expires_date, datetime):
-                exp_dt = expires_date  # already a datetime
-            else:
-                # Apple sometimes gives ms-since-epoch
+            if not isinstance(expires_date, datetime):
                 exp_dt = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
+            else:
+                exp_dt = expires_date
 
             if exp_dt < datetime.now(timezone.utc):
                 return jsonify(
@@ -1396,20 +1396,26 @@ def change_plan_apple():
 
         except Exception as e:
             print(f"⚠️ Could not parse expiresDate: {expires_date}, {e}")
+
     if plan:
+        # Send both UTC and local to frontend
+        next_billing_utc = expires_date.isoformat() if isinstance(expires_date, datetime) else None
+        next_billing_local = convert_utc_to_local(expires_date, user.time_zone) if expires_date else None
+
         return jsonify(
             success=True,
             message=f"Plan changed immediately to {plan.plan}",
-            immediate=True
+            immediate=True,
+            nextBillingUTC=next_billing_utc,
+            nextBillingLocal=next_billing_local
         ), 200
 
-    # Fallback if plan not found
+    # Fallback
     return jsonify(
         success=True,
         message="Plan change registered. Apple will confirm it shortly.",
         immediate=False
     ), 200
-
 
 
 # ====== APPLE NOTIFICATIONS API ======

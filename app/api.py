@@ -1503,40 +1503,45 @@ def test_apple_notifications():
         expires_date = tx_info.get("expiresDate")
         product_id = tx_info.get("productId")
 
-        # ✅ Handle DID_CHANGE_RENEWAL_PREF explicitly
+        status = "UNKNOWN"
+
+        # ---- Special case: user changed plan (new product id) ----
         if notification_type == "DID_CHANGE_RENEWAL_PREF":
             renewal_jwt = data_obj.get("signedRenewalInfo")
             renewal_info = decode_jwt(renewal_jwt) if renewal_jwt else {}
             print("🔄 Renewal Info:", renewal_info)
 
-            # Apple tells you the *new* productId here
             new_product_id = renewal_info.get("autoRenewProductId")
             auto_renew_status = renewal_info.get("autoRenewStatus")  # "1"=on, "0"=off
 
             if new_product_id:
-                print(f"⬆️ User changed plan preference → {new_product_id}")
-                # If auto-renew is still ON, treat as active
+                status = "ACTIVE" if auto_renew_status == "1" else "CANCELED"
+                print(f"⬆️ User changed plan preference → {new_product_id}, status={status}")
                 update_user_subscription(
                     original_transaction_id,
                     new_product_id,
-                    "ACTIVE" if auto_renew_status == "1" else "CANCELED",
+                    status,
                     expires_date,
                     tx_info
                 )
                 return jsonify({"success": True}), 200
 
-        # ✅ Map other Apple events → status
-        status_map = {
-            "SUBSCRIBED": "ACTIVE",
-            "DID_RENEW": "ACTIVE",
-            "DID_CHANGE_RENEWAL_STATUS": "CANCELED",  # user turned off auto-renew
-            "DID_CHANGE_RENEWAL_PREF": "ACTIVE ",
-            "EXPIRED": "EXPIRED",
-            "REFUND": "REFUNDED",
-            "REVOKE": "REVOKED",
-        }
+        # ---- Handle other events ----
+        if notification_type in ["SUBSCRIBED", "DID_RENEW"]:
+            status = "ACTIVE"
+        elif notification_type == "EXPIRED":
+            status = "EXPIRED"
+        elif notification_type == "REFUND":
+            status = "REFUNDED"
+        elif notification_type == "REVOKE":
+            status = "REVOKED"
+        elif notification_type == "DID_CHANGE_RENEWAL_STATUS":
+            if subtype == "AUTO_RENEW_DISABLED":
+                status = "CANCELED"
+            elif subtype == "AUTO_RENEW_ENABLED":
+                status = "ACTIVE"
 
-        status = status_map.get(notification_type, "UNKNOWN").upper()
+        # Update DB
         update_user_subscription(original_transaction_id, product_id, status, expires_date, tx_info)
 
         return jsonify({"success": True}), 200

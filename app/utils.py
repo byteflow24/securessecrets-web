@@ -2013,7 +2013,7 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
                 # --- Case 2: Trial converts to Paid (Renewal with price > 0) ---
                 elif transaction_reason == "RENEWAL" and price and price > 0:
                     # Keep trial_end_date as history, just mark as active paid
-                    user.subscription_status = "active"
+                    user.subscription_status = "ACTIVE"
                     print(f"💳 Trial converted to paid subscription for {user.email}")
 
                 # --- Case 3: Expired trial or subscription ---

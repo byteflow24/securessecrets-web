@@ -1494,7 +1494,7 @@ def test_apple_notifications():
         subtype = decoded.get("subtype")
         data_obj = decoded.get("data", {})
 
-        # Decode transaction info
+        # Decode transaction info (always useful)
         signed_tx = data_obj.get("signedTransactionInfo")
         tx_info = decode_jwt(signed_tx) if signed_tx else {}
         print("🧾 Transaction Info:", tx_info)
@@ -1503,26 +1503,48 @@ def test_apple_notifications():
         expires_date = tx_info.get("expiresDate")
         product_id = tx_info.get("productId")
 
-        # Map Apple events → subscription status
+        # ✅ Handle DID_CHANGE_RENEWAL_PREF explicitly
+        if notification_type == "DID_CHANGE_RENEWAL_PREF":
+            renewal_jwt = data_obj.get("signedRenewalInfo")
+            renewal_info = decode_jwt(renewal_jwt) if renewal_jwt else {}
+            print("🔄 Renewal Info:", renewal_info)
+
+            # Apple tells you the *new* productId here
+            new_product_id = renewal_info.get("autoRenewProductId")
+            auto_renew_status = renewal_info.get("autoRenewStatus")  # "1"=on, "0"=off
+
+            if new_product_id:
+                print(f"⬆️ User changed plan preference → {new_product_id}")
+                # If auto-renew is still ON, treat as active
+                update_user_subscription(
+                    original_transaction_id,
+                    new_product_id,
+                    "ACTIVE" if auto_renew_status == "1" else "CANCELED",
+                    expires_date,
+                    tx_info
+                )
+                return jsonify({"success": True}), 200
+
+        # ✅ Map other Apple events → status
         status_map = {
             "SUBSCRIBED": "ACTIVE",
             "DID_RENEW": "ACTIVE",
-            "DID_CHANGE_RENEWAL_STATUS": "canceled",  # user turned off auto-renew
+            "DID_CHANGE_RENEWAL_STATUS": "CANCELED",  # user turned off auto-renew
             "DID_CHANGE_RENEWAL_PREF": "ACTIVE ",
-            "EXPIRED": "expired",
-            "REFUND": "refunded",
-            "REVOKE": "revoked",
+            "EXPIRED": "EXPIRED",
+            "REFUND": "REFUNDED",
+            "REVOKE": "REVOKED",
         }
 
-        status = status_map.get(notification_type, "unknown").upper()
-
+        status = status_map.get(notification_type, "UNKNOWN").upper()
         update_user_subscription(original_transaction_id, product_id, status, expires_date, tx_info)
 
         return jsonify({"success": True}), 200
 
     except Exception as e:
-        print("❌ Error handling Apple notification:", e)
+        print("❌ Error handling Apple notification:", e, flush=True)
         return jsonify({"error": "internal server error"}), 500
+
     
 ################## GOOGLE PAYMENT METHOD ##################
     

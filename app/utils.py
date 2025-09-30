@@ -1919,7 +1919,6 @@ def verify_transaction(transaction_id, token):
     return {"error": "Apple transaction verification failed"}, 500, "Verification failed"
 
 
-
 def parse_apple_transaction(apple_data):
     """
     Decodes signedTransactionInfo and returns parsed dict.
@@ -2018,8 +2017,15 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
 
                 # --- Case 3: Expired trial or subscription ---
                 if status == "EXPIRED":
-                    if user.trial_end_date and user.trial_end_date <= datetime.now(timezone.utc):
-                        print(f"⏰ Trial expired for {user.email}")
+                    if user.trial_end_date:
+                        # Make sure it's timezone-aware
+                        trial_end = user.trial_end_date
+                        if trial_end.tzinfo is None:
+                            trial_end = trial_end.replace(tzinfo=timezone.utc)
+
+                        if trial_end <= datetime.now(timezone.utc):
+                            print(f"⏰ Trial expired for {user.email}")
+
                     user.trial_end_date = datetime.now(timezone.utc)
 
             db.session.commit()

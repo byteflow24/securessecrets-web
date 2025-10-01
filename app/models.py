@@ -26,9 +26,11 @@ class User(UserMixin, db.Model):
     transaction_id = db.Column(db.String(35), unique=True, nullable=True)
     purchase_token = db.Column(db.String(255), nullable=False)
     paypal_subscription_id = db.Column(String(25), unique=True, nullable=True)
+    pending_plan_id = db.Column(db.Integer, nullable=True)
+    pending_plan_change_date = db.Column(TIMESTAMP, nullable=True)
+
     trial_start_date = db.Column(TIMESTAMP, nullable=True)
     trial_end_date = db.Column(TIMESTAMP, nullable=True)
-
     subscription_start_date = db.Column(TIMESTAMP, nullable=True)
     next_billing_date = db.Column(TIMESTAMP, nullable=True)
     subscription_status = db.Column(String(20), nullable=True)

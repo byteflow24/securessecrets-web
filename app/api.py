@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify, current_app, url_for, abort, send
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
-from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs
+from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -1193,6 +1193,7 @@ def api_plan():
                     "plan_id": user.plan.id,
                     "plan": user.plan.plan if user.plan else "Free",
                     "bill_cycle": user.plan.billing_cycle,
+                    "price": user.plan.price,
                     "subscription_status": user.subscription_status,
                     "next_bill": next_billing_date,
                     "storage_used": storage_used_mb,
@@ -1327,6 +1328,65 @@ def verify_apple_subscription():
         "plan_id": plan_id
     }), 200
 
+@api.route('/verify-apple-plan-change', methods=['POST'])
+@jwt_required()
+def verify_apple_plan_change():
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+    if not user or not user.transaction_id:
+        return jsonify({"success": False, "error": "User or original transaction ID not found"}), 404
+
+    data = request.get_json() or {}
+    plan_id = data.get("plan_id")
+    if not plan_id:
+        return jsonify({"success": False, "error": "Missing plan_id"}), 400
+
+    plan = Plan.query.filter_by(id=plan_id).first()
+    if not plan:
+        return jsonify({"success": False, "error": "Invalid plan_id"}), 400
+
+    # Query Apple subscription status
+    token = generate_apple_jwt()
+    apple_data, status_code, error = get_subscription_status(user.transaction_id, token)
+    if status_code != 200:
+        return jsonify({"success": False, "error": "Apple API error", "details": error}), status_code
+
+    # Parse transaction and renewal info
+    latest_tx = apple_data.get("data", [{}])[0].get("lastTransactions", [{}])[0]
+    transaction_info = parse_apple_transaction({"signedTransactionInfo": latest_tx.get("signedTransactionInfo")})
+    renewal_info = parse_apple_renewal(latest_tx.get("signedRenewalInfo"))
+
+    if not transaction_info or not renewal_info:
+        return jsonify({"success": False, "error": "Failed to parse Apple response"}), 500
+
+    current_product_id = transaction_info.get("productId")
+    queued_product_id = renewal_info.get("autoRenewProductId")
+    expires_date = transaction_info.get("expiresDate")  # UTC datetime
+    auto_renew_status = renewal_info.get("autoRenewStatus")  # 1 = active, 0 = off
+
+    # Convert expiry to local time
+    expires_local = convert_utc_to_local(expires_date, user.time_zone) if expires_date else None
+
+    # Check if queued plan matches requested plan
+    if queued_product_id == plan.app_product_id and auto_renew_status == 1:
+        # Store pending plan change
+        user.pending_plan_id = plan.id
+        user.pending_plan_change_date = expires_date
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "message": f"Your plan will change to {plan.plan} on {expires_local}",
+            "immediate": False,
+            "effectiveDateUTC": expires_date.isoformat() if expires_date else None,
+            "effectiveDateLocal": expires_local,
+            "queuedProductId": queued_product_id
+        }), 200
+    else:
+        return jsonify({
+            "success": False,
+            "error": f"Plan change to {plan.app_product_id} not queued. Current: {current_product_id}, Queued: {queued_product_id}"
+        }), 400
+
 
 # === Change Plan via Apple Subscription ===
 @api.route('/change-plan-apple', methods=['POST'])
@@ -1334,104 +1394,90 @@ def verify_apple_subscription():
 def change_plan_apple():
     user_id = get_jwt_identity()
     user = User.query.get(int(user_id))
-    if not user:
-        return jsonify(success=False, error="User not found."), 404
+    if not user or not user.transaction_id:
+        return jsonify({"success": False, "error": "User or original transaction ID not found"}), 404
 
-    data = request.get_json()
-    if not data or "transaction_id" not in data:
-        return jsonify(success=False, error="Missing transaction ID."), 400
+    data = request.get_json() or {}
+    transaction_id = data.get("transaction_id")
+    plan_id = data.get("plan_id")
+    if not transaction_id or not plan_id:
+        return jsonify({"success": False, "error": "Missing transaction_id or plan_id"}), 400
 
-    transaction_id = data["transaction_id"]
+    plan = Plan.query.filter_by(id=plan_id).first()
+    if not plan:
+        return jsonify({"success": False, "error": "Invalid plan_id"}), 400
 
-    # 🔑 Verify with Apple API
+    # Verify transaction to get original_transaction_id
     token = generate_apple_jwt()
     apple_data, status_code, error = verify_transaction(transaction_id, token)
-
-    print(f"🍏 Apple verification raw data: {apple_data}")
-
     if status_code != 200:
-        return jsonify(success=False, error="Apple API error", details=apple_data or error), status_code
+        return jsonify({"success": False, "error": "Apple API error", "details": error}), status_code
 
     transaction_info = parse_apple_transaction(apple_data)
     if not transaction_info:
-        return jsonify(
-            success=True,
-            message="Your plan change is queued and will take effect at the next renewal.",
-            immediate=False
-        ), 200
+        return jsonify({"success": False, "error": "Failed to parse transaction"}), 500
 
-    product_id = transaction_info.get("productId")
-    plan = Plan.query.filter_by(app_product_id=product_id).first()
+    # Get subscription status for renewal info
+    original_tx_id = transaction_info.get("originalTransactionId", user.transaction_id)
+    apple_sub_data, status_code, error = get_subscription_status(original_tx_id, token)
+    if status_code != 200:
+        return jsonify({"success": False, "error": "Apple subscription API error", "details": error}), status_code
 
-    renewal_info = transaction_info.get("pendingRenewalInfo", {})
-    new_product_id = renewal_info.get("auto_renew_product_id")
+    latest_tx = apple_sub_data.get("data", [{}])[0].get("lastTransactions", [{}])[0]
+    transaction_info = parse_apple_transaction({"signedTransactionInfo": latest_tx.get("signedTransactionInfo")})
+    renewal_info = parse_apple_renewal(latest_tx.get("signedRenewalInfo"))
+
+    if not transaction_info or not renewal_info:
+        return jsonify({"success": False, "error": "Failed to parse Apple response"}), 500
+
+    current_product_id = transaction_info.get("productId")
+    queued_product_id = renewal_info.get("autoRenewProductId")
     expires_date = transaction_info.get("expiresDate")
+    auto_renew_status = renewal_info.get("autoRenewStatus")
 
-    # Handle queued downgrade/change
-    if new_product_id and new_product_id != product_id:
-        expires_utc = None
-        expires_local = None
-        if expires_date:
-            if not isinstance(expires_date, datetime):
-                expires_utc = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc).isoformat()
-                expires_local = convert_utc_to_local(datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc), user.time_zone)
-            else:
-                expires_utc = expires_date.isoformat()
-                expires_local = convert_utc_to_local(expires_date, user.time_zone)
+    # Convert expiry to local time
+    expires_local = convert_utc_to_local(expires_date, user.time_zone) if expires_date else None
 
-        return jsonify(
-            success=True,
-            message=f"Your plan will change to {new_product_id} on {expires_local}",
-            immediate=False,
-            effectiveDateUTC=expires_utc,
-            effectiveDateLocal=expires_local
-        ), 200
+    # Check if subscription expired
+    if expires_date and expires_date < datetime.now(timezone.utc):
+        return jsonify({
+            "success": False,
+            "error": "This subscription has expired. Please resubscribe in the app."
+        }), 400
 
-    # Normal upgrade / immediate change
-    if plan:
-        # Get current expiry from DB first
-        current_expiry = user.next_billing_date
-        if current_expiry:
-            # Make it UTC-aware if naive
-            if current_expiry.tzinfo is None:
-                current_expiry = current_expiry.replace(tzinfo=timezone.utc)
-        elif expires_date:
-            # fallback to Apple transaction
-            if not isinstance(expires_date, datetime):
-                current_expiry = datetime.fromtimestamp(int(expires_date) / 1000, tz=timezone.utc)
-            else:
-                current_expiry = expires_date
-                if current_expiry.tzinfo is None:
-                    current_expiry = current_expiry.replace(tzinfo=timezone.utc)
+    # Handle queued change (downgrade)
+    if queued_product_id and queued_product_id != current_product_id and auto_renew_status == 1:
+        user.pending_plan_id = plan.id
+        user.pending_plan_change_date = expires_date
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "message": f"Your plan will change to {plan.plan} on {expires_local}",
+            "immediate": False,
+            "effectiveDateUTC": expires_date.isoformat() if expires_date else None,
+            "effectiveDateLocal": expires_local
+        }), 200
 
-        # Check if subscription expired
-        print(f"current_expiry: {current_expiry} date_now: {datetime.now(timezone.utc)}")
-        if current_expiry and current_expiry < datetime.now(timezone.utc):
-            print(f"current_expiry: {current_expiry} date_now: {datetime.now(timezone.utc)}")
-            return jsonify(
-                success=False,
-                error="This subscription has expired. Please resubscribe in the app."
-            ), 400
+    # Handle immediate change (upgrade)
+    if current_product_id == plan.app_product_id:
+        user.plan_id = plan.id
+        user.next_billing_date = expires_date
+        user.pending_plan_id = None  # Clear pending plan
+        user.pending_plan_change_date = None
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "message": f"Plan changed immediately to {plan.plan}",
+            "immediate": True,
+            "nextBillingUTC": expires_date.isoformat() if expires_date else None,
+            "nextBillingLocal": expires_local
+        }), 200
 
-        # Send both UTC and local for frontend
-        next_billing_utc = current_expiry.isoformat() if current_expiry else None
-        next_billing_local = convert_utc_to_local(current_expiry, user.time_zone) if current_expiry else None
-
-        return jsonify(
-            success=True,
-            message=f"Plan changed immediately to {plan.plan}",
-            immediate=True,
-            nextBillingUTC=next_billing_utc,
-            nextBillingLocal=next_billing_local
-        ), 200
-
-
-    # Fallback if plan not found
-    return jsonify(
-        success=True,
-        message="Plan change registered. Apple will confirm it shortly.",
-        immediate=False
-    ), 200
+    # Fallback: Change not confirmed
+    return jsonify({
+        "success": False,
+        "error": f"Plan change to {plan.app_product_id} not confirmed. Current: {current_product_id}, Queued: {queued_product_id}"
+    }), 400
 
 
 # ====== APPLE NOTIFICATIONS API ======
@@ -1508,22 +1554,23 @@ def test_apple_notifications():
         # ---- Special case: user changed plan (new product id) ----
         if notification_type == "DID_CHANGE_RENEWAL_PREF":
             renewal_jwt = data_obj.get("signedRenewalInfo")
-            renewal_info = decode_jwt(renewal_jwt) if renewal_jwt else {}
+            renewal_info = parse_apple_renewal(renewal_jwt) if renewal_jwt else {}
             print("🔄 Renewal Info:", renewal_info)
 
             new_product_id = renewal_info.get("autoRenewProductId")
             auto_renew_status = renewal_info.get("autoRenewStatus")  # "1"=on, "0"=off
 
             if new_product_id:
-                status = "ACTIVE" if auto_renew_status == "1" else "CANCELED"
-                print(f"⬆️ User changed plan preference → {new_product_id}, status={status}")
-                update_user_subscription(
-                    original_transaction_id,
-                    new_product_id,
-                    status,
-                    expires_date,
-                    tx_info
-                )
+                status = "ACTIVE" if auto_renew_status == 1 else "CANCELED"
+                user = User.query.filter_by(transaction_id=original_transaction_id).first()
+                if user:
+                    new_plan = Plan.query.filter_by(app_product_id=new_product_id).first()
+                    if new_plan:
+                        user.pending_plan_id = new_plan.id
+                        user.pending_plan_change_date = expires_date
+                        db.session.commit()
+                        print(f"⬆️ Queued plan change to {new_product_id} for user {user.email}")
+                update_user_subscription(original_transaction_id, product_id, status, expires_date, tx_info)
                 return jsonify({"success": True}), 200
 
         # ---- Handle other events ----

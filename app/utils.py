@@ -1942,6 +1942,16 @@ def parse_apple_transaction(apple_data):
     except Exception as e:
         print("Error decoding signedTransactionInfo:", e)
         return None
+    
+def parse_apple_renewal(signed_renewal):
+    if not signed_renewal:
+        return {}
+    try:
+        parsed_renewal = jwt.decode(signed_renewal, options={"verify_signature": False})
+        return parsed_renewal
+    except Exception as e:
+        print("Error decoding signedRenewalInfo:", e)
+        return {}
 
 def decode_apple_signed_payload(signed_payload):
     # JWS format: header.payload.signature
@@ -1962,6 +1972,36 @@ def decode_jwt(jwt_token):
     payload_json = base64.urlsafe_b64decode(payload_b64).decode("utf-8")
     return json.loads(payload_json)
 
+# This queries the correct Apple API for subscription details, including queued changes
+def get_subscription_status(original_tx_id, token):
+    urls = [APPLE_API_BASE, APPLE_SANDBOX_BASE]
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    for base_url in urls:
+        url = f"{base_url}/inApps/v1/subscriptions/{original_tx_id}"
+        try:
+            resp = requests.get(url, headers=headers, timeout=10)
+            if resp.status_code == 404 and base_url == APPLE_API_BASE:
+                print("➡️ Prod says 404, retrying Sandbox…")
+                continue
+            if not resp.text.strip():
+                print(f"⚠️ Empty response from {base_url}, retrying if Sandbox left…")
+                continue
+            try:
+                data = resp.json()
+            except ValueError:
+                print(f"⚠️ Invalid JSON from {base_url}, body: {resp.text}")
+                data = None
+            print(f"📦 Apple response from {base_url}: {resp.status_code} {resp.text}")
+            if resp.status_code == 200 and data:
+                return data, 200, None
+            return data or {"error": "Apple API error"}, resp.status_code, "Apple API error"
+        except requests.RequestException as e:
+            print(f"❌ Request error {base_url}: {e}")
+            if base_url == APPLE_API_BASE:
+                continue
+            return {"error": "Request failed", "details": str(e)}, 500, str(e)
+    return {"error": "Apple subscription verification failed"}, 500, "Verification failed"
+
 
 def update_user_subscription(original_transaction_id, product_id, status, expires_date=None, tx_info=None):
     """
@@ -1975,7 +2015,13 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
             # ✅ Existing user → update subscription
             plan = Plan.query.filter_by(app_product_id=product_id).first()
             if plan:
-                user.plan_id = plan.id
+                # If this is a renewal with the pending plan, apply it
+                if user.pending_plan_id and user.pending_plan_id == plan.id:
+                    user.plan_id = plan.id
+                    user.pending_plan_id = None
+                    user.pending_plan_change_date = None
+                elif status != "DID_CHANGE_RENEWAL_PREF":  # Don't override plan for queued changes
+                    user.plan_id = plan.id
 
             user.subscription_status = status
             user.updated_at = datetime.now(timezone.utc)
@@ -2027,6 +2073,7 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
                             print(f"⏰ Trial expired for {user.email}")
 
                     user.trial_end_date = datetime.now(timezone.utc)
+                    user.subscription_status = "INACTIVE"
 
             db.session.commit()
             print(f"✅ Updated user {user.email} → plan={plan.plan if plan else 'N/A'}, "

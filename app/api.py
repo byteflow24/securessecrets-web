@@ -1388,9 +1388,6 @@ def verify_apple_plan_change():
         }), 400
 
 
-# === Change Plan via Apple Subscription ===
-@api.route('/change-plan-apple', methods=['POST'])
-@jwt_required()
 def change_plan_apple():
     user_id = get_jwt_identity()
     user = User.query.get(int(user_id))
@@ -1445,8 +1442,28 @@ def change_plan_apple():
             "error": "This subscription has expired. Please resubscribe in the app."
         }), 400
 
-    # Handle queued change (downgrade)
-    if queued_product_id and queued_product_id != current_product_id and auto_renew_status == 1:
+    # Update user's original_transaction_id if new
+    if original_tx_id and original_tx_id != user.transaction_id:
+        user.transaction_id = original_tx_id
+        db.session.commit()
+
+    # Handle immediate change (upgrade or same-plan renewal)
+    if current_product_id == plan.app_product_id:
+        user.plan_id = plan.id
+        user.next_billing_date = expires_date
+        user.pending_plan_id = None
+        user.pending_plan_change_date = None
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "message": f"Plan changed immediately to {plan.plan}",
+            "immediate": True,
+            "nextBillingUTC": expires_date.isoformat() if expires_date else None,
+            "nextBillingLocal": expires_local
+        }), 200
+
+    # Handle queued change (downgrade) or verify existing queue
+    if queued_product_id == plan.app_product_id and auto_renew_status == 1:
         user.pending_plan_id = plan.id
         user.pending_plan_change_date = expires_date
         db.session.commit()
@@ -1458,22 +1475,25 @@ def change_plan_apple():
             "effectiveDateLocal": expires_local
         }), 200
 
-    # Handle immediate change (upgrade)
-    if current_product_id == plan.app_product_id:
-        user.plan_id = plan.id
-        user.next_billing_date = expires_date
-        user.pending_plan_id = None  # Clear pending plan
-        user.pending_plan_change_date = None
-        db.session.commit()
-        return jsonify({
-            "success": True,
-            "message": f"Plan changed immediately to {plan.plan}",
-            "immediate": True,
-            "nextBillingUTC": expires_date.isoformat() if expires_date else None,
-            "nextBillingLocal": expires_local
-        }), 200
+    # Fallback: Try verifying queued change in case of sandbox quirk
+    apple_sub_data, status_code, error = get_subscription_status(original_tx_id, token)
+    if status_code == 200:
+        latest_tx = apple_sub_data.get("data", [{}])[0].get("lastTransactions", [{}])[0]
+        renewal_info = parse_apple_renewal(latest_tx.get("signedRenewalInfo"))
+        queued_product_id = renewal_info.get("autoRenewProductId")
+        if queued_product_id == plan.app_product_id and auto_renew_status == 1:
+            user.pending_plan_id = plan.id
+            user.pending_plan_change_date = expires_date
+            db.session.commit()
+            return jsonify({
+                "success": True,
+                "message": f"Your plan will change to {plan.plan} on {expires_local}",
+                "immediate": False,
+                "effectiveDateUTC": expires_date.isoformat() if expires_date else None,
+                "effectiveDateLocal": expires_local
+            }), 200
 
-    # Fallback: Change not confirmed
+    # If no change is confirmed
     return jsonify({
         "success": False,
         "error": f"Plan change to {plan.app_product_id} not confirmed. Current: {current_product_id}, Queued: {queued_product_id}"

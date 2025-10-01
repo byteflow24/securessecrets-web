@@ -1293,7 +1293,11 @@ def verify_apple_subscription():
         else:
             transaction_info = parse_apple_transaction(apple_data)
             if transaction_info and transaction_info.get("expiresDate") > datetime.now(timezone.utc):
-                return jsonify({"status": "allow_register"}), 200
+                return jsonify({
+                    "status": "allow_register",
+                    "transaction_id": transaction_id,
+                    "plan_id": plan_id
+                }), 200
             else:
                 db.session.delete(pending)
                 db.session.commit()

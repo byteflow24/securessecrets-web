@@ -1280,21 +1280,66 @@ def verify_apple_subscription():
     if user:
         return jsonify({"status": "existing_user"}), 200
 
-    plan = Plan.query.filter_by(id=plan_id).first()
-
     # 2. Check if pending subscription exists
     pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
     print("⏳ Existing pending subscription:", pending)
     if pending:
-        return jsonify({"status": "allow_register"}), 200
+        # Verify with Apple to check if transaction is still valid
+        token = generate_apple_jwt()
+        apple_data, status_code, error = verify_transaction(transaction_id, token)
+        if status_code != 200 or not apple_data:
+            # Delete stale pending subscription
+            db.session.delete(pending)
+            db.session.commit()
+            print("🗑️ Deleted stale PendingSubscription")
+        else:
+            transaction_info = parse_apple_transaction(apple_data)
+            if transaction_info and transaction_info.get("expiresDate") > datetime.now(timezone.utc):
+                return jsonify({"status": "allow_register"}), 200
+            else:
+                # Delete expired pending subscription
+                db.session.delete(pending)
+                db.session.commit()
+                print("🗑️ Deleted expired PendingSubscription")
 
-    # 3. Create PendingSubscription immediately (before Apple check)
+    # 3. Verify with Apple
     try:
+        token = generate_apple_jwt()
+        apple_data, status_code, error = verify_transaction(transaction_id, token)
+        if status_code != 200 or not apple_data:
+            return jsonify({
+                "status": "error",
+                "message": f"Apple transaction verification failed: {error}"
+            }), status_code
+
+        transaction_info = parse_apple_transaction(apple_data)
+        if not transaction_info:
+            return jsonify({
+                "status": "error",
+                "message": "Failed to parse Apple transaction"
+            }), 500
+
+        # Verify product and expiry
+        plan = Plan.query.filter_by(id=plan_id).first()
+        if not plan or transaction_info.get("productId") != plan.app_product_id:
+            return jsonify({
+                "status": "error",
+                "message": "Invalid product ID or plan"
+            }), 400
+
+        expires_date = transaction_info.get("expiresDate")
+        if expires_date < datetime.now(timezone.utc):
+            return jsonify({
+                "status": "error",
+                "message": "Transaction has expired"
+            }), 400
+
+        # 4. Create PendingSubscription
         new_pending = PendingSubscription(
             transaction_id=transaction_id,
             plan_id=plan_id,
-            product_id=plan.app_product_id,  # will fill after Apple verification
-            expires_date=None,
+            product_id=transaction_info.get("productId"),
+            expires_date=expires_date,
             status="PENDING",
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
@@ -1302,31 +1347,17 @@ def verify_apple_subscription():
         )
         db.session.add(new_pending)
         db.session.commit()
-        print("✅ PendingSubscription saved (pre-verification)")
+        print("✅ PendingSubscription created")
+
+        return jsonify({
+            "status": "new_subscription",
+            "transaction_id": transaction_id,
+            "plan_id": plan_id
+        }), 200
     except Exception as e:
         db.session.rollback()
-        print("❌ DB error:", e)
-        return jsonify({"status": "error", "message": f"DB error: {e}"}), 500
-
-    # 4. Try verifying with Apple (optional, async is even better)
-    try:
-        token = generate_apple_jwt()
-        apple_data, status_code, error = verify_transaction(transaction_id, token)
-        if status_code == 200 and apple_data:
-            transaction_info = parse_apple_transaction(apple_data)
-            if transaction_info:
-                pending.product_id = transaction_info.get("productId")
-                pending.expires_date = transaction_info.get("expiresDate")
-                db.session.commit()
-                print("✅ PendingSubscription updated with Apple data")
-    except Exception as e:
-        print("⚠️ Apple verification failed, will retry later:", e)
-
-    return jsonify({
-        "status": "new_subscription",
-        "transaction_id": transaction_id,
-        "plan_id": plan_id
-    }), 200
+        print("❌ Error verifying subscription:", e)
+        return jsonify({"status": "error", "message": f"Verification error: {e}"}), 500
 
 @api.route('/verify-apple-plan-change', methods=['POST'])
 @jwt_required()

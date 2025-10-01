@@ -1351,8 +1351,16 @@ def verify_apple_plan_change():
     if status_code != 200:
         return jsonify({"success": False, "error": "Apple API error", "details": error}), status_code
 
+    # Check if data is empty
+    if not apple_data.get("data"):
+        print(f"No subscription data found for original_transaction_id: {user.transaction_id}")
+        return jsonify({
+            "success": False,
+            "error": f"No active subscription found for transaction ID {user.transaction_id}. Please resubscribe."
+        }), 404
+
     # Parse transaction and renewal info
-    latest_tx = apple_data.get("data", [{}])[0].get("lastTransactions", [{}])[0]
+    latest_tx = apple_data["data"][0].get("lastTransactions", [{}])[0]
     transaction_info = parse_apple_transaction({"signedTransactionInfo": latest_tx.get("signedTransactionInfo")})
     renewal_info = parse_apple_renewal(latest_tx.get("signedRenewalInfo"))
 
@@ -1386,7 +1394,6 @@ def verify_apple_plan_change():
             "success": False,
             "error": f"Plan change to {plan.app_product_id} not queued. Current: {current_product_id}, Queued: {queued_product_id}"
         }), 400
-
 
 def change_plan_apple():
     user_id = get_jwt_identity()

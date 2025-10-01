@@ -1262,7 +1262,7 @@ def verify_apple_subscription():
 
     transaction_id = data.get("transaction_id")
     plan_id = data.get("plan_id")
-    receipt_data = data.get("receipt_data")  # check if Flutter is sending this
+    receipt_data = data.get("receipt_data")
 
     print("🔑 transaction_id:", transaction_id)
     print("📦 plan_id:", plan_id)
@@ -1284,11 +1284,9 @@ def verify_apple_subscription():
     pending = PendingSubscription.query.filter_by(transaction_id=transaction_id).first()
     print("⏳ Existing pending subscription:", pending)
     if pending:
-        # Verify with Apple to check if transaction is still valid
         token = generate_apple_jwt()
         apple_data, status_code, error = verify_transaction(transaction_id, token)
         if status_code != 200 or not apple_data:
-            # Delete stale pending subscription
             db.session.delete(pending)
             db.session.commit()
             print("🗑️ Deleted stale PendingSubscription")
@@ -1297,7 +1295,6 @@ def verify_apple_subscription():
             if transaction_info and transaction_info.get("expiresDate") > datetime.now(timezone.utc):
                 return jsonify({"status": "allow_register"}), 200
             else:
-                # Delete expired pending subscription
                 db.session.delete(pending)
                 db.session.commit()
                 print("🗑️ Deleted expired PendingSubscription")
@@ -1307,10 +1304,13 @@ def verify_apple_subscription():
         token = generate_apple_jwt()
         apple_data, status_code, error = verify_transaction(transaction_id, token)
         if status_code != 200 or not apple_data:
+            error_message = error or "Invalid transaction ID"
+            if status_code == 404:
+                error_message = "Transaction id not found"
             return jsonify({
                 "status": "error",
-                "message": f"Apple transaction verification failed: {error}"
-            }), status_code
+                "message": error_message
+            }), status_code if status_code != 200 else 400
 
         transaction_info = parse_apple_transaction(apple_data)
         if not transaction_info:
@@ -1357,7 +1357,7 @@ def verify_apple_subscription():
     except Exception as e:
         db.session.rollback()
         print("❌ Error verifying subscription:", e)
-        return jsonify({"status": "error", "message": f"Verification error: {e}"}), 500
+        return jsonify({"status": "error", "message": f"Verification error: {str(e)}"}), 500
 
 @api.route('/verify-apple-plan-change', methods=['POST'])
 @jwt_required()

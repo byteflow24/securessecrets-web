@@ -1430,6 +1430,8 @@ def verify_apple_plan_change():
             "error": f"Plan change to {plan.app_product_id} not queued. Current: {current_product_id}, Queued: {queued_product_id}"
         }), 400
 
+@api.route('/change-plan-apple', methods=['POST'])
+@jwt_required()
 def change_plan_apple():
     user_id = get_jwt_identity()
     user = User.query.get(int(user_id))

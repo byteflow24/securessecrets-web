@@ -2002,6 +2002,12 @@ def get_subscription_status(original_tx_id, token):
             return {"error": "Request failed", "details": str(e)}, 500, str(e)
     return {"error": "Apple subscription verification failed"}, 500, "Verification failed"
 
+# Convert Apple’s milliseconds timestamp into a Python datetime before saving
+def apple_ms_to_datetime(ms):
+    if not ms:
+        return None
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+
 
 def update_user_subscription(original_transaction_id, product_id, status, expires_date=None, tx_info=None):
     """

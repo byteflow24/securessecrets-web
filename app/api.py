@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify, current_app, url_for, abort, send
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
-from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal
+from .utils import generate_token, send_verification_email, decrypt_secret, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal, apple_ms_to_datetime
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -1414,7 +1414,7 @@ def verify_apple_plan_change():
     if queued_product_id == plan.app_product_id and auto_renew_status == 1:
         # Store pending plan change
         user.pending_plan_id = plan.id
-        user.pending_plan_change_date = expires_date
+        user.pending_plan_change_date = apple_ms_to_datetime(expires_date)
         db.session.commit()
         return jsonify({
             "success": True,
@@ -1471,7 +1471,8 @@ def change_plan_apple():
 
     current_product_id = transaction_info.get("productId")
     queued_product_id = renewal_info.get("autoRenewProductId")
-    expires_date = transaction_info.get("expiresDate")
+    expires_date_ms = transaction_info.get("expiresDate")
+    expires_date = apple_ms_to_datetime(expires_date_ms)
     auto_renew_status = renewal_info.get("autoRenewStatus")
 
     # Convert expiry to local time
@@ -1629,7 +1630,7 @@ def test_apple_notifications():
                     new_plan = Plan.query.filter_by(app_product_id=new_product_id).first()
                     if new_plan:
                         user.pending_plan_id = new_plan.id
-                        user.pending_plan_change_date = expires_date
+                        user.pending_plan_change_date = apple_ms_to_datetime(expires_date)
                         db.session.commit()
                         print(f"⬆️ Queued plan change to {new_product_id} for user {user.email}")
                 update_user_subscription(original_transaction_id, product_id, status, expires_date, tx_info)

@@ -1380,8 +1380,16 @@ def verify_apple_plan_change():
     if not plan:
         return jsonify({"success": False, "error": "Invalid plan_id"}), 400
 
-    # Query Apple subscription status
+    # Query Apple subscription status (refresh orig tx_id first)
     token = generate_apple_jwt()
+    orig_tx_data, orig_status, orig_err = verify_transaction(user.transaction_id, token)
+    if orig_status == 200 and orig_tx_data:
+        refreshed_orig_id = parse_apple_transaction(orig_tx_data).get("originalTransactionId", user.transaction_id)
+        if refreshed_orig_id != user.transaction_id:
+            user.transaction_id = refreshed_orig_id
+            db.session.commit()
+            print(f"Refreshed orig_tx_id: {refreshed_orig_id}")
+    
     apple_data, status_code, error = get_subscription_status(user.transaction_id, token)
     if status_code != 200:
         return jsonify({"success": False, "error": "Apple API error", "details": error}), status_code
@@ -1397,9 +1405,13 @@ def verify_apple_plan_change():
     # Parse transaction and renewal info
     latest_tx = apple_data["data"][0].get("lastTransactions", [{}])[0]
     transaction_info = parse_apple_transaction({"signedTransactionInfo": latest_tx.get("signedTransactionInfo")})
-    renewal_info = parse_apple_renewal(latest_tx.get("signedRenewalInfo"))
+    signed_renewal = latest_tx.get("signedRenewalInfo", "")
+    renewal_info = parse_apple_renewal(signed_renewal)
+    print(f"Raw signedRenewalInfo: {signed_renewal[:50]}...")  # Debug
+    print(f"Parsed renewal_info: {renewal_info}")  # Full for mismatches
 
     if not transaction_info or not renewal_info:
+        print(f"Parse fail: tx_info={transaction_info}, renewal={renewal_info}")
         return jsonify({"success": False, "error": "Failed to parse Apple response"}), 500
 
     current_product_id = transaction_info.get("productId")
@@ -1407,9 +1419,18 @@ def verify_apple_plan_change():
     expires_date = transaction_info.get("expiresDate")  # UTC datetime
     auto_renew_status = renewal_info.get("autoRenewStatus")  # 1 = active, 0 = off
 
+    # Early checks for renew/expiry
+    if auto_renew_status != 1:
+        print(f"Auto-renew off: {auto_renew_status}—can't queue changes")
+        return jsonify({"success": False, "error": "Auto-renew disabled—enable in Settings to queue changes"}), 400
+    if expires_date and expires_date < datetime.now(timezone.utc):
+        print(f"Sub expired: {expires_date}—resubscribe")
+        return jsonify({"success": False, "error": "Subscription expired—resubscribe to change"}), 400
+
     # Convert expiry to local time
     expires_local = convert_utc_to_local(expires_date, user.time_zone) if expires_date else None
     print(f"Verify queued: current={current_product_id}, queued={queued_product_id}, target={plan.app_product_id}, auto_renew={auto_renew_status}, user_tx={user.transaction_id}")
+    
     # Check if queued plan matches requested plan
     if queued_product_id == plan.app_product_id and auto_renew_status == 1:
         # Store pending plan change

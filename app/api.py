@@ -1446,6 +1446,25 @@ def verify_apple_plan_change():
             "queuedProductId": queued_product_id
         }), 200
     else:
+        # Retry twice in case Apple's queue update is slightly delayed
+        for i in range(2):
+            time.sleep(5)
+            apple_data, status_code, error = get_subscription_status(user.transaction_id, token)
+            if status_code == 200 and apple_data.get("data"):
+                latest_tx = apple_data["data"][0].get("lastTransactions", [{}])[0]
+                renewal_info = parse_apple_renewal(latest_tx.get("signedRenewalInfo"))
+                queued_product_id = renewal_info.get("autoRenewProductId")
+                if queued_product_id == plan.app_product_id:
+                    user.pending_plan_id = plan.id
+                    user.pending_plan_change_date = expires_date
+                    db.session.commit()
+                    return jsonify({
+                        "success": True,
+                        "message": f"Queued plan change detected after delay — your plan will change to {plan.plan} on {expires_date}",
+                        "immediate": False
+                    }), 200
+
+        # If still not queued after retries
         return jsonify({
             "success": False,
             "error": f"Plan change to {plan.app_product_id} not queued. Current: {current_product_id}, Queued: {queued_product_id}"

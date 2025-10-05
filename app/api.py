@@ -1537,7 +1537,7 @@ def change_plan_apple():
                 "effectiveDateUTC": expires_date.isoformat() if expires_date else None,
                 "effectiveDateLocal": expires_local
             }), 200
-
+    print(f"❌ Change fail: current={current_product_id}, queued={queued_product_id}, target={plan.app_product_id}, tx={transaction_id}")
     # If no change is confirmed
     return jsonify({
         "success": False,

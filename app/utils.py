@@ -1889,34 +1889,38 @@ def verify_transaction(transaction_id, token):
         try:
             resp = requests.get(url, headers=headers, timeout=10)
             if resp.status_code == 404 and base_url == APPLE_API_BASE:
-                print("➡️ Prod says 404, retrying Sandbox…")
+                print("➡️ Prod 404, trying Sandbox…")  # Single log
                 continue
 
-            # Sometimes prod returns empty body
             if not resp.text.strip():
-                print(f"⚠️ Empty response from {base_url}, retrying if Sandbox left…")
-                continue
+                if base_url == APPLE_SANDBOX_BASE:  # Only log if final
+                    print(f"⚠️ Empty from Sandbox—possible delay")
+                continue  # Skip log spam
 
             try:
                 data = resp.json()
             except ValueError:
-                print(f"⚠️ Invalid JSON from {base_url}, body: {resp.text}")
+                print(f"⚠️ Invalid JSON from {base_url}: {resp.text[:100]}...")  # Truncate
                 data = None
 
-            print(f"📦 Apple response from {base_url}: {resp.status_code} {resp.text}")
+            # Log only on 200 or error (less spam)
+            if resp.status_code == 200:
+                print(f"✅ Apple tx from {base_url}: OK (truncated)")  # No full body
+                if data:
+                    return data, 200, None
+            else:
+                print(f"❌ Apple tx from {base_url}: {resp.status_code}")
 
-            if resp.status_code == 200 and data:
-                return data, 200, None
-
-            return data or {"error": "Apple API error"}, resp.status_code, "Apple API error"
+            if resp.status_code != 200:
+                return data or {"error": "Apple API error"}, resp.status_code, "Apple API error"
 
         except requests.RequestException as e:
-            print(f"❌ Request error {base_url}: {e}")
+            print(f"❌ Req error {base_url}: {e}")
             if base_url == APPLE_API_BASE:
                 continue
             return {"error": "Request failed", "details": str(e)}, 500, str(e)
 
-    return {"error": "Apple transaction verification failed"}, 500, "Verification failed"
+    return {"error": "Verification failed—all endpoints down"}, 500, "All failed"
 
 
 def parse_apple_transaction(apple_data):
@@ -1981,26 +1985,37 @@ def get_subscription_status(original_tx_id, token):
         try:
             resp = requests.get(url, headers=headers, timeout=10)
             if resp.status_code == 404 and base_url == APPLE_API_BASE:
-                print("➡️ Prod says 404, retrying Sandbox…")
+                print("➡️ Prod 404, trying Sandbox…")  # Single log
                 continue
+
             if not resp.text.strip():
-                print(f"⚠️ Empty response from {base_url}, retrying if Sandbox left…")
-                continue
+                if base_url == APPLE_SANDBOX_BASE:  # Only log if final
+                    print(f"⚠️ Empty from Sandbox—possible delay")
+                continue  # Skip log spam
+
             try:
                 data = resp.json()
             except ValueError:
-                print(f"⚠️ Invalid JSON from {base_url}, body: {resp.text}")
+                print(f"⚠️ Invalid JSON from {base_url}: {resp.text[:100]}...")  # Truncate
                 data = None
-            print(f"📦 Apple response from {base_url}: {resp.status_code} {resp.text}")
-            if resp.status_code == 200 and data:
-                return data, 200, None
-            return data or {"error": "Apple API error"}, resp.status_code, "Apple API error"
+
+            # Log only on 200 or error (less spam)
+            if resp.status_code == 200:
+                print(f"✅ Apple sub from {base_url}: OK")  # No full body
+                if data:
+                    return data, 200, None
+            else:
+                print(f"❌ Apple sub from {base_url}: {resp.status_code}")
+
+            if resp.status_code != 200:
+                return data or {"error": "Apple API error"}, resp.status_code, "Apple API error"
+
         except requests.RequestException as e:
-            print(f"❌ Request error {base_url}: {e}")
+            print(f"❌ Req error {base_url}: {e}")
             if base_url == APPLE_API_BASE:
                 continue
             return {"error": "Request failed", "details": str(e)}, 500, str(e)
-    return {"error": "Apple subscription verification failed"}, 500, "Verification failed"
+    return {"error": "Verification failed—all endpoints down"}, 500, "All failed"
 
 # Convert Apple’s milliseconds timestamp into a Python datetime before saving
 def apple_ms_to_datetime(value):
@@ -2086,7 +2101,7 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
                             print(f"⏰ Trial expired for {user.email}")
 
                     user.trial_end_date = datetime.now(timezone.utc)
-                    user.subscription_status = "INACTIVE"
+                    user.subscription_status = "CANCELED"
 
             db.session.commit()
             print(f"✅ Updated user {user.email} → plan={plan.plan if plan else 'N/A'}, "

@@ -1409,7 +1409,7 @@ def verify_apple_plan_change():
 
     # Convert expiry to local time
     expires_local = convert_utc_to_local(expires_date, user.time_zone) if expires_date else None
-
+    print(f"Verify queued: current={current_product_id}, queued={queued_product_id}, target={plan.app_product_id}, auto_renew={auto_renew_status}, user_tx={user.transaction_id}")
     # Check if queued plan matches requested plan
     if queued_product_id == plan.app_product_id and auto_renew_status == 1:
         # Store pending plan change

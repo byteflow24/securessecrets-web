@@ -2029,7 +2029,10 @@ def apple_ms_to_datetime(value):
         return datetime.fromtimestamp(int(value) / 1000, tz=timezone.utc)
     except Exception:
         return None
-
+    
+# Simple price check (or use tiers if in DB)
+def is_upgrade(current_price, target_price):
+    return target_price > current_price  
 
 def update_user_subscription(original_transaction_id, product_id, status, expires_date=None, tx_info=None):
     """

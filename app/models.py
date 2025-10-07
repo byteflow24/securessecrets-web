@@ -162,7 +162,7 @@ class Plan(db.Model):
     product_id = db.Column(String(50), nullable=True)
     app_product_id = db.Column(String(100), nullable=True)
 
-    # 🔹 Explicit relationships for current and next plan
+    # Explicit relationships for current and next plan
     users = db.relationship('User',foreign_keys='User.plan_id',back_populates='plan')
     next_users = db.relationship('User',foreign_keys='User.next_plan_id',back_populates='next_plan')
     payments = db.relationship('Payment', back_populates='plan')

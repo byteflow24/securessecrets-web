@@ -116,7 +116,7 @@ def api_process_subscription():
         user.next_billing_date = convert_utc_to_local(next_billing_date, user.time_zone)
         user.fialed_payments = failed_payments
         user.updated_at = convert_utc_to_local(datetime.now(), user.time_zone)
-        user.status = None
+        user.status = ""
 
         db.session.commit()
 
@@ -187,7 +187,7 @@ def register_api():
         subscription_status="ACTIVE",
         payment_source=pending.payment_source,
         transaction_id=transaction_id,
-        status="",
+        status=None,
 
         # ✅ carry over trial info if it existed in PendingSubscription
         trial_start_date=pending.trial_start_date,
@@ -360,8 +360,8 @@ def public_secrets_api():
     shared_secret = db.session.execute(
         db.select(SharedSecret)
         .where(
-            SharedSecret.public == True,
-            (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None)
+            SharedSecret.public.is_(True),
+            (SharedSecret.time_period.is_not(None)) | (SharedSecret.time_to_send.is_not(None))
         )
         .options(joinedload(SharedSecret.user), joinedload(SharedSecret.secret))
     ).scalars().all()
@@ -397,6 +397,7 @@ def public_secrets_api():
     db.session.commit()
 
     public_secrets =  SharedSecret.query.filter(
+        SharedSecret.public.is_(True),
         SharedSecret.share_date <= now
     ).order_by(SharedSecret.share_date.desc()).all()
 

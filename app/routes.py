@@ -98,8 +98,8 @@ def home():
     # Fetch the public shared secrets, eager-load user and secret relationships
     shared_secret = db.session.execute(
         db.select(SharedSecret)
-        .where(SharedSecret.public == True, 
-            (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None))
+        .where(SharedSecret.public.is_(True), 
+            (SharedSecret.time_period.is_not(None)) | (SharedSecret.time_to_send.is_not(None)))
         .options(joinedload(SharedSecret.user), joinedload(SharedSecret.secret))
     ).scalars().all()
 
@@ -154,6 +154,7 @@ def home():
 
     # Fetch all public shared secrets with eligible share_date, sorted by share_date (newest first)
     public_secrets = SharedSecret.query.filter(
+        SharedSecret.public.is_(True),
         SharedSecret.share_date <= datetime.now()
     ).order_by(SharedSecret.share_date.desc()).all()
 
@@ -584,8 +585,8 @@ def dashboard():
     # Fetch the public shared secrets and eager-load user and secret relationships
     shared_secret = db.session.execute(
         db.select(SharedSecret)
-        .where(SharedSecret.public == True, 
-            (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None))
+        .where(SharedSecret.public.is_(True), 
+            (SharedSecret.time_period.is_not(None)) | (SharedSecret.time_to_send.is_not(None)))
         .options(joinedload(SharedSecret.user), joinedload(SharedSecret.secret))
     ).scalars().all()
 

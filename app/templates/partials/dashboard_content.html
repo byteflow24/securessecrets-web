@@ -144,6 +144,11 @@
     <div class="row h-100 justify-content-center align-items-center">
         <div class="container-fluid mt-5" style="padding-bottom: 100px;">
             <div class="row centered-row h-100 align-items-center">
+                {% if g.subscription_expired %}
+                    <div class="alert alert-warning">
+                        Your subscription has expired. Renew to unlock full features.
+                    </div>
+                {% endif %}
                 <!-- Flash Messages -->
                 <div id="flash-messages">
                     {% with messages = get_flashed_messages(with_categories=true) %}

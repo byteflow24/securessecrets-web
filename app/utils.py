@@ -1,5 +1,5 @@
 from io import BytesIO
-from flask import abort, request, url_for, session, send_file, flash, redirect, jsonify, send_from_directory, current_app
+from flask import abort, request, url_for, session, send_file, flash, redirect, jsonify, send_from_directory, current_app, g
 from flask_login import current_user
 from functools import wraps
 from urllib.parse import urlparse, urljoin
@@ -99,6 +99,29 @@ def subscription_ended(api=False):
             return func(*args, **kwargs)
         return decorated_function
     return decorator
+
+def subscription_ended_flag(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        current_date = datetime.now(timezone.utc).date()
+        expired = False
+
+        if current_user.is_authenticated and current_user.username != "admin":
+            trial_valid = (
+                current_user.trial_end_date
+                and current_user.trial_end_date.date() >= current_date
+            )
+            sub_valid = (
+                current_user.subscription_status == "ACTIVE"
+                and current_user.next_billing_date
+                and current_user.next_billing_date.date() >= current_date
+            )
+
+            expired = not (trial_valid or sub_valid)
+
+        g.subscription_expired = expired  # set global flag
+        return func(*args, **kwargs)
+    return wrapper
 
 
 # Mention this step at all_secrets server

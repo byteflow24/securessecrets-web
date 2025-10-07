@@ -144,11 +144,6 @@
     <div class="row h-100 justify-content-center align-items-center">
         <div class="container-fluid mt-5" style="padding-bottom: 100px;">
             <div class="row centered-row h-100 align-items-center">
-                {% if g.subscription_expired %}
-                    <div class="alert alert-warning">
-                        Your subscription has expired. Renew to unlock full features.
-                    </div>
-                {% endif %}
                 <!-- Flash Messages -->
                 <div id="flash-messages">
                     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -162,9 +157,18 @@
                         {% endif %} 
                     {% endwith %}
                 </div>
-                {% if current_user.subscription_status == "CANCELED" %}
-                    <div class="alert alert-warning text-center">
-                        You have not paid for your plan. <a href="{{ url_for('main.payment') }}" class="link-primary link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover">Pay now</a>
+                {% if g.subscription_expired %}
+                    <div class="alert alert-warning d-flex align-items-center justify-content-center" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <div>
+                            {% if current_user.payment_source == "Site - PayPal" %}
+                                Your account is currently in <strong>read-only mode</strong>. 
+                                <a href="{{ url_for('main.payment') }}" class="fw-bold link-primary">Renew now</a>.
+                            {% elif current_user.payment_source in ["Google Pay", "Apple Pay"] %}
+                                Your account is currently in <strong>read-only mode</strong>. 
+                                    <a href="" class="fw-bold link-primary">Renew from the App</a>.
+                            {% endif %}
+                        </div>
                     </div>
                 {% elif current_user.subscription_status == "APPROVAL_PENDING" %}
                     <div class="alert alert-warning text-center">

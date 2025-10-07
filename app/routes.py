@@ -98,8 +98,8 @@ def home():
     # Fetch the public shared secrets, eager-load user and secret relationships
     shared_secret = db.session.execute(
         db.select(SharedSecret)
-        .where(SharedSecret.public.is_(True), 
-            (SharedSecret.time_period.is_not(None)) | (SharedSecret.time_to_send.is_not(None)))
+        .where(SharedSecret == True, 
+            (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None))
         .options(joinedload(SharedSecret.user), joinedload(SharedSecret.secret))
     ).scalars().all()
 
@@ -154,7 +154,7 @@ def home():
 
     # Fetch all public shared secrets with eligible share_date, sorted by share_date (newest first)
     public_secrets = SharedSecret.query.filter(
-        SharedSecret.public.is_(True),
+        SharedSecret.public == True,
         SharedSecret.share_date <= datetime.now()
     ).order_by(SharedSecret.share_date.desc()).all()
 
@@ -460,7 +460,7 @@ def reset_password():
 # Profile
 @main.route('/profile', methods=['GET', 'POST'])
 @login_required
-@subscription_ended()
+@subscription_ended_flag
 def update_profile():
     secret_form = SecretForm()
     # If the user is not authenticated (session expired), return 401
@@ -496,7 +496,6 @@ def update_profile():
 # Pagination for the login history
 @main.route('/api/login-history', methods=['GET'])
 @login_required
-@subscription_ended()
 def api_login_history():
     # Get the page number from the request, default to 1
     page = request.args.get('page', 1, type=int)
@@ -586,8 +585,8 @@ def dashboard():
     # Fetch the public shared secrets and eager-load user and secret relationships
     shared_secret = db.session.execute(
         db.select(SharedSecret)
-        .where(SharedSecret.public.is_(True), 
-            (SharedSecret.time_period.is_not(None)) | (SharedSecret.time_to_send.is_not(None)))
+        .where(SharedSecret.public == True, 
+            (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None))
         .options(joinedload(SharedSecret.user), joinedload(SharedSecret.secret))
     ).scalars().all()
 
@@ -641,6 +640,7 @@ def dashboard():
 
     # Fetch all public shared secrets with eligible share_date, sorted by share_date (newest first)
     public_secrets = SharedSecret.query.filter(
+        SharedSecret.public == True,
         SharedSecret.share_date <= datetime.now()
     ).order_by(SharedSecret.share_date.desc()).all()
 
@@ -726,7 +726,7 @@ def dashboard():
 # List of all secerts for the user 
 @main.route('/all-secrets', methods=['GET', 'POST'])
 @login_required
-@subscription_ended()
+@subscription_ended_flag
 def all_secrets():
 
     # If the user is not authenticated (session expired), return 401
@@ -830,7 +830,7 @@ def search_secrets():
 
 # New secret popup
 @main.route('/add-secret', methods=['POST'])
-@subscription_ended()
+@subscription_ended_flag
 def add_secret():
     form = SecretForm()
 
@@ -891,6 +891,7 @@ def add_secret():
 
 
 @main.route('/upload', methods=['POST'])
+@subscription_ended_flag
 def upload_file():
     if 'file' not in request.files:
         return jsonify(error='No file part in the request'), 400
@@ -942,6 +943,7 @@ def get_storage_info():
 
 # Sharing secret server
 @main.route('/share', methods=['POST'])
+@subscription_ended_flag
 def share():
     form = ShareForm()
 
@@ -1255,6 +1257,7 @@ def delete_published_secret(pb_secret_id):
 # Editing secret
 @main.route('/update-secret/<int:secret_id>', methods=['POST'])
 @login_required
+@subscription_ended_flag
 def update_secret(secret_id):
     form = SecretForm()
     secret = db.get_or_404(Secret, secret_id)
@@ -1557,7 +1560,6 @@ def resend_verification():
 
 # Billing page
 @main.route('/billing', methods=['GET'])
-@subscription_ended()
 def billing():
     secret_form = SecretForm()
     form = PlanUpgradeForm()
@@ -1573,7 +1575,6 @@ def billing():
 
 # Upgrade/Downgrade plan
 @main.route('/change-plan', methods=['POST'])
-@subscription_ended()
 def change_plan():
     form = PlanUpgradeForm()
     if not form.validate_on_submit():

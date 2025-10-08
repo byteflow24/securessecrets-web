@@ -39,7 +39,12 @@
                         <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" href="#" data-url="{{ url_for('main.dashboard') }}">Dashboard</a></li>
                         <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.all_secrets' %}active{% endif %}" href="#" data-url="{{ url_for('main.all_secrets') }}">My Secrets</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a href="#" class="link-dark px-2 py-2 small fw-bold" {% if g.subscription_expired %}disabled{% endif %} style="font-size: 0.89rem; margin-right:10px;" data-bs-toggle="modal" data-bs-target="#newSecretModal">
+                        <li><a href="#" 
+                                    class="link-light px-2 py-2 small fw-bold {% if g.subscription_expired %}disabled text-secondary{% endif %}"
+                                    style="font-size: 0.89rem; margin-right:10px;" 
+                                    {% if not g.subscription_expired %}data-bs-toggle="modal" data-bs-target="#newSecretModal"{% endif %}
+                                    {% if g.subscription_expired %}onclick="alert('Your subscription has expired. Please renew to add secrets.'); return false;"{% endif %}
+                                    >
                                 <i class="bi bi-plus-square"></i> New Secret
                             </a>
                         </li>
@@ -55,7 +60,12 @@
                         {% if current_user.is_authenticated %}
                             <!-- Authenticated User Links -->
                             <li class="nav-item mx-1">
-                                <a href="#" class="link-light px-2 py-2 small fw-bold" {% if g.subscription_expired %}disabled{% endif %} style="font-size: 0.89rem; margin-right:10px;" data-bs-toggle="modal" data-bs-target="#newSecretModal">
+                                <a href="#" 
+                                    class="link-light px-2 py-2 small fw-bold {% if g.subscription_expired %}disabled text-secondary{% endif %}"
+                                    style="font-size: 0.89rem; margin-right:10px;" 
+                                    {% if not g.subscription_expired %}data-bs-toggle="modal" data-bs-target="#newSecretModal"{% endif %}
+                                    {% if g.subscription_expired %}onclick="alert('Your subscription has expired. Please renew to add secrets.'); return false;"{% endif %}
+                                    >
                                     <i class="bi bi-plus-square"></i> New Secret
                                 </a>
                             </li>
@@ -113,4 +123,5 @@
             event.stopPropagation(); // Stops Bootstrap from closing the parent menu
         });
     });
-    </script>
+    const subscriptionExpired = {{ 'true' if g.subscription_expired else 'false' }};
+</script>

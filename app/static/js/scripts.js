@@ -689,6 +689,14 @@ window.addEventListener('DOMContentLoaded', () => {
         if (newSecretForm) {
             newSecretForm.addEventListener("submit", function (event) {
                 event.preventDefault();
+
+                // 🔒 Stop if user’s subscription is expired
+                if (subscriptionExpired) {
+                    const formError = document.getElementById("formError");
+                    formError.style.display = "block";
+                    formError.textContent = "Your subscription has expired. Please renew to add new secrets.";
+                    return;
+                }
             
                 const form = event.target;
                 const secretField = form.querySelector('[name="secret"]');

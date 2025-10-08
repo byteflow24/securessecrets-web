@@ -142,8 +142,24 @@
 {% endblock %}
 <div class="container-fluid">
     <div class="row h-100 justify-content-center align-items-center">
-        <div class="container-fluid mt-5" style="padding-bottom: 100px;">
+        <div class="container-fluid" style="padding-bottom: 100px;">
             <div class="row centered-row h-100 align-items-center">
+                {% if g.subscription_expired %}
+                    <div class="alert alert-warning text-center mx-auto p-1 mb-2 small shadow-sm" 
+                        style="font-size: 12px; line-height: 1.4;"> <!-- width: fit-content; -->
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    Your account is currently in <strong>read-only mode</strong>.
+                    {% if current_user.payment_source == "Site - PayPal" %}
+                        <a href="{{ url_for('main.payment') }}" class="link-primary fw-semibold text-decoration-underline">Renew now</a>.
+                    {% elif current_user.payment_source in ["Google Pay", "Apple Pay"] %}
+                        <a href="#" class="link-primary fw-semibold text-decoration-underline">Renew from the App</a>.
+                    {% endif %}
+                    </div>
+                {% elif current_user.subscription_status == "APPROVAL_PENDING" %}
+                    <div class="alert alert-warning text-center">
+                        Please click  <a href="{{ link }}" class="link-primary link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover">here</a> to complete the approval process for your new subscription.
+                    </div>
+                {% endif %}
                 <!-- Flash Messages -->
                 <div id="flash-messages">
                     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -157,24 +173,6 @@
                         {% endif %} 
                     {% endwith %}
                 </div>
-                {% if g.subscription_expired %}
-                    <div class="alert alert-warning d-flex align-items-center justify-content-center" role="alert">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                        <div>
-                            {% if current_user.payment_source == "Site - PayPal" %}
-                                Your account is currently in <strong>read-only mode</strong>. 
-                                <a href="{{ url_for('main.payment') }}" class="fw-bold link-primary">Renew now</a>.
-                            {% elif current_user.payment_source in ["Google Pay", "Apple Pay"] %}
-                                Your account is currently in <strong>read-only mode</strong>. 
-                                    <a href="" class="fw-bold link-primary">Renew from the App</a>.
-                            {% endif %}
-                        </div>
-                    </div>
-                {% elif current_user.subscription_status == "APPROVAL_PENDING" %}
-                    <div class="alert alert-warning text-center">
-                        Please click  <a href="{{ link }}" class="link-primary link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover">here</a> to complete the approval process for your new subscription.
-                    </div>
-                {% endif %}
                 <!-- Adding new secret modal -->
                 {% include "partials/new_secret_modal.html" %}
                 <!-- User Information Section -->

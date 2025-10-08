@@ -315,10 +315,6 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/Users/mymac/Downloads/securesse
 SERVICE_ACCOUNT_FILE = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
 GCS_BUCKET = os.environ.get("GCS_BUCKET")
 
-print("Service account file:", SERVICE_ACCOUNT_FILE)
-with open(SERVICE_ACCOUNT_FILE) as f:
-    print("First 100 chars of file:", f.read(200))
-
 if not SERVICE_ACCOUNT_FILE or not GCS_BUCKET:
     raise ValueError("Missing GOOGLE_APPLICATION_CREDENTIALS or GCS_BUCKET env vars")
 

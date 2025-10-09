@@ -556,7 +556,7 @@ def add_secret_api():
         return jsonify({'success': False, 'error': 'User not authorized'}), 403
     
     subscription_expired = is_subscription_expired(user)
-    
+
     if subscription_expired:
         return jsonify({
             "subscription_expired": subscription_expired
@@ -1017,6 +1017,8 @@ def api_profile():
         if not user:
             return jsonify(success=False, error="User not found."), 404
 
+        subscription_expired = is_subscription_expired(user)
+
         if request.method == 'GET':
             login_history = LoginHistory.query.filter_by(user_id=user.id).all()
             last_login = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc()).first()
@@ -1038,6 +1040,7 @@ def api_profile():
                     "next_bill": next_billing_date,
                     "storage_used": storage_used_mb,
                     "storage_limit": storage_limit_mb,
+                    "subscription_expired": subscription_expired
                 },
                 login_history=[
                     {

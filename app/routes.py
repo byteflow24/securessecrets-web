@@ -1108,7 +1108,8 @@ def only_for_you(token):
             decrypted_secret=decrypted_secret_content,
             secret=secret,
             remaining_time=int(remaining_time),
-            file_url=file_url
+            file_url=file_url,
+            shared_secret=shared_secret
         )
     else:
         return "Invalid or expired link", 404

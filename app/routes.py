@@ -1095,7 +1095,21 @@ def only_for_you(token):
         secret = db.get_or_404(Secret, shared_secret.secret_id)
         # Decrypting the secret
         decrypted_secret_content = decrypt_secret(secret.secret)
-        return render_template('display_secret.html', decrypted_secret=decrypted_secret_content, secret=secret, remaining_time=int(remaining_time))
+
+         # ✅ Handle attached encrypted file (same logic as in published secrets)
+        file_url = None
+        if shared_secret.file:
+            # Use the same download route that handles decryption
+            file_url = url_for('main.download_file', filename=shared_secret.file)
+
+
+        return render_template(
+            'display_secret.html',
+            decrypted_secret=decrypted_secret_content,
+            secret=secret,
+            remaining_time=int(remaining_time),
+            file_url=file_url
+        )
     else:
         return "Invalid or expired link", 404
 

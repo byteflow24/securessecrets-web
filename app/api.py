@@ -360,8 +360,8 @@ def public_secrets_api():
     shared_secret = db.session.execute(
         db.select(SharedSecret)
         .where(
-            SharedSecret.public.is_(True),
-            (SharedSecret.time_period.is_not(None)) | (SharedSecret.time_to_send.is_not(None))
+            SharedSecret.public == True,
+            (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None)
         )
         .options(joinedload(SharedSecret.user), joinedload(SharedSecret.secret))
     ).scalars().all()
@@ -397,7 +397,7 @@ def public_secrets_api():
     db.session.commit()
 
     public_secrets =  SharedSecret.query.filter(
-        SharedSecret.public.is_(True),
+        SharedSecret.public == True,
         SharedSecret.share_date <= now
     ).order_by(SharedSecret.share_date.desc()).all()
 

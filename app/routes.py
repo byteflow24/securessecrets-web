@@ -1100,7 +1100,7 @@ def only_for_you(token):
         file_url = None
         if shared_secret.file:
             # Use the same download route that handles decryption
-            file_url = url_for('main.download_file', filename=shared_secret.file)
+            file_url = url_for('main.download_file', filename=shared_secret.file, token=shared_secret.token)
 
 
         return render_template(
@@ -1709,9 +1709,14 @@ def download_file(filename):
         if public_secret:
             return _serve_file(filename)
         
-        # ✅ Step 2: check if request comes from a valid "only-for-you" link
+        # ✅ Step 2: check if token in path (optional: allow ?token= or header)
         token = request.args.get('token')
+        if not token:
+            # Try reverse lookup from URL path? Only works if you pass token somehow
+            token = request.view_args.get('token')  # Only if route has <token>
+
         if token:
+            # print(f"Token: {token}")
             secret_link = SharedSecret.query.filter_by(file=filename, token=token).first()
             if secret_link:
                 return _serve_file(filename)

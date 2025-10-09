@@ -1990,10 +1990,13 @@ def api_delete_published_secret(pb_secret_id):
 @jwt_required(optional=True)
 def download_file_api(filename):
     try:
+        # Check if the request is for a preview
+        is_preview = request.args.get('preview', 'false').lower() == 'true'
+
         # ✅ Step 1: check if file is public
         public_secret = SharedSecret.query.filter_by(file=filename, public=True).first()
         if public_secret:
-            return _serve_file(filename)
+            return _serve_file(filename, as_attachment=not is_preview)
 
         # ✅ Step 2: require login for private
         user_id = get_jwt_identity()
@@ -2014,7 +2017,7 @@ def download_file_api(filename):
             return abort(403, description="You don't have permission to access this file.")
 
         # ✅ Step 4: serve file
-        return _serve_file(filename)
+        return _serve_file(filename, as_attachment=not is_preview)
 
     except Exception as e:
         print("[API Download Error]", str(e))

@@ -1100,7 +1100,11 @@ def only_for_you(token):
         file_url = None
         if shared_secret.file:
             # Use the same download route that handles decryption
-            file_url = url_for('main.download_file', filename=shared_secret.file, token=shared_secret.token)
+            file_url = {
+                'download': url_for('main.download_file', filename=shared_secret.file, token=shared_secret.token),
+                'preview': url_for('main.download_file', filename=shared_secret.file, token=shared_secret.token, preview='true'),
+                'filename': shared_secret.file  # Pass the filename for extension checking
+            }
 
 
         return render_template(
@@ -1704,22 +1708,20 @@ def paypal_webhook():
 @main.route('/downloads/<filename>')
 def download_file(filename):
     try:
+        # Check if the request is for a preview
+        is_preview = request.args.get('preview', 'false').lower() == 'true'
+
         # ✅ Step 1: check if file is public
         public_secret = SharedSecret.query.filter_by(file=filename, public=True).first()
         if public_secret:
-            return _serve_file(filename)
+            return _serve_file(filename, as_attachment=not is_preview)
         
         # ✅ Step 2: check if token in path (optional: allow ?token= or header)
-        token = request.args.get('token')
-        if not token:
-            # Try reverse lookup from URL path? Only works if you pass token somehow
-            token = request.view_args.get('token')  # Only if route has <token>
-
+        token = request.args.get('token') or request.view_args.get('token')
         if token:
-            # print(f"Token: {token}")
             secret_link = SharedSecret.query.filter_by(file=filename, token=token).first()
             if secret_link:
-                return _serve_file(filename)
+                return _serve_file(filename, as_attachment=not is_preview)
 
         # ✅ Step 3: if not public, require login
         if not current_user.is_authenticated:
@@ -1736,7 +1738,7 @@ def download_file(filename):
             return abort(403, description="You don't have permission to access this file.")
 
         # ✅ Step 5: serve file
-        return _serve_file(filename)
+        return _serve_file(filename, as_attachment=not is_preview)
 
     except Exception as e:
         print("Download error:", str(e))

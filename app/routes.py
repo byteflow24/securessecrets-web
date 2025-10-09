@@ -1708,12 +1708,19 @@ def download_file(filename):
         public_secret = SharedSecret.query.filter_by(file=filename, public=True).first()
         if public_secret:
             return _serve_file(filename)
+        
+        # ✅ Step 2: check if request comes from a valid "only-for-you" link
+        token = request.args.get('token')
+        if token:
+            secret_link = SharedSecret.query.filter_by(file=filename, token=token).first()
+            if secret_link:
+                return _serve_file(filename)
 
-        # ✅ Step 2: if not public, require login
+        # ✅ Step 3: if not public, require login
         if not current_user.is_authenticated:
             return abort(403, description="Login required.")
 
-        # ✅ Step 3: check ownership or private sharing
+        # ✅ Step 4: check ownership or private sharing
         owned_secret = Secret.query.filter_by(file=filename, user_id=current_user.id).first()
         shared_secret = SharedSecret.query.join(Secret).filter(
             Secret.file == filename,
@@ -1723,14 +1730,12 @@ def download_file(filename):
         if not owned_secret and not shared_secret:
             return abort(403, description="You don't have permission to access this file.")
 
-        # ✅ Step 4: serve file
+        # ✅ Step 5: serve file
         return _serve_file(filename)
 
     except Exception as e:
         print("Download error:", str(e))
         return abort(500)
-
-
 
 
 @main.route('/terms-of-services')

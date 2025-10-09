@@ -432,6 +432,8 @@ def all_secrets_api():
     if not user or not user.is_confirmed:
         return jsonify({'error': 'User not found or not confirmed'}), 403
 
+    subscription_expired = is_subscription_expired(user)
+
     # Fetch all secrets for the user
     query = db.select(Secret).where(Secret.user_id == user.id)
     user_secrets = db.session.execute(query.order_by(Secret.date.desc())).scalars().all()
@@ -500,7 +502,8 @@ def all_secrets_api():
 
     return jsonify({
         'user_secrets': user_secrets_data,
-        'shared_secrets': shared_secrets_data
+        'shared_secrets': shared_secrets_data,
+        "subscription_expired": subscription_expired
     }), 200
 
 # === Search and Filter === 
@@ -551,6 +554,13 @@ def add_secret_api():
 
     if not user:
         return jsonify({'success': False, 'error': 'User not authorized'}), 403
+    
+    subscription_expired = is_subscription_expired(user)
+    
+    if subscription_expired:
+        return jsonify({
+            "subscription_expired": subscription_expired
+        }), 200
 
     data = request.get_json()
     title = data.get('title', '').strip()

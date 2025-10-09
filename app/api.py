@@ -1,10 +1,10 @@
 import base64
 from io import BytesIO
-from flask import Blueprint, request, jsonify, current_app, url_for, abort, send_file, g
+from flask import Blueprint, request, jsonify, current_app, url_for, abort, send_file
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
-from .utils import generate_token, send_verification_email, decrypt_secret, subscription_ended_flag, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal, apple_ms_to_datetime, is_upgrade
+from .utils import generate_token, send_verification_email, decrypt_secret, is_subscription_expired, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal, apple_ms_to_datetime, is_upgrade
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -288,27 +288,13 @@ def api_logout():
 
 @api.route('/dashboard', methods=['GET'])
 @jwt_required()
-@subscription_ended_flag
 def dashboard_api():
     user_id = get_jwt_identity()
     user = db.session.get(User, int(user_id))
     if not user:
         return jsonify({'error': 'User not found'}), 404
-
-    # Redirect new users to payment
-    # if user.status == "new":
-    #     token = generate_access_token(
-    #         user_id=user.id,
-    #         secret_key=current_app.config['JWT_SECRET_KEY']
-    #     )
-
-    #     charge_url = url_for('main.payment', token=token, _external=True)
-
-    #     return jsonify({
-    #         'error': 'Payment required',
-    #         'payment_token': token,
-    #         'redirect_url': charge_url
-    #     }), 402
+    
+    subscription_expired = is_subscription_expired(user)
 
     secrets_count = Secret.query.filter_by(user_id=user.id).count()
     last_login = user.login_history[-1].login_time if user.login_history else None
@@ -347,7 +333,7 @@ def dashboard_api():
         "storage_limit_mb": storage_limit_mb,
         "storage_percentage": storage_percentage,
         "approval_link": approval_link,
-        "subscription_expired": g.subscription_expired
+        "subscription_expired": subscription_expired
     }), 200
 
 

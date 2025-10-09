@@ -123,6 +123,26 @@ def subscription_ended_flag(func):
         return func(*args, **kwargs)
     return wrapper
 
+def is_subscription_expired(user):
+    """
+    Returns True if the user's trial/subscription has ended, else False.
+    """
+    if not user:
+        return True  # Treat missing user as expired for safety
+    
+    if user.username == "admin":  # ✅ Always allow admin
+        return False
+
+    current_date = datetime.now(timezone.utc).date()
+    
+    trial_valid = user.trial_end_date and user.trial_end_date.date() >= current_date
+    sub_valid = (
+        user.subscription_status == "ACTIVE"
+        and user.next_billing_date
+        and user.next_billing_date.date() >= current_date
+    )
+
+    return not (trial_valid or sub_valid)
 
 # Mention this step at all_secrets server
 def decrypt_secrets(user_secrets):

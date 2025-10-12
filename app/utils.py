@@ -134,7 +134,7 @@ def is_subscription_expired(user):
         return False
 
     current_date = datetime.now(timezone.utc).date()
-    
+
     trial_valid = user.trial_end_date and user.trial_end_date.date() >= current_date
     sub_valid = (
         user.subscription_status == "ACTIVE"
@@ -374,6 +374,11 @@ def gcs_file_exists(filename):
     bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
     return blob.exists()
+
+def get_gcs_file_size(filename):
+    bucket = storage_client.bucket(GCS_BUCKET)
+    blob = bucket.get_blob(filename)
+    return blob.size if blob else 0
 
 def delete_from_gcs(blob_name):
     """Deletes a blob (file) from the GCS bucket."""

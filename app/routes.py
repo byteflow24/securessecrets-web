@@ -6,7 +6,7 @@ from flask_limiter.util import get_remote_address
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret
-from .utils import get_unique_title, storage_client, GCS_BUCKET, admin_only, current_user_only, subscription_ended_flag, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists, _serve_file, delete_from_gcs
+from .utils import get_unique_title, storage_client, GCS_BUCKET, admin_only, current_user_only, subscription_ended_flag, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists, _serve_file, delete_from_gcs, get_gcs_file_size
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -855,32 +855,39 @@ def add_secret():
         if not form.secret.data.strip() and not uploaded_filename:
             return jsonify(success=False, error="Provide a secret or upload a file."), 400
 
-        # Encrypt secret text
+        # Encrypt secret text and calculate size
         encrypted_secret = encrypt_secret(form.secret.data)
         secret_size = len(encrypted_secret.encode('utf-8'))
 
-        # Add file size if available
-        file_size = int(request.form.get("uploadedFileSize", 0))
+        # Calculate metadata size
+        unique_title = get_unique_title(form.title.data.strip(), current_user.id)
+        metadata = {
+            "title": unique_title,
+            "date": date.today().strftime("%Y-%m-%d"),
+            "file": uploaded_filename or "",
+            "user_id": str(current_user.id)
+        }
+        metadata_size = len(json.dumps(metadata).encode('utf-8')) + 100  # Add DB overhead estimate
 
-        if current_user.storage_used + secret_size + file_size > current_user.plan.storage_limit:
+        # Verify file size server-side
+        file_size = get_gcs_file_size(uploaded_filename) if uploaded_filename else 0
+
+        # Check storage limit
+        total_size = secret_size + metadata_size + file_size
+        if current_user.storage_used + total_size > current_user.plan.storage_limit:
             return jsonify(success=False, error="Adding this secret exceeds your plan's storage."), 403
 
-        # Generate unique title
-        unique_title = get_unique_title(form.title.data.strip(), current_user.id)
-
         # Update storage usage
-        current_user.storage_used += secret_size + file_size
-
-        # Save secret
-        new_secret = Secret(
-            title=unique_title,
-            secret=encrypted_secret,
-            file=uploaded_filename,
-            date=date.today().strftime("%Y-%m-%d"),
-            user_id=current_user.id
-        )
-        db.session.add(new_secret)
-        db.session.commit()
+        with db.session.begin():
+            current_user.storage_used += total_size
+            new_secret = Secret(
+                title=unique_title,
+                secret=encrypted_secret,
+                file=uploaded_filename,
+                date=date.today().strftime("%Y-%m-%d"),
+                user_id=current_user.id
+            )
+            db.session.add(new_secret)
 
         return jsonify(
             success=True,

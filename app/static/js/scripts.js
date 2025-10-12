@@ -659,13 +659,21 @@ window.addEventListener('DOMContentLoaded', () => {
                             reject('Filename missing from upload response');
                         }
                     } else {
-                        reject('Upload failed');
+                        const errorMessage = `Upload failed with status ${xhr.status}: ${xhr.statusText}`;
+                        console.error(errorMessage);
+                        document.getElementById('errorFlash').textContent = errorMessage;
+                        document.getElementById('errorFlash').style.display = 'block';
+                        reject(errorMessage);
                     }
                 });
                 
 
                 xhr.addEventListener('error', function () {
-                    reject('Upload error');
+                    const errorMessage = 'Upload error: Network or server issue';
+                    console.error(errorMessage);
+                    document.getElementById('errorFlash').textContent = errorMessage;
+                    document.getElementById('errorFlash').style.display = 'block';
+                    reject(errorMessage);
                 });
 
                 xhr.send(formData);

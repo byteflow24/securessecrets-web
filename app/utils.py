@@ -353,14 +353,19 @@ def upload_to_gcs(file, filename):
     
     # Encrypt bytes
     encrypted_bytes = cipher_suite.encrypt(file_bytes)
-    
-    # Upload encrypted bytes to GCS
-    bucket = storage_client.bucket(GCS_BUCKET)
-    blob = bucket.blob(filename)
-    blob.upload_from_file(BytesIO(encrypted_bytes), content_type="application/octet-stream")
 
-    print("Using client:", storage_client._credentials.service_account_email)
-    return blob.name  # return filename, NOT public URL
+    try:
+    
+        # Upload encrypted bytes to GCS
+        bucket = storage_client.bucket(GCS_BUCKET)
+        blob = bucket.blob(filename)
+        blob.upload_from_file(BytesIO(encrypted_bytes), content_type="application/octet-stream")
+
+        print("Using client:", storage_client._credentials.service_account_email)
+        return blob.name  # return filename, NOT public URL
+    except Exception as e:
+        print(f"[GCS Upload Error] {str(e)}")
+        raise
 
 def get_signed_url(filename, expires=300):
     """Return a signed URL valid for `expires` seconds"""

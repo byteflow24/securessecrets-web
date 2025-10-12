@@ -935,6 +935,7 @@ def upload_file():
         filename = f"{unique_prefix}_{original_filename}"
 
         # ✅ Upload directly from stream (no full buffering)
+        print(f"Uploading {filename}, size: {file_size} bytes")
         upload_to_gcs(file.stream, filename)
 
         # Update storage usage

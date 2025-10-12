@@ -878,16 +878,16 @@ def add_secret():
             return jsonify(success=False, error="Adding this secret exceeds your plan's storage."), 403
 
         # Update storage usage
-        with db.session.begin():
-            current_user.storage_used += total_size
-            new_secret = Secret(
-                title=unique_title,
-                secret=encrypted_secret,
-                file=uploaded_filename,
-                date=date.today().strftime("%Y-%m-%d"),
-                user_id=current_user.id
-            )
-            db.session.add(new_secret)
+        current_user.storage_used += total_size
+        new_secret = Secret(
+            title=unique_title,
+            secret=encrypted_secret,
+            file=uploaded_filename,
+            date=date.today().strftime("%Y-%m-%d"),
+            user_id=current_user.id
+        )
+        db.session.add(new_secret)
+        db.session.commit()
 
         return jsonify(
             success=True,

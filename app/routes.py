@@ -919,9 +919,13 @@ def upload_file():
         return jsonify(error='User not authenticated'), 401
 
     try:
-        file_size = request.content_length
-        if not file_size:
-            return jsonify(error="Could not determine file size"), 400
+        # ✅ Get file size safely
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+
+        if file_size == 0:
+            return jsonify(error="Empty file uploaded"), 400
 
         if current_user.storage_used + file_size > current_user.plan.storage_limit:
             return jsonify(error='Exceeds storage limit'), 403
@@ -930,9 +934,8 @@ def upload_file():
         unique_prefix = uuid.uuid4().hex
         filename = f"{unique_prefix}_{original_filename}"
 
-        # Encrypt & upload
-        file.seek(0)
-        upload_to_gcs(file, filename)
+        # ✅ Upload directly from stream (no full buffering)
+        upload_to_gcs(file.stream, filename)
 
         # Update storage usage
         current_user.storage_used += file_size

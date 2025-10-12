@@ -980,7 +980,7 @@ def get_storage_info():
         file_size = sum(get_gcs_file_size(s.file) for s in secrets if s.file)
         metadata_size = sum(len(json.dumps({
             "title": s.title,
-            "date": s.date,
+            "date": s.date.strftime("%Y-%m-%d") if s.date else None,  # ✅ convert date to string,
             "file": s.file or ""
         }).encode('utf-8')) + 100 for s in secrets)
         return jsonify({

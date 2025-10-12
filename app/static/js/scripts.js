@@ -651,20 +651,8 @@ window.addEventListener('DOMContentLoaded', () => {
                                 // Update storage info from the upload response if available
                                 updateStorageInfo(response.storageInfo.used, response.storageInfo.total);
                             } else {
-                                // Fetch storage info if not included in the response
-                                fetch('/get-storage-info', {
-                                    method: 'GET',
-                                    headers: {
-                                        'X-Requested-With': 'XMLHttpRequest',
-                                    },
-                                })
-                                    .then(response => response.json())
-                                    .then(data => {
-                                        if (data.used !== undefined && data.total !== undefined) {
-                                            updateStorageInfo(data.used, data.total);
-                                        }
-                                    })
-                                    .catch(error => console.error('Error fetching storage info:', error));
+                                console.warn("Storage info missing, fetching from server...");
+                                fetchStorageInfo();
                             }
                             resolve(response.filename);
                         } else {
@@ -770,43 +758,22 @@ window.addEventListener('DOMContentLoaded', () => {
                             <span>${data.title}</span>
                             <small>${data.date}</small>
                         </a>`;
-                    
-                    // Remove "No secrets found" message if it exists
                     const noSecretsAlert = secretsList.querySelector(".alert-info");
-                    if (noSecretsAlert) {
-                        noSecretsAlert.remove();
-                    }
-        
-                    // Add the new secret to the list
+                    if (noSecretsAlert) noSecretsAlert.remove();
                     secretsList.insertAdjacentHTML("afterbegin", newSecretHTML);
                 }
-        
-                // Update storage info if provided
-                if (data.storageInfo) {
+
+                // Update storage info
+                if (data.storageInfo && data.storageInfo.used !== undefined && data.storageInfo.total !== undefined) {
                     updateStorageInfo(data.storageInfo.used, data.storageInfo.total);
                 } else {
-                    fetch('/get-storage-info', {
-                        method: 'GET',
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest',
-                        },
-                    })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.used !== undefined && data.total !== undefined) {
-                                updateStorageInfo(data.used, data.total);
-                            }
-                        })
-                        .catch(error => console.error('Error fetching storage info:', error));
+                    console.warn("Storage info missing, fetching from server...");
+                    fetchStorageInfo(); // Centralized fetch function
                 }
 
                 showFlashMessage(data.flash_message, 'success');
-        
-                // Reset the form and close the modal
                 form.reset();
                 closeModal(form);
-        
-                // Reset file input and preview
                 resetFileInput();
             } else {
                 formError.style.display = "block";
@@ -824,6 +791,26 @@ window.addEventListener('DOMContentLoaded', () => {
         
             const storageText = document.querySelector('.text-muted');
             storageText.textContent = `${(used / (1024 * 1024)).toFixed(2)} MB used out of ${(total / (1024 * 1024)).toFixed(2)} MB`;
+        }
+
+        function fetchStorageInfo() {
+            fetch('/get-storage-info', {
+                method: 'GET',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.used !== undefined && data.total !== undefined) {
+                        updateStorageInfo(data.used, data.total);
+                    } else {
+                        console.error("Invalid storage info response:", data);
+                        showFlashMessage("Failed to update storage info", "danger");
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching storage info:', error);
+                    showFlashMessage("Failed to update storage info", "danger");
+                });
         }
 
         // Reset the file input and related elements

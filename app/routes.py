@@ -893,7 +893,11 @@ def add_secret():
             success=True,
             title=new_secret.title,
             date=new_secret.date,
-            flash_message="New secret added successfully."
+            flash_message="New secret added successfully.",
+            storageInfo={
+                "used": current_user.storage_used,
+                "total": current_user.plan.storage_limit
+            }
         ), 200
 
     except IntegrityError:
@@ -939,15 +943,55 @@ def upload_file():
     except Exception as e:
         print(f"[❌ Upload Error] {str(e)}")
         return jsonify(error=str(e)), 500
+    
+# Example endpoint to show usage
+@main.route('/storage-usage', methods=['GET'])
+def storage_usage():
+    secrets = db.session.execute(
+        db.select(Secret).where(Secret.user_id == current_user.id)
+    ).scalars().all()
+
+    text_size = sum(len(s.secret.encode('utf-8')) for s in secrets if s.secret)
+    file_size = sum(get_gcs_file_size(s.file) for s in secrets if s.file)
+
+    metadata_size = sum(len(json.dumps({
+        "title": s.title,
+        "date": s.date.strftime("%Y-%m-%d") if s.date else None,  # ✅ convert date to string
+        "file": s.file or ""
+    }).encode('utf-8')) for s in secrets)
+
+    return jsonify({
+        "text_size_bytes": text_size,
+        "file_size_bytes": file_size,
+        "metadata_size_bytes": metadata_size,
+        "total_size_bytes": text_size + file_size + metadata_size
+    })
+
 
 # Route to fetch the user's current storage usage and limit, requiring login.
 @main.route('/get-storage-info', methods=['GET'])
 @login_required
 def get_storage_info():
     try:
-        used = current_user.storage_used
-        total = current_user.plan.storage_limit
-        return jsonify({'used': used, 'total': total})
+        secrets = db.session.execute(
+            db.select(Secret).where(Secret.user_id == current_user.id)
+        ).scalars().all()
+        text_size = sum(len(s.secret.encode('utf-8')) for s in secrets if s.secret)
+        file_size = sum(get_gcs_file_size(s.file) for s in secrets if s.file)
+        metadata_size = sum(len(json.dumps({
+            "title": s.title,
+            "date": s.date,
+            "file": s.file or ""
+        }).encode('utf-8')) + 100 for s in secrets)
+        return jsonify({
+            'used': current_user.storage_used,
+            'total': current_user.plan.storage_limit,
+            'breakdown': {
+                'text': text_size,
+                'files': file_size,
+                'metadata': metadata_size
+            }
+        })
     except Exception as e:
         print(f"Error fetching storage info: {e}")
         return jsonify({'error': str(e)}), 500

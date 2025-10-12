@@ -18,7 +18,7 @@ from google.cloud import storage
 from google.oauth2 import service_account
 from dateutil.relativedelta import relativedelta
 from io import BytesIO
-import pytz, paypalrestsdk, uuid, time, json, os, traceback, requests, logging, jwt, mimetypes
+import pytz, paypalrestsdk, uuid, time, json, os, traceback, requests, logging, jwt, mimetypes, psutil
 
 # Handle Google Application Credentials
 if "GOOGLE_APPLICATION_CREDENTIALS_JSON" in os.environ:
@@ -934,9 +934,15 @@ def upload_file():
         unique_prefix = uuid.uuid4().hex
         filename = f"{unique_prefix}_{original_filename}"
 
+        # Log memory usage before upload
+        print(f"Pre-upload memory: {psutil.virtual_memory().percent}%")
+
         # ✅ Upload directly from stream (no full buffering)
         print(f"Uploading {filename}, size: {file_size} bytes")
         upload_to_gcs(file.stream, filename)
+
+        # Log memory usage after upload
+        print(f"Post-upload memory: {psutil.virtual_memory().percent}%")
 
         # Update storage usage
         current_user.storage_used += file_size

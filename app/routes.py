@@ -575,7 +575,7 @@ def dashboard():
     
     # cancel_subscription('I-JWXGEDPYF9XT', 'I was testing only')
     # redirect the new users to the payment page to continue using the account
-    if current_user.status == "new":
+    if current_user.status == "new" and current_user.payment_source == "PayPal":
         return redirect(url_for("main.payment"))
         
     # counting secrets for each user

@@ -705,6 +705,10 @@ def dashboard():
         if not public_secret:
             flash('The secret you are reporting does not exist.', 'danger')
             return redirect(request.path)
+        
+        if public_secret.user and public_secret.user.username == "admin":
+            flash("You cannot report admin's secrets.", "warning")
+            return redirect(request.path)
 
         send_report_email(secret_id, secret, secret_file, report_details)
         flash('Report submitted successfully.', 'success')

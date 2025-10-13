@@ -1367,7 +1367,7 @@ def update_secret(secret_id):
         old_text_size = len(secret.secret.encode('utf-8'))
         old_metadata = {
             "title": secret.title,
-            "date": secret.date,
+            "date": secret.date.isoformat() if secret.date else "",
             "file": secret.file or "",
             "user_id": str(secret.user_id)
         }

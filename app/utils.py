@@ -123,6 +123,24 @@ def subscription_ended_flag(func):
         return func(*args, **kwargs)
     return wrapper
 
+# Users downgraded plan and exceeds the basic plan storage
+def storage_exceeded_flag(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        storage_exceeded = False
+
+        if current_user.is_authenticated and current_user.username != "admin":
+            # Check if user is on Basic plan and exceeds storage limit
+            storage_exceeded = (
+                current_user.plan.plan == "Basic" and
+                current_user.storage_used > current_user.plan.storage_limit
+            )
+
+        g.storage_exceeded = storage_exceeded  # Set global flag
+        return func(*args, **kwargs)
+    
+    return wrapper
+
 def is_subscription_expired(user):
     """
     Returns True if the user's trial/subscription has ended, else False.

@@ -1213,7 +1213,7 @@ def delete_secret(sec_id):
         # Calculate metadata size (same logic as add_secret)
         metadata = {
             "title": secret.title,
-            "date": secret.date,
+            "date": secret.date.isoformat() if secret.date else "",
             "file": secret.file or "",
             "user_id": str(secret.user_id)
         }
@@ -1409,7 +1409,7 @@ def update_secret(secret_id):
         new_text_size = len(encrypted_secret.encode('utf-8'))
         new_metadata = {
             "title": form.title.data.strip(),
-            "date": date.today().strftime("%Y-%m-%d"),
+            "date": secret.date.isoformat() if secret.date else "",
             "file": filename or "",
             "user_id": str(current_user.id)
         }

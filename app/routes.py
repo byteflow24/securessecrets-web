@@ -6,7 +6,7 @@ from flask_limiter.util import get_remote_address
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret
-from .utils import get_unique_title, storage_client, GCS_BUCKET, admin_only, current_user_only, subscription_ended_flag, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists, _serve_file, delete_from_gcs, get_gcs_file_size
+from .utils import get_unique_title, storage_client, GCS_BUCKET, admin_only, current_user_only, subscription_ended_flag, storage_exceeded_flag, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists, _serve_file, delete_from_gcs, get_gcs_file_size
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -461,6 +461,7 @@ def reset_password():
 @main.route('/profile', methods=['GET', 'POST'])
 @login_required
 @subscription_ended_flag
+@storage_exceeded_flag
 def update_profile():
     secret_form = SecretForm()
     # If the user is not authenticated (session expired), return 401
@@ -567,6 +568,7 @@ def change_password():
 @main.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 @subscription_ended_flag
+@storage_exceeded_flag
 def dashboard():
     secret_form = SecretForm()
     # If the user is not authenticated (session expired), return 401
@@ -731,6 +733,7 @@ def dashboard():
 @main.route('/all-secrets', methods=['GET', 'POST'])
 @login_required
 @subscription_ended_flag
+@storage_exceeded_flag
 def all_secrets():
 
     # If the user is not authenticated (session expired), return 401
@@ -835,6 +838,7 @@ def search_secrets():
 # New secret popup
 @main.route('/add-secret', methods=['POST'])
 @subscription_ended_flag
+@storage_exceeded_flag
 def add_secret():
     form = SecretForm()
 
@@ -908,6 +912,7 @@ def add_secret():
 
 @main.route('/upload', methods=['POST'])
 @subscription_ended_flag
+@storage_exceeded_flag
 def upload_file():
     if 'file' not in request.files:
         return jsonify(error='No file part in the request'), 400
@@ -1010,6 +1015,7 @@ def get_storage_info():
 # Sharing secret server
 @main.route('/share', methods=['POST'])
 @subscription_ended_flag
+@storage_exceeded_flag
 def share():
     form = ShareForm()
 
@@ -1352,6 +1358,7 @@ def delete_published_secret(pb_secret_id):
 @main.route('/update-secret/<int:secret_id>', methods=['POST'])
 @login_required
 @subscription_ended_flag
+@storage_exceeded_flag
 def update_secret(secret_id):
     form = SecretForm()
     secret = db.get_or_404(Secret, secret_id)

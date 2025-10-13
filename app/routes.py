@@ -946,7 +946,7 @@ def upload_file():
         print(f"Post-upload memory: {psutil.virtual_memory().percent}%")
 
         # Update storage usage
-        current_user.storage_used += file_size
+        # current_user.storage_used += file_size
         db.session.commit()
 
         return jsonify(message='File successfully uploaded', filename=filename), 200

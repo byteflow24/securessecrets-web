@@ -91,6 +91,7 @@ class Secret(db.Model):
     share = db.Column(Boolean, default=False)
     pinned = db.Column(Boolean, default=False)
     starred = db.Column(Boolean, default=False)
+    secret_size = db.Column(Integer, nullable=False, default=0)
 
     user = db.relationship('User', back_populates='secrets')
     shared_secrets = db.relationship('SharedSecret', back_populates='secret', passive_deletes=True)

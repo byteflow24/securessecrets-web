@@ -884,7 +884,8 @@ def add_secret():
             secret=encrypted_secret,
             file=uploaded_filename,
             date=date.today().strftime("%Y-%m-%d"),
-            user_id=current_user.id
+            user_id=current_user.id,
+            secret_size=total_size
         )
         db.session.add(new_secret)
         db.session.commit()
@@ -1209,6 +1210,16 @@ def delete_secret(sec_id):
         # Calculate the size of the secret's text (in bytes)
         text_size = len(secret.secret.encode('utf-8'))  # Convert the string to bytes and measure its length
 
+        # Calculate metadata size (same logic as add_secret)
+        metadata = {
+            "title": secret.title,
+            "date": secret.date,
+            "file": secret.file or "",
+            "user_id": str(secret.user_id)
+        }
+        metadata_size = len(json.dumps(metadata).encode('utf-8')) + 100  # overhead
+
+
         # Get the file size if the secret has a file
         file_size = 0
         if secret.file:
@@ -1221,7 +1232,7 @@ def delete_secret(sec_id):
                     file_size = 0
 
         # Update the user's storage used
-        total_size = text_size + file_size
+        total_size = text_size + metadata_size + file_size
         current_user.storage_used = max(0, current_user.storage_used - total_size)  # Prevent negative storage
 
         # Commit the changes to update storage
@@ -1351,20 +1362,29 @@ def update_secret(secret_id):
     try:
         # Encrypt new secret text
         encrypted_secret = encrypt_secret(form.secret.data.strip())
-        new_text_size = len(encrypted_secret.encode("utf-8"))
-        old_text_size = len(secret.secret.encode("utf-8"))
 
-        # File size tracking
+        # --- Calculate OLD sizes ---
+        old_text_size = len(secret.secret.encode('utf-8'))
+        old_metadata = {
+            "title": secret.title,
+            "date": secret.date,
+            "file": secret.file or "",
+            "user_id": str(secret.user_id)
+        }
+        old_metadata_size = len(json.dumps(old_metadata).encode('utf-8')) + 100
+        old_file_size = get_gcs_file_size(secret.file) if secret.file else 0
+        old_total_size = old_text_size + old_metadata_size + old_file_size
+
+        # --- Handle file update ---
         new_file_size = 0
-        old_file_size = 0
+        old_file_size_to_subtract = 0
         filename = secret.file
 
-        # Handle file update (if user uploaded a new file)
         if form.file.data:
             file = form.file.data
             original_filename = secure_filename(file.filename)
 
-            # Generate a new unique filename (keep extension for previews)
+            # Generate new unique filename (keep extension)
             unique_prefix = uuid.uuid4().hex
             new_filename = f"{unique_prefix}_{original_filename}"
 
@@ -1373,43 +1393,54 @@ def update_secret(secret_id):
             new_file_size = file.tell()
             file.seek(0)
 
-            # Upload encrypted file to GCS
+            # Upload new file to GCS
             upload_to_gcs(file, new_filename)
 
-            # If old file exists in GCS → delete it
+            # Delete old file from GCS (if exists and not used elsewhere)
             if secret.file and gcs_file_exists(secret.file):
                 old_blob = storage_client.bucket(GCS_BUCKET).blob(secret.file)
-                old_file_size = old_blob.size or 0
+                old_file_size_to_subtract = old_blob.size or 0
                 old_blob.delete()
 
-            # Replace with new filename
+            # Replace filename with the new one
             filename = new_filename
 
-        # Storage limit check
-        new_storage_used = (
-            current_user.storage_used
-            - old_text_size - old_file_size
-            + new_text_size + new_file_size
-        )
-        if new_storage_used > current_user.plan.storage_limit:
+        # --- Calculate NEW sizes ---
+        new_text_size = len(encrypted_secret.encode('utf-8'))
+        new_metadata = {
+            "title": form.title.data.strip(),
+            "date": date.today().strftime("%Y-%m-%d"),
+            "file": filename or "",
+            "user_id": str(current_user.id)
+        }
+        new_metadata_size = len(json.dumps(new_metadata).encode('utf-8')) + 100
+        new_file_size = get_gcs_file_size(filename) if filename else new_file_size
+        new_total_size = new_text_size + new_metadata_size + new_file_size
+
+        # --- Calculate difference and check storage ---
+        storage_diff = new_total_size - old_total_size
+        if current_user.storage_used + storage_diff > current_user.plan.storage_limit:
             return jsonify(success=False, error="Exceeds storage limit."), 403
 
-        # Update secret fields
+        # Update user storage usage
+        current_user.storage_used += storage_diff
+
+        # --- Update secret fields ---
         secret.title = form.title.data.strip()
         secret.secret = encrypted_secret
         secret.file = filename
         secret.date = date.today().strftime("%Y-%m-%d")
+        # ✅ Update secret size
+        secret.secret_size = new_total_size
 
-        # Update user storage
-        current_user.storage_used = new_storage_used
-
-        # Update shared copies
+        # --- Update any shared entries ---
         shared_entries = SharedSecret.query.filter_by(secret_id=secret.id).all()
         for shared in shared_entries:
             shared.title = secret.title
             shared.snapshot_secret = secret.secret
             shared.file = secret.file
 
+        # Commit all changes
         db.session.commit()
 
         decrypted_secret = decrypt_secret(secret.secret)
@@ -1431,6 +1462,7 @@ def update_secret(secret_id):
     except Exception as e:
         db.session.rollback()
         return jsonify(success=False, error=str(e)), 500
+
 
 # Pricing page
 @main.route('/pricing')

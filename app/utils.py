@@ -7,7 +7,7 @@ from . import db, login_manager
 from .models import User, Secret, Plan, Payment, PendingSubscription
 from sqlalchemy import and_
 from datetime import datetime, timezone, timedelta, date
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet
 from wtforms.validators import DataRequired, Email, Regexp, ValidationError
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -386,21 +386,29 @@ credentials = service_account.Credentials.from_service_account_file(SERVICE_ACCO
 storage_client = storage.Client(credentials=credentials)
 
 def upload_to_gcs(file_stream, filename, chunk_size=1024 * 1024):
+    """
+    Encrypts and uploads a file to GCS in chunks (streaming, low memory).
+    """
     from google.cloud import storage
+    import tempfile
+
     bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
-    
-    # Use GCS streaming upload
-    with blob.open("wb") as gcs_stream:
+
+    # Create a temporary file for encrypted data (optional, low disk use)
+    with tempfile.NamedTemporaryFile() as temp_file:
         while True:
             chunk = file_stream.read(chunk_size)
             if not chunk:
                 break
             encrypted_chunk = cipher_suite.encrypt(chunk)
-            size_prefix = len(encrypted_chunk).to_bytes(4, "big")
-            gcs_stream.write(size_prefix + encrypted_chunk)
-    
+            temp_file.write(encrypted_chunk)
+
+        temp_file.seek(0)
+        blob.upload_from_file(temp_file, content_type="application/octet-stream")
+
     return blob.name
+
 
 def get_signed_url(filename, expires=300):
     """Return a signed URL valid for `expires` seconds"""
@@ -439,13 +447,15 @@ def delete_from_gcs(blob_name):
         return False, 0
 
 def _serve_file(filename, as_attachment=False):
-    """Stream-decrypt and send a file from GCS."""
-    from flask import Response
+    """Helper to fetch, decrypt, and stream file from GCS."""
     bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
 
     if not blob.exists():
         return abort(404, description="File not found.")
+
+    encrypted_bytes = blob.download_as_bytes()
+    decrypted_bytes = cipher_suite.decrypt(encrypted_bytes)
 
     # Detect MIME type
     ext = filename.split('.')[-1].lower()
@@ -460,30 +470,17 @@ def _serve_file(filename, as_attachment=False):
     }
     mime_type = mimetypes.get(ext, 'application/octet-stream')
 
-    # Stream download and decryption
-    def generate():
-        with blob.open("rb") as f:
-            while True:
-                size_bytes = f.read(4)
-                if len(size_bytes) != 4:
-                    return  # Or raise ValueError("Incomplete prefix")
-                chunk_size = int.from_bytes(size_bytes, "big")
-                encrypted_chunk = f.read(chunk_size)
-                if len(encrypted_chunk) != chunk_size:
-                    raise ValueError("Incomplete chunk")
-                try:
-                    decrypted_chunk = cipher_suite.decrypt(encrypted_chunk)
-                except InvalidToken:
-                    raise ValueError("Invalid token - possible corruption")
-                yield decrypted_chunk
-
-    headers = {}
+    # Serve the file
+    response = send_file(
+        BytesIO(decrypted_bytes),
+        download_name=filename,
+        mimetype=mime_type,
+        as_attachment=as_attachment
+    )
+    # Ensure Content-Disposition is set to inline for previews
     if not as_attachment:
-        headers["Content-Disposition"] = f'inline; filename="{filename}"'
-
-    return Response(generate(), mimetype=mime_type, headers=headers)
-
-
+        response.headers['Content-Disposition'] = f'inline; filename="{filename}"'
+    return response
 
 
 # def as_dict(self):

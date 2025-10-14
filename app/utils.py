@@ -7,7 +7,7 @@ from . import db, login_manager
 from .models import User, Secret, Plan, Payment, PendingSubscription
 from sqlalchemy import and_
 from datetime import datetime, timezone, timedelta, date
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from wtforms.validators import DataRequired, Email, Regexp, ValidationError
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -386,31 +386,21 @@ credentials = service_account.Credentials.from_service_account_file(SERVICE_ACCO
 storage_client = storage.Client(credentials=credentials)
 
 def upload_to_gcs(file_stream, filename, chunk_size=1024 * 1024):
-    """
-    Encrypts and uploads a file to GCS in chunks (streaming, low memory).
-    Stores each encrypted chunk prefixed with its length.
-    """
     from google.cloud import storage
-    import tempfile, struct
-
     bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
-
-    with tempfile.NamedTemporaryFile() as temp_file:
+    
+    # Use GCS streaming upload
+    with blob.open("wb") as gcs_stream:
         while True:
             chunk = file_stream.read(chunk_size)
             if not chunk:
                 break
             encrypted_chunk = cipher_suite.encrypt(chunk)
             size_prefix = len(encrypted_chunk).to_bytes(4, "big")
-            temp_file.write(size_prefix + encrypted_chunk)
-
-        temp_file.seek(0)
-        blob.upload_from_file(temp_file, content_type="application/octet-stream")
-
+            gcs_stream.write(size_prefix + encrypted_chunk)
+    
     return blob.name
-
-
 
 def get_signed_url(filename, expires=300):
     """Return a signed URL valid for `expires` seconds"""
@@ -472,16 +462,19 @@ def _serve_file(filename, as_attachment=False):
 
     # Stream download and decryption
     def generate():
-        # Download blob in streaming mode
         with blob.open("rb") as f:
             while True:
-                # Fernet tokens are variable length; you must store a size prefix when encrypting
                 size_bytes = f.read(4)
-                if not size_bytes:
-                    break
+                if len(size_bytes) != 4:
+                    return  # Or raise ValueError("Incomplete prefix")
                 chunk_size = int.from_bytes(size_bytes, "big")
                 encrypted_chunk = f.read(chunk_size)
-                decrypted_chunk = cipher_suite.decrypt(encrypted_chunk)
+                if len(encrypted_chunk) != chunk_size:
+                    raise ValueError("Incomplete chunk")
+                try:
+                    decrypted_chunk = cipher_suite.decrypt(encrypted_chunk)
+                except InvalidToken:
+                    raise ValueError("Invalid token - possible corruption")
                 yield decrypted_chunk
 
     headers = {}

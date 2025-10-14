@@ -733,6 +733,7 @@ def dashboard():
 @main.route('/all-secrets', methods=['GET', 'POST'])
 @login_required
 @subscription_ended_flag
+@storage_exceeded_flag()
 def all_secrets():
 
     # If the user is not authenticated (session expired), return 401
@@ -1683,6 +1684,8 @@ def resend_verification():
 
 # Billing page
 @main.route('/billing', methods=['GET'])
+@login_required
+@storage_exceeded_flag()
 def billing():
     secret_form = SecretForm()
     form = PlanUpgradeForm()
@@ -1698,6 +1701,7 @@ def billing():
 
 # Upgrade/Downgrade plan
 @main.route('/change-plan', methods=['POST'])
+@login_required
 def change_plan():
     form = PlanUpgradeForm()
     if not form.validate_on_submit():

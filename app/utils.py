@@ -387,31 +387,30 @@ if not SERVICE_ACCOUNT_FILE or not GCS_BUCKET:
 credentials = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE)
 storage_client = storage.Client(credentials=credentials)
 
-def upload_to_gcs(file, filename):
+def upload_to_gcs(file_stream, filename, chunk_size=1024 * 1024):
     """
-    Encrypts the file bytes and uploads them to GCS.
-    Returns the blob name (do NOT use public URL directly!)
+    Encrypts and uploads a file to GCS in chunks (streaming, low memory).
     """
-    from io import BytesIO
+    from google.cloud import storage
+    import tempfile
 
-    # Read raw bytes
-    file_bytes = file.read()
-    
-    # Encrypt bytes
-    encrypted_bytes = cipher_suite.encrypt(file_bytes)
+    bucket = storage_client.bucket(GCS_BUCKET)
+    blob = bucket.blob(filename)
 
-    try:
-    
-        # Upload encrypted bytes to GCS
-        bucket = storage_client.bucket(GCS_BUCKET)
-        blob = bucket.blob(filename)
-        blob.upload_from_file(BytesIO(encrypted_bytes), content_type="application/octet-stream")
+    # Create a temporary file for encrypted data (optional, low disk use)
+    with tempfile.NamedTemporaryFile() as temp_file:
+        while True:
+            chunk = file_stream.read(chunk_size)
+            if not chunk:
+                break
+            encrypted_chunk = cipher_suite.encrypt(chunk)
+            temp_file.write(encrypted_chunk)
 
-        print("Using client:", storage_client._credentials.service_account_email)
-        return blob.name  # return filename, NOT public URL
-    except Exception as e:
-        print(f"[GCS Upload Error] {str(e)}")
-        raise
+        temp_file.seek(0)
+        blob.upload_from_file(temp_file, content_type="application/octet-stream")
+
+    return blob.name
+
 
 def get_signed_url(filename, expires=300):
     """Return a signed URL valid for `expires` seconds"""

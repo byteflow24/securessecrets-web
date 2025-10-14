@@ -388,26 +388,28 @@ storage_client = storage.Client(credentials=credentials)
 def upload_to_gcs(file_stream, filename, chunk_size=1024 * 1024):
     """
     Encrypts and uploads a file to GCS in chunks (streaming, low memory).
+    Stores each encrypted chunk prefixed with its length.
     """
     from google.cloud import storage
-    import tempfile
+    import tempfile, struct
 
     bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
 
-    # Create a temporary file for encrypted data (optional, low disk use)
     with tempfile.NamedTemporaryFile() as temp_file:
         while True:
             chunk = file_stream.read(chunk_size)
             if not chunk:
                 break
             encrypted_chunk = cipher_suite.encrypt(chunk)
-            temp_file.write(encrypted_chunk)
+            size_prefix = len(encrypted_chunk).to_bytes(4, "big")
+            temp_file.write(size_prefix + encrypted_chunk)
 
         temp_file.seek(0)
         blob.upload_from_file(temp_file, content_type="application/octet-stream")
 
     return blob.name
+
 
 
 def get_signed_url(filename, expires=300):
@@ -447,37 +449,13 @@ def delete_from_gcs(blob_name):
         return False, 0
 
 def _serve_file(filename, as_attachment=False):
-    """Helper to fetch, decrypt, and stream file from GCS."""
+    """Stream-decrypt and send a file from GCS."""
+    from flask import Response
     bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
 
     if not blob.exists():
         return abort(404, description="File not found.")
-
-    # Download encrypted file in chunks
-    from io import BytesIO
-    import tempfile
-
-    with tempfile.NamedTemporaryFile() as temp_file:
-        blob.download_to_file(temp_file)
-        temp_file.seek(0)
-
-        decrypted_stream = BytesIO()
-        while True:
-            # Each Fernet-encrypted chunk has variable size, but you can split by marker
-            # if you saved metadata or length prefix. Since you didn't, you must decrypt
-            # in the same chunk size you encrypted (chunk_size=1MB).
-            chunk = temp_file.read(1024 * 1024 + 100)  # add overhead for Fernet
-            if not chunk:
-                break
-            try:
-                decrypted_chunk = cipher_suite.decrypt(chunk)
-                decrypted_stream.write(decrypted_chunk)
-            except Exception:
-                # If chunk boundaries don't align perfectly, you’ll need Option 2.
-                return abort(500, description="Decryption failed. Chunk mismatch.")
-
-        decrypted_stream.seek(0)
 
     # Detect MIME type
     ext = filename.split('.')[-1].lower()
@@ -492,15 +470,26 @@ def _serve_file(filename, as_attachment=False):
     }
     mime_type = mimetypes.get(ext, 'application/octet-stream')
 
-    response = send_file(
-        decrypted_stream,
-        download_name=filename,
-        mimetype=mime_type,
-        as_attachment=as_attachment
-    )
+    # Stream download and decryption
+    def generate():
+        # Download blob in streaming mode
+        with blob.open("rb") as f:
+            while True:
+                # Fernet tokens are variable length; you must store a size prefix when encrypting
+                size_bytes = f.read(4)
+                if not size_bytes:
+                    break
+                chunk_size = int.from_bytes(size_bytes, "big")
+                encrypted_chunk = f.read(chunk_size)
+                decrypted_chunk = cipher_suite.decrypt(encrypted_chunk)
+                yield decrypted_chunk
+
+    headers = {}
     if not as_attachment:
-        response.headers['Content-Disposition'] = f'inline; filename="{filename}"'
-    return response
+        headers["Content-Disposition"] = f'inline; filename="{filename}"'
+
+    return Response(generate(), mimetype=mime_type, headers=headers)
+
 
 
 

@@ -446,7 +446,8 @@ def delete_from_gcs(blob_name):
 
 def _serve_file(filename, as_attachment=False):
     """
-    Stream-decrypt a file from GCS in chunks.
+    Stream-decrypt a file from GCS in chunks and serve it in a way that all file types
+    (images, pdf, video, office docs) preview correctly in browser.
     """
     bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
@@ -454,7 +455,7 @@ def _serve_file(filename, as_attachment=False):
     if not blob.exists():
         return abort(404, description="File not found.")
 
-    # MIME type detection (add more if needed)
+    # MIME type detection
     ext = filename.split('.')[-1].lower()
     mime_map = {
         'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
@@ -470,8 +471,8 @@ def _serve_file(filename, as_attachment=False):
     }
     mime_type = mime_map.get(ext, 'application/octet-stream')
 
-    def generate():
-        # Stream from GCS blob
+    # Decrypt and write to temp file (stream-safe for large files)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{filename}") as tmp_file:
         with blob.open("rb") as f:
             while True:
                 # Read 4-byte length prefix
@@ -479,15 +480,29 @@ def _serve_file(filename, as_attachment=False):
                 if not size_bytes:
                     break
                 token_len = int.from_bytes(size_bytes, 'big')
-                # Read exact Fernet token
                 token = f.read(token_len)
-                yield cipher_suite.decrypt(token)
+                decrypted_chunk = cipher_suite.decrypt(token)
+                tmp_file.write(decrypted_chunk)
+        tmp_path = tmp_file.name
 
-    headers = {}
-    if not as_attachment:
-        headers["Content-Disposition"] = f'inline; filename="{filename}"'
+    # Serve via Flask send_file (handles range requests for video/pdf automatically)
+    response = send_file(
+        tmp_path,
+        mimetype=mime_type,
+        as_attachment=as_attachment,
+        download_name=filename,
+        conditional=True  # Enables Range support for media/PDF
+    )
 
-    return Response(generate(), mimetype=mime_type, headers=headers)
+    # Clean up temp file after sending (safe async cleanup)
+    @response.call_on_close
+    def cleanup_temp_file():
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+    return response
 
 
 # def as_dict(self):

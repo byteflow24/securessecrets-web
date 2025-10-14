@@ -944,7 +944,7 @@ def upload_file():
 
         # ✅ Upload directly from stream (no full buffering)
         print(f"Uploading {filename}, size: {file_size} bytes")
-        upload_to_gcs(file.stream, filename)
+        upload_to_gcs(file.stream, filename, file_size)
 
         # Log memory usage after upload
         print(f"Post-upload memory: {psutil.virtual_memory().percent}%")

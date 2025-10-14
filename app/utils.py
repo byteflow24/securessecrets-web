@@ -124,43 +124,50 @@ def subscription_ended_flag(func):
     return wrapper
 
 # Users downgraded plan and exceeds the basic plan storage
-def storage_exceeded_flag(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        storage_exceeded = False
+def storage_exceeded_flag(api=False):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            storage_exceeded = False
 
-        if current_user.is_authenticated and current_user.username != "admin":
+            # Check if user is authenticated
+            if not current_user.is_authenticated:
+                if api:
+                    return jsonify({"success": False, "error": "Unauthorized"}), 401
+                return redirect(url_for('main.login'))
+
+            # Admin bypasses storage check
+            if current_user.username == 'admin':
+                return func(*args, **kwargs)
+
+            # Check storage limit for Basic plan
             storage_exceeded = (
                 current_user.plan.plan == "Basic" and
                 current_user.storage_used > current_user.plan.storage_limit
             )
 
-        g.storage_exceeded = storage_exceeded
+            g.storage_exceeded = storage_exceeded
 
-        # Skip redirect/error for allowed routes or if storage not exceeded
-        allowed_routes = (
-            'all_secrets',  # Secrets management page
-            'delete_secret',  # Secret deletion endpoint (adjust to your route name)
-            'payment',  # Payment page to upgrade plan (adjust to your route name)
-            'billing', # Changing plan from billing
-            'logout',  # Allow logout (adjust to your route name)
-            'get_storage_info'  # Storage info API
-        )
+            if not storage_exceeded:
+                return func(*args, **kwargs)
 
-        if storage_exceeded and func.__name__ not in allowed_routes:
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            # Allow access to specific routes
+            allowed_routes = ('all_secrets', 'delete_secret', 'payment', 'billing', 'logout', 'get_storage_info')
+
+            if api or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({
                     'success': False,
-                    'error': 'Storage exceeds Basic plan limit. Delete secrets to continue.',
+                    'error': 'Storage exceeds Basic plan limit. Delete secrets or upgrade your plan.',
                     'redirect': url_for('main.all_secrets')
                 }), 403
 
-            # Handle web routes (redirect to all_secrets)
-            return redirect(url_for('main.all_secrets'))
+            if func.__name__ not in allowed_routes:
+                return redirect(url_for('main.all_secrets'))
 
-        return func(*args, **kwargs)
-    
-    return wrapper
+            return func(*args, **kwargs)
+        
+        return wrapper
+    return decorator
 
 def is_subscription_expired(user):
     """

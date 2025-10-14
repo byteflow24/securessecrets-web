@@ -153,7 +153,7 @@ def storage_exceeded_flag(api=False):
                 'billing', 'logout', 'get_storage_info'
             )
 
-            if api or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            if api:
                 return jsonify({
                     'success': False,
                     'error': 'Storage exceeds Basic plan limit. Delete secrets or upgrade your plan.',

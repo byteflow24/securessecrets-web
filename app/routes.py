@@ -836,6 +836,7 @@ def search_secrets():
 
 # New secret popup
 @main.route('/add-secret', methods=['POST'])
+@login_required
 @subscription_ended_flag
 @storage_exceeded_flag()
 def add_secret():
@@ -910,6 +911,7 @@ def add_secret():
 
 
 @main.route('/upload', methods=['POST'])
+@login_required
 @subscription_ended_flag
 @storage_exceeded_flag()
 def upload_file():

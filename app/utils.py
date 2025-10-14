@@ -454,8 +454,30 @@ def _serve_file(filename, as_attachment=False):
     if not blob.exists():
         return abort(404, description="File not found.")
 
-    encrypted_bytes = blob.download_as_bytes()
-    decrypted_bytes = cipher_suite.decrypt(encrypted_bytes)
+    # Download encrypted file in chunks
+    from io import BytesIO
+    import tempfile
+
+    with tempfile.NamedTemporaryFile() as temp_file:
+        blob.download_to_file(temp_file)
+        temp_file.seek(0)
+
+        decrypted_stream = BytesIO()
+        while True:
+            # Each Fernet-encrypted chunk has variable size, but you can split by marker
+            # if you saved metadata or length prefix. Since you didn't, you must decrypt
+            # in the same chunk size you encrypted (chunk_size=1MB).
+            chunk = temp_file.read(1024 * 1024 + 100)  # add overhead for Fernet
+            if not chunk:
+                break
+            try:
+                decrypted_chunk = cipher_suite.decrypt(chunk)
+                decrypted_stream.write(decrypted_chunk)
+            except Exception:
+                # If chunk boundaries don't align perfectly, you’ll need Option 2.
+                return abort(500, description="Decryption failed. Chunk mismatch.")
+
+        decrypted_stream.seek(0)
 
     # Detect MIME type
     ext = filename.split('.')[-1].lower()
@@ -470,17 +492,16 @@ def _serve_file(filename, as_attachment=False):
     }
     mime_type = mimetypes.get(ext, 'application/octet-stream')
 
-    # Serve the file
     response = send_file(
-        BytesIO(decrypted_bytes),
+        decrypted_stream,
         download_name=filename,
         mimetype=mime_type,
         as_attachment=as_attachment
     )
-    # Ensure Content-Disposition is set to inline for previews
     if not as_attachment:
         response.headers['Content-Disposition'] = f'inline; filename="{filename}"'
     return response
+
 
 
 # def as_dict(self):

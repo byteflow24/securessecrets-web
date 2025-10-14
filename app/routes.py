@@ -733,7 +733,6 @@ def dashboard():
 @main.route('/all-secrets', methods=['GET', 'POST'])
 @login_required
 @subscription_ended_flag
-# @storage_exceeded_flag()
 def all_secrets():
 
     # If the user is not authenticated (session expired), return 401

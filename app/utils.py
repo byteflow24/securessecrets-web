@@ -460,13 +460,11 @@ def _serve_file(filename, as_attachment=False):
     """Helper to fetch, decrypt, and **stream** file from GCS **chunk-by-chunk** (low mem)."""
     bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
+    blob.reload()
 
-    if not blob.exists():
-        return abort(404, description="File not found.")
-
+    if not blob.exists() or blob.size is None:
+        return abort(404, description="File not found or empty.")
     blob_size = blob.size
-    if blob_size == 0:
-        return abort(404, description="Empty file.")
 
     # ✅ Compute chunks
     num_full = blob_size // FULL_ENC_LEN

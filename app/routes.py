@@ -461,7 +461,7 @@ def reset_password():
 @main.route('/profile', methods=['GET', 'POST'])
 @login_required
 @subscription_ended_flag
-@storage_exceeded_flag
+@storage_exceeded_flag()
 def update_profile():
     secret_form = SecretForm()
     # If the user is not authenticated (session expired), return 401
@@ -568,7 +568,7 @@ def change_password():
 @main.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 @subscription_ended_flag
-@storage_exceeded_flag
+@storage_exceeded_flag()
 def dashboard():
     secret_form = SecretForm()
     # If the user is not authenticated (session expired), return 401
@@ -733,7 +733,7 @@ def dashboard():
 @main.route('/all-secrets', methods=['GET', 'POST'])
 @login_required
 @subscription_ended_flag
-@storage_exceeded_flag
+@storage_exceeded_flag()
 def all_secrets():
 
     # If the user is not authenticated (session expired), return 401
@@ -838,7 +838,7 @@ def search_secrets():
 # New secret popup
 @main.route('/add-secret', methods=['POST'])
 @subscription_ended_flag
-@storage_exceeded_flag
+@storage_exceeded_flag()
 def add_secret():
     form = SecretForm()
 
@@ -912,7 +912,7 @@ def add_secret():
 
 @main.route('/upload', methods=['POST'])
 @subscription_ended_flag
-@storage_exceeded_flag
+@storage_exceeded_flag()
 def upload_file():
     if 'file' not in request.files:
         return jsonify(error='No file part in the request'), 400
@@ -1015,7 +1015,7 @@ def get_storage_info():
 # Sharing secret server
 @main.route('/share', methods=['POST'])
 @subscription_ended_flag
-@storage_exceeded_flag
+@storage_exceeded_flag()
 def share():
     form = ShareForm()
 
@@ -1358,7 +1358,7 @@ def delete_published_secret(pb_secret_id):
 @main.route('/update-secret/<int:secret_id>', methods=['POST'])
 @login_required
 @subscription_ended_flag
-@storage_exceeded_flag
+@storage_exceeded_flag()
 def update_secret(secret_id):
     form = SecretForm()
     secret = db.get_or_404(Secret, secret_id)

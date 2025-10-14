@@ -126,21 +126,18 @@ def subscription_ended_flag(func):
 # Users downgraded plan and exceeds the basic plan storage
 def storage_exceeded_flag(api=False):
     def decorator(func):
-        @wraps(func)
+        @wraps(func)  # ✅ make sure this wraps the *route function itself*
         def wrapper(*args, **kwargs):
             storage_exceeded = False
-
-            # Check if user is authenticated
+            
             if not current_user.is_authenticated:
                 if api:
                     return jsonify({"success": False, "error": "Unauthorized"}), 401
                 return redirect(url_for('main.login'))
 
-            # Admin bypasses storage check
             if current_user.username == 'admin':
                 return func(*args, **kwargs)
 
-            # Check storage limit for Basic plan
             storage_exceeded = (
                 current_user.plan.plan == "Basic" and
                 current_user.storage_used > current_user.plan.storage_limit
@@ -151,8 +148,10 @@ def storage_exceeded_flag(api=False):
             if not storage_exceeded:
                 return func(*args, **kwargs)
 
-            # Allow access to specific routes
-            allowed_routes = ('all_secrets', 'delete_secret', 'payment', 'billing', 'logout', 'get_storage_info')
+            allowed_routes = (
+                'all_secrets', 'delete_secret', 'payment',
+                'billing', 'logout', 'get_storage_info'
+            )
 
             if api or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({
@@ -165,7 +164,6 @@ def storage_exceeded_flag(api=False):
                 return redirect(url_for('main.all_secrets'))
 
             return func(*args, **kwargs)
-        
         return wrapper
     return decorator
 

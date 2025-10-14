@@ -1,5 +1,5 @@
 from io import BytesIO
-from flask import abort, request, url_for, session, send_file, flash, redirect, jsonify, send_from_directory, current_app, g
+from flask import abort, request, url_for, session, Response, send_file, flash, redirect, jsonify, send_from_directory, current_app, g
 from flask_login import current_user
 from functools import wraps
 from urllib.parse import urlparse, urljoin
@@ -18,7 +18,7 @@ from google.cloud import recaptchaenterprise_v1, storage
 from google.oauth2 import service_account
 from google.cloud.recaptchaenterprise_v1 import Assessment
 from itsdangerous import URLSafeTimedSerializer
-import logging, uuid, json, pytz, jwt, base64, requests, secrets, re, os, smtplib, time
+import logging, uuid, json, pytz, jwt, base64, requests, secrets, re, os, smtplib, time, tempfile
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -385,7 +385,7 @@ if not SERVICE_ACCOUNT_FILE or not GCS_BUCKET:
 credentials = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE)
 storage_client = storage.Client(credentials=credentials)
 
-def upload_to_gcs(file_stream, filename, chunk_size=1024 * 1024):
+def upload_to_gcs(file_stream, filename, file_size, chunk_size=1024 * 1024):  # ✅ Add file_size param
     """
     Encrypts and uploads a file to GCS in chunks (streaming, low memory).
     """
@@ -395,7 +395,6 @@ def upload_to_gcs(file_stream, filename, chunk_size=1024 * 1024):
     bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
 
-    # Create a temporary file for encrypted data (optional, low disk use)
     with tempfile.NamedTemporaryFile() as temp_file:
         while True:
             chunk = file_stream.read(chunk_size)
@@ -406,6 +405,10 @@ def upload_to_gcs(file_stream, filename, chunk_size=1024 * 1024):
 
         temp_file.seek(0)
         blob.upload_from_file(temp_file, content_type="application/octet-stream")
+
+    # ✅ Add metadata for original size (used in download)
+    blob.metadata = {'original_size': str(file_size)}
+    blob.patch()
 
     return blob.name
 
@@ -446,41 +449,91 @@ def delete_from_gcs(blob_name):
         print(f"Error deleting {blob_name} from GCS: {e}")
         return False, 0
 
+
+# ✅ Globals (compute once; run at module load)
+FULL_CHUNK_SIZE = 1024 * 1024
+DUMMY_CHUNK = b'\x00' * FULL_CHUNK_SIZE
+FULL_ENC_LEN = len(cipher_suite.encrypt(DUMMY_CHUNK))  # 1398200
+MIN_ENC_LEN = 100  # Fernet min (empty/small chunk)
+
 def _serve_file(filename, as_attachment=False):
-    """Helper to fetch, decrypt, and stream file from GCS."""
+    """Helper to fetch, decrypt, and **stream** file from GCS **chunk-by-chunk** (low mem)."""
     bucket = storage_client.bucket(GCS_BUCKET)
     blob = bucket.blob(filename)
 
     if not blob.exists():
         return abort(404, description="File not found.")
 
-    encrypted_bytes = blob.download_as_bytes()
-    decrypted_bytes = cipher_suite.decrypt(encrypted_bytes)
+    blob_size = blob.size
+    if blob_size == 0:
+        return abort(404, description="Empty file.")
 
-    # Detect MIME type
-    ext = filename.split('.')[-1].lower()
-    mimetypes = {
-        'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-        'gif': 'image/gif', 'webp': 'image/webp', 'heic': 'image/heic',
-        'mp4': 'video/mp4', 'mov': 'video/quicktime',
-        'pdf': 'application/pdf', 'mp3': 'audio/mpeg',
-        'doc': 'application/msword', 'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'xls': 'application/vnd.ms-excel', 'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'ppt': 'application/vnd.ms-powerpoint', 'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-    }
-    mime_type = mimetypes.get(ext, 'application/octet-stream')
+    # ✅ Compute chunks
+    num_full = blob_size // FULL_ENC_LEN
+    remainder = blob_size % FULL_ENC_LEN
+    has_last = bool(remainder)
+    if has_last and remainder < MIN_ENC_LEN:
+        return abort(500, description="Corrupted encryption metadata.")
 
-    # Serve the file
-    response = send_file(
-        BytesIO(decrypted_bytes),
-        download_name=filename,
-        mimetype=mime_type,
-        as_attachment=as_attachment
-    )
-    # Ensure Content-Disposition is set to inline for previews
-    if not as_attachment:
-        response.headers['Content-Disposition'] = f'inline; filename="{filename}"'
-    return response
+    # ✅ Get original size from metadata
+    original_size = int(blob.metadata.get('original_size', 0))
+    if original_size == 0:
+        return abort(500, description="Missing file size metadata.")
+
+    # ✅ Download to temp disk (streams from GCS, low mem)
+    temp_fd, temp_path = tempfile.mkstemp(suffix='.enc')
+    try:
+        blob.download_to_filename(temp_path)
+
+        def generate_chunks():
+            """Yield decrypted chunks (1MB mem peak)."""
+            with os.fdopen(temp_fd, 'rb') as f:
+                # Full chunks
+                for _ in range(num_full):
+                    enc_chunk = f.read(FULL_ENC_LEN)
+                    if len(enc_chunk) != FULL_ENC_LEN:
+                        raise ValueError("Download corruption")
+                    yield cipher_suite.decrypt(enc_chunk)
+                
+                # Last chunk
+                if has_last:
+                    enc_chunk = f.read(remainder)
+                    if len(enc_chunk) != remainder:
+                        raise ValueError("Download corruption")
+                    yield cipher_suite.decrypt(enc_chunk)
+
+        # ✅ MIME detection (unchanged)
+        ext = filename.split('.')[-1].lower()
+        mimetypes = {
+            'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+            'gif': 'image/gif', 'webp': 'image/webp', 'heic': 'image/heic',
+            'mp4': 'video/mp4', 'mov': 'video/quicktime',
+            'pdf': 'application/pdf', 'mp3': 'audio/mpeg',
+            'doc': 'application/msword', 'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls': 'application/vnd.ms-excel', 'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'ppt': 'application/vnd.ms-powerpoint', 'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        }
+        mime_type = mimetypes.get(ext, 'application/octet-stream')
+
+        # ✅ Stream response
+        response = Response(generate_chunks(), mimetype=mime_type)
+        response.headers['Content-Length'] = str(original_size)
+        if as_attachment:
+            response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+        else:
+            response.headers['Content-Disposition'] = f'inline; filename="{filename}"'
+        return response
+
+    finally:
+        # ✅ Cleanup
+        try:
+            os.close(temp_fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
 
 
 # def as_dict(self):

@@ -39,15 +39,29 @@
                         <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" href="#" data-url="{{ url_for('main.dashboard') }}">Dashboard</a></li>
                         <li><a class="dropdown-item dynamic-link {% if request.endpoint == 'main.all_secrets' %}active{% endif %}" href="#" data-url="{{ url_for('main.all_secrets') }}">My Secrets</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a href="#" 
-                                    class="link-light px-2 py-2 small fw-bold {% if g.subscription_expired %}disabled text-secondary{% endif %}"
-                                    style="font-size: 0.89rem; margin-right:10px;" 
-                                    {% if not g.subscription_expired %}data-bs-toggle="modal" data-bs-target="#newSecretModal"{% endif %}
-                                    {% if g.subscription_expired %}onclick="alert('Your subscription has expired. Please renew to add secrets.'); return false;"{% endif %}
-                                    >
+                        <li>
+                            <a href="#"
+                                class="link-light px-2 py-2 small fw-bold 
+                                        {% if g.subscription_expired or (current_user.plan.name == 'Basic' and current_user.storage_used >= current_user.plan.storage_limit) %}
+                                            disabled text-secondary
+                                        {% endif %}"
+                                style="font-size: 0.89rem; margin-right:10px;"
+                                
+                                {% if not (g.subscription_expired or (current_user.plan.name == 'Basic' and current_user.storage_used >= current_user.plan.storage_limit)) %}
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#newSecretModal"
+                                {% endif %}
+                                
+                                {% if g.subscription_expired %}
+                                    onclick="alert('Your subscription has expired. Please renew to add secrets.'); return false;"
+                                {% elif current_user.plan.name == 'Basic' and current_user.storage_used >= current_user.plan.storage_limit %}
+                                    onclick="alert('You have reached your Basic plan storage limit. Please delete old secrets or upgrade your plan.'); return false;"
+                                {% endif %}
+                            >
                                 <i class="bi bi-plus-square"></i> New Secret
                             </a>
                         </li>
+
                     {% endif %}
                 </ul>
             </div>
@@ -60,12 +74,24 @@
                         {% if current_user.is_authenticated %}
                             <!-- Authenticated User Links -->
                             <li class="nav-item mx-1">
-                                <a href="#" 
-                                    class="link-light px-2 py-2 small fw-bold {% if g.subscription_expired %}disabled text-secondary{% endif %}"
-                                    style="font-size: 0.89rem; margin-right:10px;" 
-                                    {% if not g.subscription_expired %}data-bs-toggle="modal" data-bs-target="#newSecretModal"{% endif %}
-                                    {% if g.subscription_expired %}onclick="alert('Your subscription has expired. Please renew to add secrets.'); return false;"{% endif %}
-                                    >
+                                <a href="#"
+                                    class="link-light px-2 py-2 small fw-bold 
+                                            {% if g.subscription_expired or (current_user.plan.name == 'Basic' and current_user.storage_used >= current_user.plan.storage_limit) %}
+                                                disabled text-secondary
+                                            {% endif %}"
+                                    style="font-size: 0.89rem; margin-right:10px;"
+                                    
+                                    {% if not (g.subscription_expired or (current_user.plan.name == 'Basic' and current_user.storage_used >= current_user.plan.storage_limit)) %}
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#newSecretModal"
+                                    {% endif %}
+                                    
+                                    {% if g.subscription_expired %}
+                                        onclick="alert('Your subscription has expired. Please renew to add secrets.'); return false;"
+                                    {% elif current_user.plan.name == 'Basic' and current_user.storage_used >= current_user.plan.storage_limit %}
+                                        onclick="alert('You have reached your Basic plan storage limit. Please delete old secrets or upgrade your plan.'); return false;"
+                                    {% endif %}
+                                >
                                     <i class="bi bi-plus-square"></i> New Secret
                                 </a>
                             </li>

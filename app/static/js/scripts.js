@@ -94,36 +94,57 @@ window.addEventListener('DOMContentLoaded', () => {
     
     // Function to load content via AJAX
     let isLoading = false;
+
     function loadContent(url) {
         if (isLoading) return;
         isLoading = true;
+
         fetch(url, {
             method: 'GET',
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRFToken': csrfToken, // Include CSRF token if required
+                'X-CSRFToken': csrfToken,
             }
         })
         .then(response => {
-            // Check if the user is unauthorized (session expired)
+            // Handle session expiration (401)
             if (response.status === 401) {
                 showFlashMessage('Your session has ended due to inactivity. Please log in again.', 'danger');
-                window.location.href = '/login'; // Redirect to login page
-                return null; // Stop further processing
+                window.location.href = '/login';
+                return null;
             }
 
-            return response.json(); // Parse response as JSON
+            // Handle subscription or storage restrictions (403)
+            if (response.status === 403) {
+                return response.json().then(data => {
+                    // If backend sends redirect key
+                    if (data.redirect) {
+                        if (data.redirect.includes('all-secrets')) {
+                            // Stay on all-secrets, reload it to refresh state
+                            loadContent(data.redirect);
+                        } else {
+                            // Move to billing or other redirect destination
+                            window.location.href = data.redirect;
+                        }
+                    } else {
+                        // Fallback: show error message
+                        showFlashMessage(data.error || 'Access denied.', 'warning');
+                    }
+                    return null;
+                });
+            }
+
+            return response.json();
         })
         .then(data => {
-            if (!data) return; // Exit if no data is returned
+            if (!data) return; // exit if no data
 
-            // Update the main content
-            document.getElementById('content-container').innerHTML = data.html;
+            // Update main content
+            const container = document.getElementById('content-container');
+            container.innerHTML = data.html;
 
-            // Update the page title
-            if (data.title) {
-                document.title = data.title;
-            }
+            // Update title
+            if (data.title) document.title = data.title;
 
             // Update browser history
             history.pushState(null, data.title || '', url);
@@ -131,13 +152,17 @@ window.addEventListener('DOMContentLoaded', () => {
             // Reinitialize components
             reinitializeAllComponents();
 
-            // Reset focus and scroll position
-            document.getElementById('content-container').focus();
-            document.body.scrollTop = 0; // For Safari
-            document.documentElement.scrollTop = 0; // For Chrome, Firefox, IE, and Opera
+            // Reset scroll
+            container.focus();
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+
             isLoading = false;
         })
-        .catch(error => console.error('Error loading page:', error));
+        .catch(error => {
+            console.error('Error loading page:', error);
+            isLoading = false;
+        });
     }
 
     // Handle dynamic links with AJAX

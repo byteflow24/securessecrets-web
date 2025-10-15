@@ -374,7 +374,7 @@ def serve_file(abs_path, filename):
 ############################ Storing Users Files ############################
 # Set Google credentials (Render: store JSON as env var or mount it as secret file)
 # Load credentials
-# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/Users/mymac/Downloads/securessecrets-5ebbe62714c1.json"
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/Users/mymac/Downloads/securessecrets-5ebbe62714c1.json"
 
 SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
 GCS_BUCKET = os.environ.get("GCS_BUCKET")

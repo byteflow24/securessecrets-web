@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify, current_app, url_for, abort, send
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
-from .utils import generate_token, send_verification_email, decrypt_secret, is_subscription_expired, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal, apple_ms_to_datetime, is_upgrade
+from .utils import generate_token, send_verification_email, decrypt_secret, is_subscription_expired, is_storage_exceeded, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal, apple_ms_to_datetime, is_upgrade
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -1008,7 +1008,6 @@ def share_secret_api():
 # === Profile === 
 @api.route('/profile', methods=['GET'])
 @jwt_required()
-# @subscription_ended(api=True)
 def api_profile():
     try:
         user_id = get_jwt_identity()
@@ -1018,6 +1017,7 @@ def api_profile():
             return jsonify(success=False, error="User not found."), 404
 
         subscription_expired = is_subscription_expired(user)
+        storage_exceeded = is_storage_exceeded(user)
 
         if request.method == 'GET':
             login_history = LoginHistory.query.filter_by(user_id=user.id).all()
@@ -1040,7 +1040,8 @@ def api_profile():
                     "next_bill": next_billing_date,
                     "storage_used": storage_used_mb,
                     "storage_limit": storage_limit_mb,
-                    "subscription_expired": subscription_expired
+                    "subscription_expired": subscription_expired,
+                    "storage_exceeded": storage_exceeded
                 },
                 login_history=[
                     {
@@ -1106,7 +1107,6 @@ def api_update_phone():
 # === Changing password ===
 @api.route('/change-password', methods=['PATCH'])
 @jwt_required()
-# @subscription_ended(api=True)
 def api_change_password():
     user_id = get_jwt_identity()
     user = db.session.get(User, int(user_id))
@@ -1214,7 +1214,6 @@ def api_plan():
 # === Billing ===
 @api.route('/billing', methods=['GET'])
 @jwt_required()
-@subscription_ended(api=True)
 def billing_api():
     user_id = get_jwt_identity()
     user = db.session.get(User, int(user_id))

@@ -188,6 +188,25 @@ def is_subscription_expired(user):
 
     return not (trial_valid or sub_valid)
 
+def is_storage_exceeded(user):
+    """
+    Checks if the user's storage exceeds their plan limit.
+
+    Returns:
+        bool: True if storage is exceeded, False otherwise.
+    """
+    if not user or user.username == 'admin':
+        return False  # Admins always allowed
+
+    plan = user.plan
+    if not plan:
+        return False  # No plan = no restriction (can adjust if needed)
+
+    return (
+        plan.plan == "Basic" and
+        user.storage_used > plan.storage_limit
+    )
+
 # Mention this step at all_secrets server
 def decrypt_secrets(user_secrets):
     """Decrypt secrets for a given list of secrets."""

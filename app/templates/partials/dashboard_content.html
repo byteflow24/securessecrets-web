@@ -180,7 +180,10 @@
                     <h2 class="user-info-heading">Your Information</h2>
                     <div class="user-info-container">
                         <p><strong>Username:</strong> {{ current_user.username }}</p>
-                        <p><strong>Total Secrets:</strong> {{ secrets ~ '/10' if current_user.plan and current_user.plan.plan == 'Basic' else secrets }}</p>
+                        <p><strong>Total Secrets:</strong> 
+                            <span id="totalSecrets">
+                                {{ secrets ~ '/10' if current_user.plan and current_user.plan.plan == 'Basic' else secrets }}</p>
+                            </span>
                         <p><strong>Plan:</strong> {{ current_user.plan.plan }}</p>
                         <p><strong>Next Billing Date:</strong> {{ current_user.next_billing_date.strftime('%Y-%m-%d') if current_user.next_billing_date else 'INACTIVE' }}</p>
                         <p><strong>Last Login:</strong> {{ last_login.login_time }}</p>

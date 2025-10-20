@@ -802,6 +802,18 @@ window.addEventListener('DOMContentLoaded', () => {
                     fetchStorageInfo(); // Centralized fetch function
                 }
 
+                // ✅ Update total secrets count
+                if (data.totalSecrets !== undefined) {
+                    const totalSecretsElement = document.getElementById('totalSecrets');
+                    if (totalSecretsElement) {
+                        if (data.plan && data.plan.plan === 'Basic') {
+                            totalSecretsElement.textContent = `${data.totalSecrets}/10`;
+                        } else {
+                            totalSecretsElement.textContent = `${data.totalSecrets}`;
+                        }
+                    }
+                }
+
                 showFlashMessage(data.flash_message, 'success');
                 form.reset();
                 closeModal(form);

@@ -233,7 +233,7 @@ def get_unique_title(title, user_id):
         new_suffix = max(suffixes, default=0) + 1
         title = f"{title}_{new_suffix}"
 
-    return title
+    return ' '.join(word.capitalize() for word in title.split())
 
 # To go throw url 
 def is_safe_url(target):

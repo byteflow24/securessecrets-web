@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify, current_app, url_for, abort, send
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
-from .utils import generate_token, send_verification_email, decrypt_secret, is_subscription_expired, is_storage_exceeded, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal, apple_ms_to_datetime, is_upgrade
+from .utils import generate_token, send_verification_email, decrypt_secret, is_subscription_expired, is_storage_exceeded, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal, apple_ms_to_datetime, is_upgrade, get_gcs_file_size
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -556,23 +556,19 @@ def add_secret_api():
         return jsonify({'success': False, 'error': 'User not authorized'}), 403
     
     subscription_expired = is_subscription_expired(user)
-
     if subscription_expired:
-        return jsonify({
-            "subscription_expired": subscription_expired
-        }), 200
+        return jsonify({"subscription_expired": subscription_expired}), 200
 
     data = request.get_json()
     title = data.get('title', '').strip()
     secret_text = data.get('secret', '').strip()
     filename = data.get('filename')  # optional
 
-    # Secret limit check (e.g., 10 secrets for Basic plan)
+    # Secret limit check
     secret_limit = 10
     user_secrets = db.session.execute(
         db.select(Secret).where(Secret.user_id == user.id)
     ).scalars().all()
-
     if user.plan.plan == 'Basic' and len(user_secrets) >= secret_limit:
         return jsonify(success=False, error=f"You have reached the maximum limit of {secret_limit} secrets for your Basic plan."), 403
 
@@ -580,20 +576,31 @@ def add_secret_api():
     if not secret_text and not filename:
         return jsonify(success=False, error="Please provide a secret or upload a file."), 400
 
-    # Storage size check
-    storage_limit = user.plan.storage_limit
-    encrypted_secret = encrypt_secret(secret_text)
-    secret_size = len(encrypted_secret.encode('utf-8'))
-
-    if user.storage_used + secret_size > storage_limit:
-        return jsonify(success=False, error=f"Adding this secret will exceed your {user.plan.plan} plan's storage limit."), 403
-
     try:
-        # Generate unique title
+        # Encrypt secret text
+        encrypted_secret = encrypt_secret(secret_text)
+        secret_size = len(encrypted_secret.encode('utf-8'))
+
+        # Metadata size calculation
         unique_title = get_unique_title(title or "Untitled", user.id)
+        metadata = {
+            "title": unique_title,
+            "date": date.today().strftime("%Y-%m-%d"),
+            "file": filename or "",
+            "user_id": str(user.id)
+        }
+        metadata_size = len(json.dumps(metadata).encode('utf-8')) + 100  # DB overhead estimate
+
+        # File size (if any)
+        file_size = get_gcs_file_size(filename) if filename else 0
+
+        total_size = secret_size + metadata_size + file_size
+
+        if user.storage_used + total_size > user.plan.storage_limit:
+            return jsonify(success=False, error=f"Adding this secret will exceed your {user.plan.plan} plan's storage limit."), 403
 
         # Update storage usage
-        user.storage_used += secret_size
+        user.storage_used += total_size
 
         new_secret = Secret(
             title=unique_title,
@@ -601,6 +608,7 @@ def add_secret_api():
             file=filename,
             date=date.today().strftime("%Y-%m-%d"),
             user_id=user.id,
+            secret_size=total_size
         )
         db.session.add(new_secret)
         db.session.commit()
@@ -609,63 +617,70 @@ def add_secret_api():
             success=True,
             title=new_secret.title,
             date=new_secret.date,
-            flash_message="New secret has been added successfully."
+            flash_message="New secret has been added successfully.",
+            storageInfo={
+                "used": user.storage_used,
+                "total": user.plan.storage_limit
+            }
         ), 200
 
     except IntegrityError:
         db.session.rollback()
         return jsonify(success=False, error="An error occurred while saving your secret. Please try again."), 500
+
     
 # === Uploading a file ===
 @api.route('/upload', methods=['POST'])
 @jwt_required()
 def upload_file_api():
+    user_id = get_jwt_identity()
+    user = db.session.get(User, int(user_id))
+    if not user:
+        return jsonify(error='User not authorized'), 401
+
+    if 'file' not in request.files:
+        return jsonify(error='No file part in the request'), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify(error='No selected file'), 400
+
     try:
-        user_id = get_jwt_identity()
-        user = db.session.get(User, int(user_id))
-        if not user:
-            return jsonify(error='User not authorized'), 401
+        # ✅ Calculate file size safely without reading full content
+        file.seek(0, 2)  # Move to end
+        file_size = file.tell()
+        file.seek(0)  # Reset to start
 
-        if 'file' not in request.files:
-            return jsonify(error='No file part in the request'), 400
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify(error='No selected file'), 400
+        if file_size == 0:
+            return jsonify(error="Empty file uploaded"), 400
 
-        # Determine file size
-        file_size = request.content_length
-        if not file_size:
-            return jsonify(error="Could not determine file size"), 400
-
-        # Check user's storage quota
+        # Check storage quota
         if user.storage_used + file_size > user.plan.storage_limit:
             return jsonify(error='Exceeds storage limit'), 403
 
         # Generate unique filename
         original_filename = secure_filename(file.filename)
-        filename = f"{uuid.uuid4().hex}_{original_filename}"
+        unique_prefix = uuid.uuid4().hex
+        filename = f"{unique_prefix}_{original_filename}"
 
-        # Encrypt & upload to GCS
-        file.seek(0)
-        encrypted_bytes = file.read()  # If you want encryption, do it here
-        # Example: encrypted_bytes = cipher_suite.encrypt(file.read())
-        upload_to_gcs(BytesIO(encrypted_bytes), filename)
+        # Upload to GCS (optional encryption)
+        # For encryption: read in chunks and encrypt stream-wise
+        # Here we upload as-is
+        upload_to_gcs(file.stream, filename)
 
         # Update storage usage
-        user.storage_used += file_size
+        # user.storage_used += file_size
         db.session.commit()
 
-        # Return success with filename (and optionally URL for API clients)
-        return jsonify(
-            message='File successfully uploaded',
-            filename=filename,
-            url=get_signed_url(filename)  # Optional: if you want to return signed URL
-        ), 200
+        # Optional: signed URL for API client
+        url = get_signed_url(filename) if 'get_signed_url' in globals() else None
+
+        return jsonify(message='File successfully uploaded', filename=filename, url=url), 200
 
     except Exception as e:
-        print("[❌ Upload Error]", str(e))
+        print(f"[❌ Upload Error] {str(e)}")
         return jsonify(error='Server error during upload'), 500
-    
+
 # === Route to fetch the user's current storage usage and limit, requiring login ===
 @api.route('/get-storage-info', methods=['GET'])
 @jwt_required()
@@ -705,8 +720,8 @@ def update_secret_api(secret_id):
     title = (form_data.get('title') or '').strip()
     secret_text = (form_data.get('secret') or '').strip()
 
-    if not title or not secret_text:
-        return jsonify(success=False, error="Title and secret are required."), 400
+    if not title or (not secret_text and not secret.file and not file):
+        return jsonify(success=False, error="Title and secret or file are required."), 400
 
     try:
         # Encrypt new secret
@@ -714,11 +729,21 @@ def update_secret_api(secret_id):
         new_text_size = len(encrypted_secret.encode('utf-8'))
         old_text_size = len(secret.secret.encode('utf-8'))
 
-        new_file_size = 0
-        old_file_size = 0
-        filename = secret.file  # default to old file
+        # Metadata sizes
+        old_metadata = {
+            "title": secret.title,
+            "date": secret.date.isoformat() if secret.date else "",
+            "file": secret.file or "",
+            "user_id": str(secret.user_id)
+        }
+        old_metadata_size = len(json.dumps(old_metadata).encode('utf-8')) + 100
+        old_file_size = get_gcs_file_size(secret.file) if secret.file else 0
+        old_total_size = old_text_size + old_metadata_size + old_file_size
 
-        # Handle file update (if provided)
+        filename = secret.file
+        new_file_size = old_file_size
+
+        # Handle file update
         if file:
             original_filename = secure_filename(file.filename)
             unique_prefix = uuid.uuid4().hex
@@ -729,28 +754,39 @@ def update_secret_api(secret_id):
             new_file_size = file.tell()
             file.seek(0)
 
-            # Upload new file to GCS
-            upload_to_gcs(file, new_filename)
+            # Upload new file
+            upload_to_gcs(file.stream, new_filename)
 
-            # Delete old file from GCS if exists
-            if secret.file and gcs_file_exists(secret.file):
-                old_blob = storage_client.bucket(GCS_BUCKET).blob(secret.file)
-                old_file_size = old_blob.size or 0
-                old_blob.delete()
+            # Delete old file if exists and not shared
+            if secret.file and not SharedSecret.query.filter_by(file=secret.file).first():
+                delete_from_gcs(secret.file)
 
             filename = new_filename
 
-        # Storage limit check
-        new_storage_used = user.storage_used - old_text_size - old_file_size + new_text_size + new_file_size
-        if new_storage_used > user.plan.storage_limit:
+        # New metadata size
+        new_metadata = {
+            "title": title,
+            "date": secret.date.isoformat() if secret.date else "",
+            "file": filename or "",
+            "user_id": str(user.id)
+        }
+        new_metadata_size = len(json.dumps(new_metadata).encode('utf-8')) + 100
+        new_total_size = new_text_size + new_metadata_size + new_file_size
+
+        # Storage check
+        storage_diff = new_total_size - old_total_size
+        if user.storage_used + storage_diff > user.plan.storage_limit:
             return jsonify(success=False, error="Exceeds storage limit."), 403
 
-        # Update secret fields
+        # Update storage usage
+        user.storage_used += storage_diff
+
+        # Update secret
         secret.title = title
         secret.secret = encrypted_secret
         secret.file = filename
         secret.date = date.today().strftime("%Y-%m-%d")
-        user.storage_used = new_storage_used
+        secret.secret_size = new_total_size
 
         # Update shared copies
         shared_entries = SharedSecret.query.filter_by(secret_id=secret.id).all()
@@ -763,7 +799,6 @@ def update_secret_api(secret_id):
 
         decrypted_secret = decrypt_secret(secret.secret)
 
-        # Detect file preview
         file_preview = filename.lower().endswith(
             ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.mov')
         ) if filename else False
@@ -785,6 +820,7 @@ def update_secret_api(secret_id):
         db.session.rollback()
         print("[❌ Update Secret API Error]", e)
         return jsonify(success=False, error=str(e)), 500
+
     
 # === Deleting secret === 
 @api.route('/delete-secret/<int:sec_id>', methods=['DELETE'])
@@ -803,11 +839,20 @@ def delete_secret_api(sec_id):
         if secret.user_id != user.id:
             return jsonify(error='Unauthorized access to this secret'), 403
 
-        # Calculate size of secret text
+        # Secret text size
         text_size = len(secret.secret.encode('utf-8'))
-        file_size = 0
 
-        # Handle file deletion if exists
+        # Metadata size (title, date, file, user_id + overhead)
+        metadata = {
+            "title": secret.title,
+            "date": secret.date.isoformat() if secret.date else "",
+            "file": secret.file or "",
+            "user_id": str(secret.user_id)
+        }
+        metadata_size = len(json.dumps(metadata).encode('utf-8')) + 100
+
+        # File size if exists and not shared publicly
+        file_size = 0
         if secret.file:
             is_shared_publicly = db.session.execute(
                 db.select(SharedSecret).filter_by(file=secret.file)
@@ -817,10 +862,11 @@ def delete_secret_api(sec_id):
                 if not success:
                     file_size = 0
 
-        # Update user's storage
-        total_size = text_size + file_size
+        # Total size to deduct from user's storage
+        total_size = text_size + metadata_size + file_size
         user.storage_used = max(0, user.storage_used - total_size)
 
+        # Delete secret from DB
         db.session.delete(secret)
         db.session.commit()
 
@@ -830,9 +876,9 @@ def delete_secret_api(sec_id):
         db.session.rollback()
         return jsonify(error='A database error occurred while deleting the secret'), 500
     except Exception as e:
-        current_app.logger.error(f"Error deleting secret {sec_id}: {e}")
+        print(f"[❌ Delete Error] {e}")
         return jsonify(error='An unexpected error occurred'), 500
-    
+ 
 
 # === Deleting shared secret === 
 @api.route('/delete-shared-secret/<int:sec_id>', methods=['DELETE'])

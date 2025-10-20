@@ -899,11 +899,13 @@ def add_secret():
             success=True,
             title=new_secret.title,
             date=new_secret.date,
-            flash_message="New secret added successfully.",
+            totalSecrets=Secret.query.filter_by(user_id=current_user.id).count(),
+            plan={'plan': current_user.plan.plan},
             storageInfo={
                 "used": current_user.storage_used,
                 "total": current_user.plan.storage_limit
-            }
+            },
+            flash_message="New secret added successfully."
         ), 200
 
     except IntegrityError:

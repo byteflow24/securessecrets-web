@@ -336,6 +336,11 @@ def is_future_time_today(form, field):
 
 # Converting time to user time
 def convert_utc_to_local(utc_time, time_zone):
+    """
+    Convert a UTC datetime (string or datetime) to user's local timezone.
+    """
+
+    # Fallback timezone
     if not time_zone:
         time_zone = "UTC"
 
@@ -345,25 +350,27 @@ def convert_utc_to_local(utc_time, time_zone):
         print("Invalid timezone! Falling back to UTC.")
         local_tz = pytz.utc
 
+    # Convert string to datetime
     if isinstance(utc_time, str):
-        # Check if the time is in ISO 8601 format (with 'Z')
-        if utc_time.endswith('Z'):
+        try:
+            # Try ISO format with optional 'Z'
+            utc_time = datetime.fromisoformat(utc_time.replace("Z", "+00:00"))
+        except ValueError:
             try:
-                # Handle ISO 8601 format (2025-02-13T10:00:00Z)
-                utc_time = datetime.strptime(utc_time, "%Y-%m-%dT%H:%M:%SZ")
-            except ValueError:
-                print("Unexpected datetime format:", utc_time)
-                return "Invalid Format"
-        else:
-            try:
-                # Handle normal format (2025-02-13 10:00:00)
+                # Fallback to common format
                 utc_time = datetime.strptime(utc_time, "%Y-%m-%d %H:%M:%S")
+                utc_time = pytz.utc.localize(utc_time)
             except ValueError:
                 print("Unexpected datetime format:", utc_time)
                 return "Invalid Format"
 
-    # **Force UTC Time to be correct**
-    utc_time = utc_time.replace(tzinfo=pytz.utc)
+    # Ensure datetime is in UTC
+    if utc_time.tzinfo is None:
+        utc_time = pytz.utc.localize(utc_time)
+    else:
+        utc_time = utc_time.astimezone(pytz.utc)
+
+    # Convert to local timezone
     local_time = utc_time.astimezone(local_tz)
 
     return local_time.strftime("%Y-%m-%d %H:%M:%S")

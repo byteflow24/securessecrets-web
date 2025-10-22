@@ -138,7 +138,7 @@ def api_process_subscription():
 @api.route('/register', methods=['POST'])
 def register_api():
     data = request.get_json()
-    required_fields = ['username', 'email', 'password', 'confirm_password', 'code', 'phone', 'plan_id', 'transaction_id']
+    required_fields = ['username', 'email', 'password', 'confirm_password', 'code', 'phone', 'plan_id', 'transaction_id', 'time_zone']
     
     missing = [field for field in required_fields if field not in data]
 
@@ -154,6 +154,7 @@ def register_api():
     phone = data['phone']
     plan_id = data['plan_id']
     transaction_id = data['transaction_id']
+    time_zone = data.get["time_zone"]
 
     if password != confirm_password:
         return jsonify({'error': 'Passwords do not match'}), 400
@@ -187,6 +188,7 @@ def register_api():
         subscription_status="ACTIVE",
         payment_source=pending.payment_source,
         transaction_id=transaction_id,
+        time_zone=time_zone if time_zone else None,
         status=None,
 
         # ✅ carry over trial info if it existed in PendingSubscription
@@ -213,7 +215,7 @@ def register_api():
 @jwt_required()
 def api_update_timezone():
     current_user_id = get_jwt_identity()
-    user = User.query.get(int(current_user_id))
+    user = User.query.get(current_user_id)
 
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -239,6 +241,7 @@ def login_api():
 
     user_input = data.get('user')
     password = data.get('password')
+    time_zone = data.get("time_zone")  
 
     if not user_input or not password:
         return jsonify({'error': 'Username/email and password are required'}), 400
@@ -258,6 +261,9 @@ def login_api():
 
     if not user.is_confirmed:
         return jsonify({'error': 'Email not confirmed'}), 403
+    
+    if time_zone:
+        user.time_zone = time_zone if time_zone else None
 
     ip_address = request.remote_addr
     login_history = LoginHistory(

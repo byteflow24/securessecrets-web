@@ -213,7 +213,7 @@ def register_api():
 @jwt_required()
 def api_update_timezone():
     current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    user = User.query.get(int(current_user_id))
 
     if not user:
         return jsonify({"error": "User not found"}), 404

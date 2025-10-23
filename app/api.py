@@ -1099,14 +1099,14 @@ def api_profile():
                     {
                         "ip": log.ip_address,
                         # "user_agent": log.user_agent,
-                        "login_time": convert_utc_to_local(log.login_time.strftime("%Y-%m-%d %H:%M:%S"), user.time_zone),
+                        "login_time": convert_utc_to_local(log.login_time, user.time_zone),
                         "time_zone": user.time_zone
                     } for log in login_history
                 ],
                 last_login={
                     "ip": last_login.ip_address,
                     # "user_agent": last_login.user_agent,
-                    "login_time": convert_utc_to_local(last_login.login_time.strftime("%Y-%m-%d %H:%M:%S"), user.time_zone),
+                    "login_time": convert_utc_to_local(last_login.login_time, user.time_zone),
                     "time_zone": user.time_zone
                 } if last_login else None
             ), 200

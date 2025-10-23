@@ -1073,7 +1073,7 @@ def api_profile():
 
         if request.method == 'GET':
             login_history = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc()).all()
-            last_login = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc())
+            last_login = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc()).first()
 
             next_billing_date = user.next_billing_date.strftime('%Y-%m-%d') if user.next_billing_date else 'INACTIVE'
 

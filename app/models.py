@@ -73,6 +73,7 @@ class LoginHistory(db.Model):
     user_id = db.Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     login_time = db.Column(TIMESTAMP, nullable=False, default=func.now())
     ip_address = db.Column(String(45), nullable=False)
+    time_zone = db.Column(db.String(50), nullable=True)
     
     # Relationship to access user from the login history
     user = db.relationship('User', back_populates='login_history')

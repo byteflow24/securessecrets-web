@@ -376,6 +376,36 @@ def convert_utc_to_local(utc_time, time_zone):
     return local_time.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def convert_local_to_utc(local_time, time_zone):
+    """
+    Convert user's local timezone to UTC datetime (string or datetime).
+    """
+    if not time_zone:
+        time_zone = "UTC"
+
+    try:
+        local_tz = pytz.timezone(time_zone)
+    except pytz.UnknownTimeZoneError:
+        print("Invalid timezone! Falling back to UTC.")
+        local_tz = pytz.utc
+
+    if isinstance(local_time, str):
+        try:
+            local_time = datetime.strptime(local_time, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            print("Invalid local time format:", local_time)
+            return None
+
+    # Localize the time (attach the user’s timezone info)
+    local_dt = local_tz.localize(local_time)
+
+    # Convert it to UTC
+    utc_time = local_dt.astimezone(pytz.utc)
+
+    return utc_time
+
+
+
 def serve_file(abs_path, filename):
     # Serve PDF or Office inline, otherwise as attachment
     ext = os.path.splitext(filename)[1].lower()

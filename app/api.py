@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify, current_app, url_for, abort, send
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
 from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
-from .utils import generate_token, send_verification_email, decrypt_secret, is_subscription_expired, is_storage_exceeded, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal, apple_ms_to_datetime, is_upgrade, get_gcs_file_size
+from .utils import generate_token, send_verification_email, decrypt_secret, is_subscription_expired, is_storage_exceeded, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal, apple_ms_to_datetime, is_upgrade, get_gcs_file_size, convert_local_to_utc
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
@@ -989,7 +989,7 @@ def share_secret_api():
             return jsonify(success=False, message="Invalid date/time format. Expected YYYY-MM-DD and HH:MM"), 400
 
         # Convert to UTC
-        share_datetime_utc = convert_utc_to_local(local_dt, user.time_zone)
+        share_datetime_utc = convert_local_to_utc(local_dt, user.time_zone)
         date_to_send = share_datetime_utc
         time_to_send = share_datetime_utc
         token = generate_token() if emails else None
@@ -1072,8 +1072,8 @@ def api_profile():
         storage_exceeded = is_storage_exceeded(user)
 
         if request.method == 'GET':
-            login_history = LoginHistory.query.filter_by(user_id=user.id).all()
-            last_login = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc()).first()
+            login_history = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc()).all()
+            last_login = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc())
 
             next_billing_date = user.next_billing_date.strftime('%Y-%m-%d') if user.next_billing_date else 'INACTIVE'
 

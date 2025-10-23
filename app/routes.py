@@ -6,7 +6,7 @@ from flask_limiter.util import get_remote_address
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret
-from .utils import get_unique_title, storage_client, GCS_BUCKET, admin_only, current_user_only, subscription_ended_flag, storage_exceeded_flag, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists, _serve_file, delete_from_gcs, get_gcs_file_size
+from .utils import get_unique_title, storage_client, GCS_BUCKET, admin_only, current_user_only, subscription_ended_flag, storage_exceeded_flag, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists, _serve_file, delete_from_gcs, get_gcs_file_size, convert_local_to_utc
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -1075,7 +1075,7 @@ def share():
                 time = time.time()
 
             # Convert the date/ time to user current UTC and split them to save them in DB
-            date_time_combined = convert_utc_to_local(datetime.combine(date, time), current_user.time_zone)
+            date_time_combined = convert_local_to_utc(datetime.combine(date, time), current_user.time_zone)
             date_str, time_str = str(date_time_combined).split()
 
             message = f"Your secret is scheduled for {date_str} at {time_str}"

@@ -715,6 +715,7 @@ def dashboard():
         send_report_email(secret_id, secret, secret_file, report_details)
         flash('Report submitted successfully.', 'success')
 
+
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
             'html': render_template('partials/dashboard_content.html', 
@@ -727,7 +728,7 @@ def dashboard():
                                     show_secrets_list=False),
             'title': 'Dashboard - Secures Secrets'
         })
-    return render_template('dashboard.html', current_user=current_user, show_header=True, show_footer=True, show_secrets_list=False, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login, secret_form=secret_form, link=approval_link)
+    return render_template('dashboard.html', current_user=current_user, show_header=True, show_footer=True, show_secrets_list=False, public_secrets=decrypted_secrets, secrets=secrets, last_login=convert_utc_to_local(last_login.login_time, current_user.time_zone), secret_form=secret_form, link=approval_link)
 
 # List of all secerts for the user 
 @main.route('/all-secrets', methods=['GET', 'POST'])

@@ -990,7 +990,9 @@ def share_secret_api():
 
         # Convert to UTC
         share_datetime_utc = convert_local_to_utc(local_dt, user.time_zone)
-        print(f"Secret will be shared at: {share_datetime_utc} which means at: {convert_utc_to_local(local_dt, user.time_zone)}")
+       # Convert back to local (for human-readable debug/logs)
+        share_datetime_local = convert_utc_to_local(share_datetime_utc, user.time_zone)
+        print(f"Secret will be shared (UTC): {share_datetime_utc} | Local user time: {share_datetime_local}")
         date_to_send = share_datetime_utc
         time_to_send = share_datetime_utc
         token = generate_token() if emails else None

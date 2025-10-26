@@ -334,7 +334,7 @@ def is_future_time_today(form, field):
         if selected_date == current_datetime.date() and selected_time < current_time:
             raise ValidationError("The selected time cannot be in the past.")
 
-# Converting time to user time
+# Converting utc time to user time
 def convert_utc_to_local(utc_time, time_zone):
     """
     Convert a UTC datetime (string or datetime) to user's local timezone.
@@ -343,36 +343,23 @@ def convert_utc_to_local(utc_time, time_zone):
     # Fallback timezone
     if not time_zone:
         time_zone = "UTC"
-
     try:
         local_tz = pytz.timezone(time_zone)
     except pytz.UnknownTimeZoneError:
         print("Invalid timezone! Falling back to UTC.")
         local_tz = pytz.utc
 
-    # Convert string to datetime
     if isinstance(utc_time, str):
         try:
-            # Try ISO format with optional 'Z'
             utc_time = datetime.fromisoformat(utc_time.replace("Z", "+00:00"))
         except ValueError:
-            try:
-                # Fallback to common format
-                utc_time = datetime.strptime(utc_time, "%Y-%m-%d %H:%M:%S")
-                utc_time = pytz.utc.localize(utc_time)
-            except ValueError:
-                print("Unexpected datetime format:", utc_time)
-                return "Invalid Format"
+            utc_time = datetime.strptime(utc_time, "%Y-%m-%d %H:%M:%S")
+            utc_time = pytz.utc.localize(utc_time)
 
-    # Ensure datetime is in UTC
     if utc_time.tzinfo is None:
         utc_time = pytz.utc.localize(utc_time)
-    else:
-        utc_time = utc_time.astimezone(pytz.utc)
 
-    # Convert to local timezone
     local_time = utc_time.astimezone(local_tz)
-
     return local_time.strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -382,7 +369,6 @@ def convert_local_to_utc(local_time, time_zone):
     """
     if not time_zone:
         time_zone = "UTC"
-
     try:
         local_tz = pytz.timezone(time_zone)
     except pytz.UnknownTimeZoneError:
@@ -390,20 +376,14 @@ def convert_local_to_utc(local_time, time_zone):
         local_tz = pytz.utc
 
     if isinstance(local_time, str):
-        try:
-            local_time = datetime.strptime(local_time, "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            print("Invalid local time format:", local_time)
-            return None
+        local_time = datetime.strptime(local_time, "%Y-%m-%d %H:%M:%S")
 
-    # Localize the time (attach the user’s timezone info)
-    local_dt = local_tz.localize(local_time)
+    if local_time.tzinfo is None:
+        local_dt = local_tz.localize(local_time)
+    else:
+        local_dt = local_time.astimezone(local_tz)
 
-    # Convert it to UTC
-    utc_time = local_dt.astimezone(pytz.utc)
-
-    return utc_time
-
+    return local_dt.astimezone(pytz.utc)
 
 
 def serve_file(abs_path, filename):

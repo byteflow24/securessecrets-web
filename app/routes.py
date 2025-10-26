@@ -721,7 +721,7 @@ def dashboard():
                                     current_user=current_user, 
                                     public_secrets=decrypted_secrets, 
                                     secrets=secrets, 
-                                    last_login=last_login, 
+                                    last_login=convert_utc_to_local(last_login.login_time, current_user.time_zone), 
                                     secret_form=secret_form, 
                                     link=approval_link, 
                                     show_secrets_list=False),

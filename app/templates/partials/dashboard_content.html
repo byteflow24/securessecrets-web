@@ -186,7 +186,7 @@
                             </span>
                         <p><strong>Plan:</strong> {{ current_user.plan.plan }}</p>
                         <p><strong>Next Billing Date:</strong> {{ current_user.next_billing_date.strftime('%Y-%m-%d') if current_user.next_billing_date else 'INACTIVE' }}</p>
-                        <p><strong>Last Login:</strong> {{ last_login.login_time }}</p>
+                        <p><strong>Last Login:</strong> {{ last_login }}</p>
                         <p class="form-label"><strong>Storage Usage:</strong></p>
                         <div class="progress" style="height: 20px; border-radius: 10px; overflow: hidden;">
                             <div

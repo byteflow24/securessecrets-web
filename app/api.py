@@ -334,7 +334,7 @@ def dashboard_api():
         "plan_id": user.plan_id,
         "next_billing_date": next_billing_date,
         "secrets_count": f"{secrets_count}/10" if plan_name == 'Basic' else secrets_count,
-        "last_login": last_login.strftime('%Y-%m-%d %H:%M:%S') if last_login else None,
+        "last_login": convert_utc_to_local(last_login.strftime('%Y-%m-%d %H:%M:%S'), user.time_zone) if convert_utc_to_local(last_login, user.time_zone) else None,
         "storage_used_mb": storage_used_mb,
         "storage_limit_mb": storage_limit_mb,
         "storage_percentage": storage_percentage,
@@ -499,9 +499,9 @@ def all_secrets_api():
             'title': shared.title if shared.title else '',
             'secret': shared.snapshot_secret if shared.snapshot_secret else '',
             'file': file_is if file_is else None,
-            'date_to_send': shared.date_to_send.isoformat() if shared.date_to_send else None,
+            'date_to_send': convert_utc_to_local(shared.date_to_send.isoformat(), user.time_zone) if convert_utc_to_local(shared.date_to_send, user.time_zone) else None,
             'time_to_send': shared.time_to_send.isoformat() if shared.time_to_send else None,
-            "share_date": shared.share_date.isoformat() if shared and shared.share_date else None,
+            "share_date": convert_utc_to_local(shared.share_date.isoformat(), user.time_zone) if shared and convert_utc_to_local(shared.share_date, user.time_zone) else None,
             "time_period": shared.time_period.isoformat() if shared.time_period else None,
             'status': status,
         })
@@ -990,6 +990,7 @@ def share_secret_api():
 
         # Convert to UTC
         share_datetime_utc = convert_local_to_utc(local_dt, user.time_zone)
+        print(f"Secret will be shared at: {share_datetime_utc} which means at: {convert_utc_to_local(local_dt, user.time_zone)}")
         date_to_send = share_datetime_utc
         time_to_send = share_datetime_utc
         token = generate_token() if emails else None

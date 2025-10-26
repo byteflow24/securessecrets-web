@@ -844,6 +844,14 @@ def delete_secret_api(sec_id):
         # Ensure the user owns the secret
         if secret.user_id != user.id:
             return jsonify(error='Unauthorized access to this secret'), 403
+        
+        # ✅ Check if this secret is linked to any shared secrets
+        shared_links = SharedSecret.query.filter_by(secret_id=secret.id).all()
+        if shared_links:
+            print(f"Secret {secret.id} is shared — will not delete shared records.")
+            # Just detach it safely (they'll keep their snapshot)
+            for link in shared_links:
+                link.secret_id = None
 
         # Secret text size
         text_size = len(secret.secret.encode('utf-8'))

@@ -384,8 +384,7 @@ def convert_local_to_utc(local_time, time_zone):
         local_dt = local_time.astimezone(local_tz)
 
     return local_dt.astimezone(pytz.utc)
-
-
+    
 def serve_file(abs_path, filename):
     # Serve PDF or Office inline, otherwise as attachment
     ext = os.path.splitext(filename)[1].lower()

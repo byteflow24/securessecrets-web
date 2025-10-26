@@ -1219,6 +1219,14 @@ def delete_secret(sec_id):
     try:
         secret = db.get_or_404(Secret, sec_id)
 
+        # ✅ Check if this secret is linked to any shared secrets
+        shared_links = SharedSecret.query.filter_by(secret_id=secret.id).all()
+        if shared_links:
+            print(f"Secret {secret.id} is shared — will not delete shared records.")
+            # Just detach it safely (they'll keep their snapshot)
+            for link in shared_links:
+                link.secret_id = None
+
         # Calculate the size of the secret's text (in bytes)
         text_size = len(secret.secret.encode('utf-8'))  # Convert the string to bytes and measure its length
 

@@ -998,8 +998,7 @@ def share_secret_api():
        # Convert back to local (for human-readable debug/logs)
         share_datetime_local = convert_utc_to_local(share_datetime_utc, user.time_zone)
         print(f"Secret will be shared (UTC): {share_datetime_utc} | Local user time: {share_datetime_local}")
-        date_to_send = share_datetime_utc
-        time_to_send = share_datetime_utc
+        
         token = generate_token() if emails else None
 
         shared_secret = SharedSecret(
@@ -1011,8 +1010,8 @@ def share_secret_api():
             title=secret.title,
             snapshot_secret=secret.secret,
             file=secret.file,
-            date_to_send=date_to_send,
-            time_to_send=time_to_send,
+            date_to_send=share_datetime_utc.date(),
+            time_to_send=share_datetime_utc.time(),
             schedule_delete_confirm=confirm_deletion,
             token=token,
             received=False,

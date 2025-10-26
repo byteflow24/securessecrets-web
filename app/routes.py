@@ -1165,7 +1165,8 @@ def only_for_you(token):
         if not shared_secret.received:
             shared_secret.received = True
             shared_secret.received_time = now
-            shared_secret.delete_at = now + timedelta(hours=1)
+            if shared_secret.schedule_delete_confirm:
+                shared_secret.delete_at = now + timedelta(hours=1)
             db.session.commit()
         
         # Check if delete_at is not None and if the current time is past the delete time
@@ -1180,10 +1181,9 @@ def only_for_you(token):
         if remaining_time < 0:
             remaining_time = 0
 
-        # Retrieve the associated secret
-        secret = db.get_or_404(Secret, shared_secret.secret_id)
         # Decrypting the secret
-        decrypted_secret_content = decrypt_secret(secret.secret)
+        decrypted_secret_content = decrypt_secret(shared_secret.snapshot_secret)
+        print(decrypt_secret)
 
          # ✅ Handle attached encrypted file (same logic as in published secrets)
         file_url = None
@@ -1195,11 +1195,10 @@ def only_for_you(token):
                 'filename': shared_secret.file  # Pass the filename for extension checking
             }
 
-
         return render_template(
             'display_secret.html',
             decrypted_secret=decrypted_secret_content,
-            secret=secret,
+            secret=shared_secret,
             remaining_time=int(remaining_time),
             file_url=file_url,
         )

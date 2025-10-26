@@ -95,7 +95,7 @@ class Secret(db.Model):
     secret_size = db.Column(Integer, nullable=False, default=0)
 
     user = db.relationship('User', back_populates='secrets')
-    shared_secrets = db.relationship('SharedSecret', back_populates='secret', passive_deletes=True, cascade="save-update, merge")
+    shared_secrets = db.relationship('SharedSecret', back_populates='secret', passive_deletes=True, cascade="save-update, merge", lazy='select')
 
     
 # Payments DB
@@ -201,8 +201,7 @@ class SharedSecret(db.Model):
     share_date = db.Column(TIMESTAMP, nullable=True)
 
     user = db.relationship('User', back_populates='shared_secrets')
-    secret = db.relationship('Secret', back_populates='shared_secrets')
-
+    secret = db.relationship('Secret', back_populates='shared_secrets', lazy='joined')
 
 
 class PublicSecrets(db.Model):

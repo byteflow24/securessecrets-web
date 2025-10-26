@@ -792,6 +792,17 @@ def all_secrets():
             shared.status = 'shared' if combined <= datetime.now() else 'pending'
         else:
             shared.status = 'shared' if shared.received else 'pending'
+        
+    for shared in shared_secrets:
+        if shared.share_date:
+            shared.share_date_local = convert_utc_to_local(shared.share_date, current_user.time_zone)
+        elif shared.date_to_send and shared.time_to_send:
+            combined = datetime.combine(shared.date_to_send, shared.time_to_send)
+            shared.share_date_local = convert_utc_to_local(combined, current_user.time_zone)
+        elif shared.time_period:
+            shared.share_date_local = convert_utc_to_local(shared.time_period, current_user.time_zone)
+        else:
+            shared.share_date_local = None
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
@@ -1079,8 +1090,8 @@ def share():
             # Convert the date/ time to user current UTC and split them to save them in DB
             date_time_combined = convert_local_to_utc(datetime.combine(date, time), current_user.time_zone)
             date_str, time_str = str(date_time_combined).split()
-
-            message = f"Your secret is scheduled for {date_str} at {time_str}"
+            share_datetime_local = convert_utc_to_local(date_time_combined, current_user.time_zone)
+            message = f"Your secret is scheduled at {share_datetime_local}"
         else:
             return jsonify({"success": False, "message": "Invalid sharing type or missing fields!"}), 400
 

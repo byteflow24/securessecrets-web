@@ -95,7 +95,7 @@ class Secret(db.Model):
     secret_size = db.Column(Integer, nullable=False, default=0)
 
     user = db.relationship('User', back_populates='secrets')
-    shared_secrets = db.relationship('SharedSecret', back_populates='secret', passive_deletes=True)
+    shared_secrets = db.relationship('SharedSecret', back_populates='secret', passive_deletes=True, cascade="save-update, merge")
 
     
 # Payments DB

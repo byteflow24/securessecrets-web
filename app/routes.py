@@ -582,7 +582,8 @@ def dashboard():
         
     # counting secrets for each user
     secrets = Secret.query.filter_by(user_id=current_user.id).count()
-    last_login = current_user.login_history[-1] if current_user.login_history else None
+    # last_login = current_user.login_history[-1] if current_user.login_history else None
+    last_login = LoginHistory.query.filter_by(user_id=current_user.id).order_by(LoginHistory.login_time.desc()).first()
 
     # Fetch the public shared secrets and eager-load user and secret relationships
     shared_secret = db.session.execute(
@@ -722,13 +723,13 @@ def dashboard():
                                     current_user=current_user, 
                                     public_secrets=decrypted_secrets, 
                                     secrets=secrets, 
-                                    last_login=convert_utc_to_local(last_login.login_time, current_user.time_zone), 
+                                    last_login=last_login.login_time, 
                                     secret_form=secret_form, 
                                     link=approval_link, 
                                     show_secrets_list=False),
             'title': 'Dashboard - Secures Secrets'
         })
-    return render_template('dashboard.html', current_user=current_user, show_header=True, show_footer=True, show_secrets_list=False, public_secrets=decrypted_secrets, secrets=secrets, last_login=convert_utc_to_local(last_login.login_time, current_user.time_zone), secret_form=secret_form, link=approval_link)
+    return render_template('dashboard.html', current_user=current_user, show_header=True, show_footer=True, show_secrets_list=False, public_secrets=decrypted_secrets, secrets=secrets, last_login=last_login.login_time, secret_form=secret_form, link=approval_link)
 
 # List of all secerts for the user 
 @main.route('/all-secrets', methods=['GET', 'POST'])

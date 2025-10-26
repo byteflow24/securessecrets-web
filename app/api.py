@@ -485,12 +485,20 @@ def all_secrets_api():
             status = 'shared' if combined <= datetime.now() else 'pending'
         else:
             status = 'shared' if shared.received else 'pending'
-        
-        file_is = None
-        if shared.file:
-            file_is = s.file
-        elif shared.secret and shared.secret.file:
-            file_is = s.file
+
+        # Handle file
+        file_is = shared.file if shared.file else shared.secret.file if shared.secret and shared.secret.file else None
+
+        # Convert date/time to user's timezone
+        date_to_send_local = convert_utc_to_local(
+            datetime.combine(shared.date_to_send, shared.time_to_send), user.time_zone
+        ).date() if shared.date_to_send and shared.time_to_send else None
+
+        time_to_send_local = convert_utc_to_local(
+            datetime.combine(shared.date_to_send, shared.time_to_send), user.time_zone
+        ).time() if shared.date_to_send and shared.time_to_send else None
+
+        share_date_local = convert_utc_to_local(shared.share_date, user.time_zone).strftime('%Y-%m-%d %H:%M') if shared.share_date else None
 
         shared_secrets_data.append({
             'id': shared.id,
@@ -498,13 +506,14 @@ def all_secrets_api():
             'email': shared.email,
             'title': shared.title if shared.title else '',
             'secret': shared.snapshot_secret if shared.snapshot_secret else '',
-            'file': file_is if file_is else None,
-            'date_to_send': convert_utc_to_local(shared.date_to_send.isoformat(), user.time_zone) if convert_utc_to_local(shared.date_to_send, user.time_zone) else None,
-            'time_to_send': shared.time_to_send.isoformat() if shared.time_to_send else None,
-            "share_date": convert_utc_to_local(shared.share_date.isoformat(), user.time_zone) if shared and convert_utc_to_local(shared.share_date, user.time_zone) else None,
-            "time_period": shared.time_period.isoformat() if shared.time_period else None,
+            'file': file_is,
+            'date_to_send': date_to_send_local,
+            'time_to_send': time_to_send_local,
+            'share_date': share_date_local,
+            'time_period': shared.time_period.isoformat() if shared.time_period else None,
             'status': status,
         })
+
 
     return jsonify({
         'user_secrets': user_secrets_data,

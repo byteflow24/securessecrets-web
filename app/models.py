@@ -38,6 +38,7 @@ class User(UserMixin, db.Model):
     updated_at = db.Column(TIMESTAMP, nullable=True)
     status = db.Column(String(4), nullable=True)
     time_zone = db.Column(db.String(50), nullable=True)
+    fcm_token = db.Column(db.String(255), nullable=True)
 
     secrets = db.relationship('Secret', back_populates='user', cascade="all, delete-orphan")
     payments = db.relationship('Payment', back_populates='user', cascade="all, delete-orphan")
@@ -46,6 +47,8 @@ class User(UserMixin, db.Model):
     shared_secrets = db.relationship('SharedSecret', back_populates='user', cascade="all, delete-orphan")
     history_payments = db.relationship('HistoryPayment', back_populates='user')
     login_history = db.relationship('LoginHistory', back_populates='user', cascade="all, delete-orphan")
+    notifications = db.relationship('Notification', back_populates='user', cascade="all, delete-orphan")
+
 
 
 class PendingSubscription(db.Model):
@@ -202,6 +205,25 @@ class SharedSecret(db.Model):
 
     user = db.relationship('User', back_populates='shared_secrets')
     secret = db.relationship('Secret', back_populates='shared_secrets', lazy='joined')
+    notifications = db.relationship('Notification', back_populates='related_secret', cascade="all, delete-orphan")
+
+class Notification(db.Model):
+    __tablename__ = "notifications"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    title = db.Column(db.String(150), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    type = db.Column(db.String(50), nullable=False)  # e.g. shared_secret, subscription, update, ad, inactive_user
+    related_secret_id = db.Column(db.Integer, db.ForeignKey('shared_secrets.id'), nullable=True)  # can point to SharedSecret, etc.
+    scheduled_for = db.Column(TIMESTAMP, nullable=True)  # when to send (for Celery)
+    sent_at = db.Column(TIMESTAMP, nullable=True)
+    read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(TIMESTAMP, nullable=True)
+
+    user = db.relationship('User', back_populates='notifications')
+    related_secret = db.relationship('SharedSecret', back_populates='notifications')
+
 
 
 class PublicSecrets(db.Model):

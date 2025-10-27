@@ -2,9 +2,9 @@ from celery import Celery
 from celery.schedules import crontab
 from flask import url_for, current_app
 from celery import shared_task
-from .models import SharedSecret
+from .models import SharedSecret, Notification
 from . import db
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import os
 
@@ -124,6 +124,22 @@ def not_paied_reminder_task():
     logger.info("Running not paid reminder task...")
     from .utils import not_paied_reminder
     not_paied_reminder()
+
+@celery.task
+def check_scheduled_notifications():
+    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    pending_notifs = Notification.query.filter(
+        Notification.scheduled_for <= now,
+        Notification.sent_at.is_(None)
+    ).all()
+
+    for notif in pending_notifs:
+        user = notif.user
+        if user and user.fcm_token:
+            from .notifications import send_push_notification
+            send_push_notification(user.fcm_token, notif.title, notif.message)
+            notif.sent_at = datetime.now(timezone.utc)
+            db.session.commit()
 
 # @celery.task
 # def test_task():

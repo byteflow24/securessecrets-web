@@ -14,7 +14,7 @@ babel==2.16.0
 billiard==4.2.0
 blinker==1.8.2
 Brotli==1.1.0
-CacheControl>=0.12.6,<0.13
+CacheControl==0.12.14
 cachelib==0.13.0
 cachetools==5.5.2
 celery==5.4.0

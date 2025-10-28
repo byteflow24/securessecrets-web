@@ -2109,3 +2109,21 @@ def contact_us():
         return jsonify(success=True, message="Your message has been sent successfully."), 200
     except Exception as e:
         return jsonify(success=False, error="An error occurred while sending your message."), 500
+    
+################################# GENEREATE FCM TOKEN #################################
+@api.route('/update-fcm-token', methods=['POST'])
+@jwt_required()
+def update_fcm_token():
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+    data = request.get_json()
+    token = data.get('fcm_token')
+
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    user.fcm_token = token
+    db.session.commit()
+
+    return jsonify({'message': 'Token updated successfully'}), 200
+

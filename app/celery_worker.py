@@ -2,9 +2,11 @@ from celery import Celery
 from celery.schedules import crontab
 from flask import url_for, current_app
 from celery import shared_task
-from .models import SharedSecret, Notification
+from .models import SharedSecret, Notification, User, LoginHistory
+from .notifications import _notify_secret, _notify_subscription, _notify_end_trial, send_and_log_notification
 from . import db
-from datetime import datetime, timezone
+from sqlalchemy import func
+from datetime import datetime, timezone, timedelta
 import logging
 import os
 
@@ -51,6 +53,10 @@ def create_celery_app(app=None):
         'check-scheduled-secrets-every-minute': {
             'task': 'app.celery_worker.check_scheduled_secrets',
             'schedule': crontab(minute='*'),  # This runs every minute
+        },
+        'check-conditional-notifications-hourly': {
+            'task': 'app.celery_worker.check_conditional_notifications',
+            'schedule': crontab(minute='*'),  # every minute
         }
     }
     celery.conf.timezone = 'UTC'
@@ -127,19 +133,99 @@ def not_paied_reminder_task():
 
 @celery.task
 def check_scheduled_notifications():
-    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
-    pending_notifs = Notification.query.filter(
-        Notification.scheduled_for <= now,
-        Notification.sent_at.is_(None)
+    now = datetime.now(timezone.utc)
+
+    # === 1️⃣ Shared Secrets Reminders ===
+    secrets = SharedSecret.query.filter_by(received=False).all()
+    for secret in secrets:
+        if not (secret.date_to_send or secret.time_period):
+            continue
+        
+        target_time = (
+            datetime.combine(secret.date_to_send, secret.time_to_send)
+            if secret.date_to_send and secret.time_to_send
+            else secret.time_period
+        )
+
+        delta = target_time - now
+
+        if timedelta(days=29) <= delta <= timedelta(days=31):
+            _notify_secret(secret, "month")
+        elif timedelta(days=4) <= delta <= timedelta(days=5):
+            _notify_secret(secret, "5_days")
+        elif timedelta(minutes=59) <= delta <= timedelta(minutes=61):
+            _notify_secret(secret, "hour")
+
+    # === 2️⃣ Subscription Renewal Reminders ===
+    users = User.query.filter(
+        User.username != "admin",
+        User.next_billing_date.isnot(None)
     ).all()
 
-    for notif in pending_notifs:
-        user = notif.user
-        if user and user.fcm_token:
-            from .notifications import send_push_notification
-            send_push_notification(user.fcm_token, notif.title, notif.message)
-            notif.sent_at = datetime.now(timezone.utc)
-            db.session.commit()
+    for user in users:
+        delta = user.next_billing_date - now
+        if timedelta(days=4) <= delta <= timedelta(days=5):
+            _notify_subscription(user, "5_days")
+        elif timedelta(days=0) <= delta <= timedelta(days=1):
+            _notify_subscription(user, "1_day")
+
+    # === 3️⃣ Trial End Reminders ===
+    for user in users:
+        if not user.trial_end_date:
+            continue
+        delta = user.trial_end_date - now
+        if timedelta(days=4) <= delta <= timedelta(days=5):
+            _notify_end_trial(user, "5_days")
+        elif timedelta(days=0) <= delta <= timedelta(days=1):
+            _notify_end_trial(user, "1_day")
+
+    # === 4️⃣ Inactivity Reminder ===
+    thirty_days_ago = now - timedelta(days=30)
+    inactive_users = (
+        db.session.query(User)
+        .join(LoginHistory, User.id == LoginHistory.user_id)
+        .group_by(User.id)
+        .having(func.max(LoginHistory.login_time) < thirty_days_ago)
+        .all()
+    )
+
+    for user in inactive_users:
+        send_and_log_notification(
+            user.id,
+            "We miss you!",
+            "You haven’t logged in for a month. Come back and check your secrets!",
+            "inactive_user"
+        )
+
+        shared_secret = SharedSecret.query.filter(
+            SharedSecret.user_id == user.id,
+            SharedSecret.received == False,
+            SharedSecret.time_period.isnot(None),
+            (SharedSecret.date_to_send.is_(None)) & (SharedSecret.time_to_send.is_(None))
+        ).first()
+
+        if shared_secret:
+            send_and_log_notification(
+                user.id,
+                "Last Login Secret Warning",
+                "You have an active 'Last Login' shared secret. Avoid opening the app unless you intend to reset its timer.",
+                "last_login_warning"
+            )
+
+
+
+# pending_notifs = Notification.query.filter(
+#     Notification.scheduled_for <= now,
+#     Notification.sent_at.is_(None)
+# ).all()
+
+# for notif in pending_notifs:
+#     user = notif.user
+#     if user and user.fcm_token:
+#         from .notifications import send_push_notification
+#         send_push_notification(user.fcm_token, notif.title, notif.message)
+#         notif.sent_at = datetime.now(timezone.utc)
+#         db.session.commit()
 
 # @celery.task
 # def test_task():

@@ -12,25 +12,83 @@ def create_notification(user_id, title, message, notif_type, related_secret_id=N
         scheduled_for=scheduled_for,
     )
     db.session.add(notif)
-    db.session.commit()
+    # ⚠️ Don't commit here — let caller commit once after batch
     return notif
 
+
 def send_push_notification(fcm_token, title, message):
-    """Send Firebase push"""
+    """Send Firebase push notification."""
     if not fcm_token:
         return False
     msg = messaging.Message(
         notification=messaging.Notification(title=title, body=message),
         token=fcm_token
     )
-    messaging.send(msg)
-    return True
+    try:
+        messaging.send(msg)
+        return True
+    except Exception as e:
+        print(f"❌ Push notification failed: {e}")
+        return False
+
 
 def send_and_log_notification(user_id, title, message, notif_type, related_secret_id=None):
-    """Send and record notification"""
+    """Send push + log notification."""
     user = User.query.get(user_id)
     if not user:
-        return
+        return False
+    
     sent = send_push_notification(user.fcm_token, title, message)
     create_notification(user.id, title, message, notif_type, related_secret_id)
+    db.session.commit()  # commit once per send
     return sent
+
+
+def _notify_secret(secret, phase):
+    user = secret.user or secret.sender  # ensure proper relation
+    if not user:
+        return
+
+    messages = {
+        "month": f"Your shared secret '{secret.title}' will be sent in about a month."
+            "\n⚠️ Opening the app will extend the sending date.",
+        "5_days": f"Your shared secret '{secret.title}' will be sent in 5 days."
+            "\n⚠️ Opening the app will extend the sending date.",
+        "hour": f"Your shared secret '{secret.title}' will be sent in 1 hour."
+            "\n⚠️ Opening the app will extend the sending date.",
+    }
+
+    send_and_log_notification(
+        user.id,
+        "Shared Secret Reminder",
+        messages[phase],
+        f"secret_reminder_{phase}",
+        related_secret_id=secret.id
+    )
+
+
+def _notify_subscription(user, phase):
+    messages = {
+        "5_days": "Your subscription will renew in 5 days.",
+        "1_day": "Your subscription will renew tomorrow.",
+    }
+    send_and_log_notification(
+        user.id,
+        "Subscription Reminder",
+        messages[phase],
+        f"subscription_{phase}"
+    )
+
+
+def _notify_end_trial(user, phase):
+    messages = {
+        "5_days": "Your free trial will end in 5 days.",
+        "1_day": "Your free trial will end tomorrow.",
+    }
+    send_and_log_notification(
+        user.id,
+        "Free Trial Ending Soon",
+        messages[phase],
+        f"free_trial_{phase}"
+    )
+

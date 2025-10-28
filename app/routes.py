@@ -186,9 +186,10 @@ def home():
     # Report submission
     if request.method == "POST":
         try:
-            secret_id = int(request.form.get('secret_id'))
+            secret_id_raw = request.form.get('secret_id')
+            secret_id = int(secret_id_raw)
         except (ValueError, TypeError):
-            flash(f'Invalid secret ID. {secret_id}', 'danger')
+            flash('Invalid secret ID.', 'danger')
             return redirect(request.path)
 
         report_details = request.form.get('details', '').strip()

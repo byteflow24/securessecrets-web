@@ -499,9 +499,9 @@ def all_secrets_api():
             'title': shared.title if shared.title else '',
             'secret': shared.snapshot_secret if shared.snapshot_secret else '',
             'file': file_is if file_is else None,
-            'date_to_send': convert_utc_to_local(shared.date_to_send.isoformat(), user.time_zone) if convert_utc_to_local(shared.date_to_send, user.time_zone) else None,
+            'date_to_send': convert_utc_to_local(shared.date_to_send, user.time_zone) if shared.date_to_send else None,
             'time_to_send': shared.time_to_send.isoformat() if shared.time_to_send else None,
-            "share_date": convert_utc_to_local(shared.share_date.isoformat(), user.time_zone) if shared and convert_utc_to_local(shared.share_date, user.time_zone) else None,
+            "share_date": convert_utc_to_local(shared.share_date, user.time_zone) if shared.share_date else None,
             "time_period": shared.time_period.isoformat() if shared.time_period else None,
             'status': status,
         })

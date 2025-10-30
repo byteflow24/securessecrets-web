@@ -339,7 +339,9 @@ def convert_utc_to_local(utc_time, time_zone):
     """
     Convert a UTC datetime (string or datetime) to user's local timezone.
     """
-
+    if not utc_time:
+        return None
+    
     # Fallback timezone
     if not time_zone:
         time_zone = "UTC"

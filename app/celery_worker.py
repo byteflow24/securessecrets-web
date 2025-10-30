@@ -131,8 +131,10 @@ def not_paied_reminder_task():
     from .utils import not_paied_reminder
     not_paied_reminder()
 
+
 @celery.task
 def check_scheduled_notifications():
+    logger.info("🔔 Running check_scheduled_notifications task")
     now = datetime.now(timezone.utc)
 
     # === 1️⃣ Shared Secrets Reminders ===

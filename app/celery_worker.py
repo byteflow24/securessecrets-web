@@ -55,7 +55,7 @@ def create_celery_app(app=None):
             'schedule': crontab(minute='*'),  # This runs every minute
         },
         'check-conditional-notifications-hourly': {
-            'task': 'app.celery_worker.check_conditional_notifications',
+            'task': 'app.celery_worker.check_scheduled_notifications',
             'schedule': crontab(minute='*'),  # every minute
         }
     }
@@ -151,7 +151,7 @@ def check_scheduled_notifications():
 
         if timedelta(days=29) <= delta <= timedelta(days=31):
             _notify_secret(secret, "month")
-        elif timedelta(days=4) <= delta <= timedelta(days=5):
+        elif timedelta(days=1) <= delta <= timedelta(days=2):
             _notify_secret(secret, "5_days")
         elif timedelta(minutes=59) <= delta <= timedelta(minutes=61):
             _notify_secret(secret, "hour")

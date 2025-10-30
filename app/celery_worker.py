@@ -37,27 +37,22 @@ def create_celery_app(app=None):
     celery.conf.worker_prefetch_multiplier = 1
     celery.conf.broker_connection_retry_on_startup = True
     celery.conf.beat_schedule = {
-        
-        'initiate-recurring-payment-daily': {
-            'task': 'app.celery_worker.initiate_recurring_payment_task',
-            'schedule': crontab(hour=0, minute=0),    #crontab(minute=0, hour='*/6') this means every 6 hours
-        },
-        'trial-end-reminder-daily': {
-            'task': 'app.celery_worker.trial_end_reminder_task',
-            'schedule': crontab(hour=0, minute=0), #hour=6, minute=0 / only minute='*'
-        },
-        'not-paid-reminder-daily': {
-            'task': 'app.celery_worker.not_paied_reminder_task',
-            'schedule': crontab(hour=0, minute=0),
-        },
         'check-scheduled-secrets-every-minute': {
             'task': 'app.celery_worker.check_scheduled_secrets',
-            'schedule': crontab(minute='*'),  # This runs every minute
+            'schedule': crontab(minute='*'),
         },
-        'check-conditional-notifications-hourly': {
+        'check-scheduled-notifications-every-minute': {  # ← renamed
             'task': 'app.celery_worker.check_scheduled_notifications',
-            'schedule': crontab(minute='*'),  # every minute
-        }
+            'schedule': crontab(minute='*'),  # ← every minute for testing
+        },
+        'trial-end-reminder-now': {
+            'task': 'app.celery_worker.trial_end_reminder_task',
+            'schedule': 60,  # ← every 60 seconds
+        },
+        'not-paid-reminder-now': {
+            'task': 'app.celery_worker.not_paied_reminder_task',
+            'schedule': 60,
+        },
     }
     celery.conf.timezone = 'UTC'
     celery.Task = ContextTask
@@ -111,25 +106,21 @@ def check_scheduled_secrets():
 
             secret.received = True  # Mark it as sent
         db.session.commit()
-
-
-@celery.task
-def initiate_recurring_payment_task():
-    logger.info("Initiating recurring payment task...")
-    from .utils import initiate_recurring_payment
-    initiate_recurring_payment()
+        
 
 @celery.task
 def trial_end_reminder_task():
     logger.info("Running trial end reminder task...")
     from .utils import trial_end_reminder
     trial_end_reminder()
+    logger.info("trial_end_reminder_task FINISHED")
 
 @celery.task
 def not_paied_reminder_task():
     logger.info("Running not paid reminder task...")
     from .utils import not_paied_reminder
     not_paied_reminder()
+    logger.info("not_paied_reminder_task FINISHED")
 
 
 @celery.task
@@ -137,6 +128,21 @@ def check_scheduled_notifications():
     with current_app.app_context():
         logger.info("🔔 Running check_scheduled_notifications task")
         now = datetime.now(timezone.utc)
+        logger.info(f"Current UTC time: {now}")
+
+        # TEST: Force a notification
+        test_user = User.query.first()
+        if test_user:
+            logger.info(f"Test user found: {test_user.username}, FCM: {test_user.fcm_token}")
+            sent = send_and_log_notification(
+                test_user.id,
+                "Test Notification",
+                "This is a test from Celery!",
+                "test"
+            )
+            logger.info(f"Test notification sent: {sent}")
+        else:
+            logger.warning("No users in DB!")
 
         # === 1️⃣ Shared Secrets Reminders ===
         secrets = SharedSecret.query.filter_by(received=False).all()

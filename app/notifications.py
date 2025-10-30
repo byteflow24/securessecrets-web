@@ -1,6 +1,11 @@
+import logging
 from . import db
 from .models import Notification, User
 from firebase_admin import messaging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def create_notification(user_id, title, message, notif_type, related_secret_id=None, scheduled_for=None):
     notif = Notification(
@@ -36,9 +41,12 @@ def send_and_log_notification(user_id, title, message, notif_type, related_secre
     """Send push + log notification."""
     user = User.query.get(user_id)
     if not user:
+        logger.error(f"User {user_id} not found")
         return False
     
+    logger.info(f"Sending to {user.username} | FCM: {user.fcm_token}")
     sent = send_push_notification(user.fcm_token, title, message)
+    logger.info(f"Push sent: {sent}")
     create_notification(user.id, title, message, notif_type, related_secret_id)
     db.session.commit()  # commit once per send
     return sent

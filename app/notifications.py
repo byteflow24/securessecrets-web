@@ -58,25 +58,23 @@ def send_and_log_notification(user_id, title, message, notif_type, related_secre
 
 
 def _notify_secret(secret, phase):
-    user = secret.user or secret.sender  # ensure proper relation
+    user = secret.user or secret.sender
     if not user:
         return
 
     messages = {
-        "month": f"Your shared secret '{secret.title}' will be sent in about a month."
-            "\n⚠️ Opening the app will extend the sending date.",
-        "5_days": f"Your shared secret '{secret.title}' will be sent in 5 days."
-            "\n⚠️ Opening the app will extend the sending date.",
-        "hour": f"Your shared secret '{secret.title}' will be sent in 1 hour."
-            "\n⚠️ Opening the app will extend the sending date.",
+        "month": f"Your shared secret '{secret.title}' will be sent in about a month.\n⚠️ Opening the app will extend the sending date.",
+        "5_days": f"Your shared secret '{secret.title}' will be sent in 5 days.\n⚠️ Opening the app will extend the sending date.",
+        "hour": f"Your shared secret '{secret.title}' will be sent in 1 hour.\n⚠️ Opening the app will extend the sending date.",
     }
 
+    notif_type = f"secret_reminder_{phase}"
     send_and_log_notification(
         user.id,
         "Shared Secret Reminder",
         messages[phase],
-        f"secret_reminder_{phase}",
-        related_secret_id=secret.id
+        notif_type,
+        related_secret_id=secret.id  # ← CRITICAL
     )
 
 

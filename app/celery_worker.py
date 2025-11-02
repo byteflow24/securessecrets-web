@@ -127,82 +127,80 @@ def trial_end_reminder_task():
 def check_scheduled_notifications(self):
     logger.info("🔔 Running check_scheduled_notifications task")
     now = datetime.now(timezone.utc)
-    logger.info(f"Current UTC time: {now}")
-
-    # TEST: Force a notification
-    # TEST: Force a notification only once per run or remove entirely after testing
-    test_user = User.query.first()
-    if test_user and not Notification.query.filter_by(user_id=test_user.id, type="test").first():
-        logger.info(f"Test user found: {test_user.username}, FCM: {test_user.fcm_token}")
-        sent = send_and_log_notification(
-            test_user.id,
-            "Test Notification",
-            "This is a test from Celery!",
-            "test"
-        )
-        logger.info(f"Test notification sent: {sent}")
-    else:
-        logger.warning("No users in DB!")
-
-    pending_notifs = Notification.query.filter(Notification.sent_at.is_(None)).count()
-    if pending_notifs == 0:
-        logger.info("✅ All notifications already sent, skipping.")
-        return
     
-    # === 1️⃣ Shared Secrets Reminders ===
+    # === 1. Shared Secrets Reminders ===
     secrets = SharedSecret.query.filter_by(received=False).all()
     for secret in secrets:
         if not (secret.date_to_send or secret.time_period):
             continue
-        
+
         target_time = (
             datetime.combine(secret.date_to_send, secret.time_to_send)
             if secret.date_to_send and secret.time_to_send
             else secret.time_period
         )
-
         if target_time.tzinfo is None:
             target_time = target_time.replace(tzinfo=timezone.utc)
 
         delta = target_time - now
+        days_left = delta.days
+        hours_left = delta.total_seconds() // 3600
 
-        if delta == timedelta(days=30):
-            _notify_secret(secret, "month")
-        elif timedelta(days=1) <= delta >= timedelta(days=3):
-            _notify_secret(secret, "5_days")
-        elif delta == timedelta(minutes=60):
-            _notify_secret(secret, "hour")
+        # Define phases
+        phases = [
+            ("month", 30, "secret_reminder_month"),
+            ("5_days", 5, "secret_reminder_5_days"),
+            ("hour", 1, "secret_reminder_hour"),
+        ]
 
-    # === 2️⃣ Subscription Renewal Reminders ===
-    users = User.query.filter(
-        User.username != "admin",
-        User.next_billing_date.isnot(None)
-    ).all()
+        for phase_name, threshold, notif_type in phases:
+            # Check exact day/hour match
+            if (phase_name == "month" and days_left == threshold) or \
+               (phase_name == "5_days" and 1 <= days_left <= 3) or \
+               (phase_name == "hour" and hours_left == threshold):
 
-    # for user in users:
-    #     next_date = user.next_billing_date
-    #     if next_date and next_date.tzinfo is None:
-    #         next_date = next_date.replace(tzinfo=timezone.utc)
+                # CHECK: Already sent?
+                already_sent = Notification.query.filter_by(
+                    user_id=secret.user_id or secret.sender_id,
+                    type=notif_type,
+                    related_secret_id=secret.id
+                ).first()
 
-    #     delta = next_date - now
-    #     if delta == timedelta(days=5):
-    #         _notify_subscription(user, "5_days")
-    #     elif delta == timedelta(days=1):
-    #         _notify_subscription(user, "1_day")
+                if not already_sent:
+                    _notify_secret(secret, phase_name)
+                    logger.info(f"Sent {phase_name} reminder for secret {secret.id}")
+                else:
+                    logger.info(f"Skipped {phase_name} — already sent")
 
-    # === 3️⃣ Trial End Reminders ===
-    for user in users:
-        if not user.trial_end_date:
-            continue
-        trial_end = user.trial_end_date
-        if trial_end.tzinfo is None:
-            trial_end = trial_end.replace(tzinfo=timezone.utc)
+    # === 2. Subscription Renewal ===
+    for user in User.query.filter(User.username != "admin", User.next_billing_date.isnot(None)).all():
+        delta = user.next_billing_date - now
+        days_left = delta.days
 
-        delta = trial_end - now
-        if delta == timedelta(days=7):
-            _notify_end_trial(user, "7_days")
-        elif delta == timedelta(days=1):
-            _notify_end_trial(user, "1_day")
+        phases = [
+            ("5_days", 5, "subscription_5_days"),
+            ("1_day", 1, "subscription_1_day"),
+        ]
+
+        for phase, days, notif_type in phases:
+            if days_left == days:
+                if not Notification.query.filter_by(user_id=user.id, type=notif_type).first():
+                    _notify_subscription(user, phase)
+
+    # === 3. Trial End ===
+    for user in User.query.filter(User.trial_end_date.isnot(None)).all():
+        delta = user.trial_end_date - now
+        days_left = delta.days
+
+        phases = [
+            ("7_days", 7, "free_trial_7_days"),
+            ("1_day", 1, "free_trial_1_day"),
+        ]
+
+        for phase, days, notif_type in phases:
+            if days_left == days:
+                if not Notification.query.filter_by(user_id=user.id, type=notif_type).first():
+                    _notify_end_trial(user, phase)
 
     # === 4️⃣ Inactivity Reminder ===
     thirty_days_ago = now - timedelta(days=30)

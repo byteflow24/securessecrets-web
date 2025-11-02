@@ -1,5 +1,5 @@
 import logging
-
+from .firebase import firebase_admin
 from celery import current_app
 from . import db
 from .models import Notification, User

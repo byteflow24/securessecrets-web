@@ -2031,7 +2031,7 @@ def generate_access_token(user_id, secret_key, expires_in=3600):
 # ======  CONFIGURATION  ====== APPLE API ======
 APPLE_ISSUER_ID = os.environ.get("APPLE_ISSUER_ID")
 APPLE_KEY_ID = os.environ.get("APPLE_KEY_ID")
-APPLE_PRIVATE_KEY_PATH = os.environ.get("APPLE_PRIVATE_KEY_PATH")
+APPLE_PRIVATE_KEY_PATH = os.environ.get("APPLE_PRIVATE_KEY_PATH") # in Web Server /var/data/uploads/AuthKey_ST4M9QBWX6.p8 in env group /etc/secrets/app-authKey.p8 
 APPLE_API_BASE = "https://api.storekit.itunes.apple.com"  # For production
 APPLE_SANDBOX_BASE = "https://api.storekit-sandbox.itunes.apple.com"# For sandbox
 

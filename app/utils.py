@@ -1971,46 +1971,46 @@ def trial_end_reminder():
 
 
 # Check if user subscription end date
-def not_paied_reminder():
-    logger.info("Sending not paid reminder.")
-    current_date = datetime.now(timezone.utc).date()
-    users = User.query.filter(User.next_billing_date <= current_date).all()
+# def not_paied_reminder():
+#     logger.info("Sending not paid reminder.")
+#     current_date = datetime.now(timezone.utc).date()
+#     users = User.query.filter(User.next_billing_date <= current_date).all()
 
-    for user in users:
+#     for user in users:
 
-        if user.username == 'admin':
-            continue  # Skip processing for admin user
+#         if user.username == 'admin':
+#             continue  # Skip processing for admin user
 
-        plan = Plan.query.filter_by(id=user.plan_id).first()
-        if user.next_billing_date:
-            if user.next_billing_date.tzinfo is None:
-                next_billing_date = user.next_billing_date.replace(tzinfo=timezone.utc)
-            else:
-                next_billing_date = user.next_billing_date
+#         plan = Plan.query.filter_by(id=user.plan_id).first()
+#         if user.next_billing_date:
+#             if user.next_billing_date.tzinfo is None:
+#                 next_billing_date = user.next_billing_date.replace(tzinfo=timezone.utc)
+#             else:
+#                 next_billing_date = user.next_billing_date
             
-            # Get only the date part of next_billing_date (ignore time)
-            next_billing_date = next_billing_date.date()
+#             # Get only the date part of next_billing_date (ignore time)
+#             next_billing_date = next_billing_date.date()
 
-            # will make the user inactive if the subscription ended
-            if next_billing_date > current_date:
-                user.subscription_status = "INACTIVE"
-                db.session.commit()
+#             # will make the user inactive if the subscription ended
+#             if next_billing_date > current_date:
+#                 user.subscription_status = "INACTIVE"
+#                 db.session.commit()
 
-            # Calculate the difference in days
-            days_left = (next_billing_date - current_date).days
+#             # Calculate the difference in days
+#             days_left = (next_billing_date - current_date).days
 
-            if days_left in [-5, -3, -7]:
-                days_left = abs(days_left)
+#             if days_left in [-5, -3, -7]:
+#                 days_left = abs(days_left)
 
-            logger.info(days_left)
+#             logger.info(days_left)
 
-            if days_left in [5, 3, 1]:  # Send reminders at 5, 3, and 1 day left
-                reminder_to_pay_email(user.username, user.email, plan.plan, days_left)
+#             if days_left in [5, 3, 1]:  # Send reminders at 5, 3, and 1 day left
+#                 reminder_to_pay_email(user.username, user.email, plan.plan, days_left)
                 
-                # If it's the last reminder (1 day), delete the user
-                if days_left == 1:
-                    db.session.delete(user)
-                    db.session.commit()
+#                 # If it's the last reminder (1 day), delete the user
+#                 if days_left == 1:
+#                     db.session.delete(user)
+#                     db.session.commit()
 
 
 # Generating a token

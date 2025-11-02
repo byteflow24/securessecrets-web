@@ -77,7 +77,7 @@ def subscription_ended(api=False):
 
             trial_valid = current_user.trial_end_date and current_user.trial_end_date.date() >= current_date
             subscription_valid = (
-                current_user.subscription_status == "ACTIVE" and
+                current_user.subscription_status == "INACTIVE" and
                 current_user.next_billing_date and
                 current_user.next_billing_date.date() >= current_date
             )

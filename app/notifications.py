@@ -10,16 +10,18 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def create_notification(user_id, title, message, notif_type, related_secret_id=None):
+def create_notification(user_id, title, message, notif_type, related_secret_id=None, scheduled_for=None):
     notif = Notification(
         user_id=user_id,
         title=title,
         message=message,
         type=notif_type,
         related_secret_id=related_secret_id,
+        scheduled_for=scheduled_for,
         sent_at = datetime.now(),
     )
     db.session.add(notif)
+    print(datetime.now())
     # ⚠️ Don't commit here — let caller commit once after batch
     return notif
 

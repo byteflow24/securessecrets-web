@@ -160,11 +160,11 @@ def check_scheduled_notifications(self):
 
         delta = target_time - now
 
-        if timedelta(days=29) <= delta <= timedelta(days=31):
+        if delta == timedelta(days=30):
             _notify_secret(secret, "month")
-        elif timedelta(days=1) <= delta <= timedelta(days=2):
+        elif delta == timedelta(days=2):
             _notify_secret(secret, "5_days")
-        elif timedelta(minutes=59) <= delta <= timedelta(minutes=61):
+        elif delta == timedelta(minutes=60):
             _notify_secret(secret, "hour")
 
     # === 2️⃣ Subscription Renewal Reminders ===
@@ -173,16 +173,16 @@ def check_scheduled_notifications(self):
         User.next_billing_date.isnot(None)
     ).all()
 
-    for user in users:
-        next_date = user.next_billing_date
-        if next_date and next_date.tzinfo is None:
-            next_date = next_date.replace(tzinfo=timezone.utc)
+    # for user in users:
+    #     next_date = user.next_billing_date
+    #     if next_date and next_date.tzinfo is None:
+    #         next_date = next_date.replace(tzinfo=timezone.utc)
 
-        delta = next_date - now
-        if timedelta(days=4) <= delta <= timedelta(days=5):
-            _notify_subscription(user, "5_days")
-        elif timedelta(days=0) <= delta <= timedelta(days=1):
-            _notify_subscription(user, "1_day")
+    #     delta = next_date - now
+    #     if delta == timedelta(days=5):
+    #         _notify_subscription(user, "5_days")
+    #     elif delta == timedelta(days=1):
+    #         _notify_subscription(user, "1_day")
 
     # === 3️⃣ Trial End Reminders ===
     for user in users:
@@ -193,9 +193,9 @@ def check_scheduled_notifications(self):
             trial_end = trial_end.replace(tzinfo=timezone.utc)
 
         delta = trial_end - now
-        if timedelta(days=4) <= delta <= timedelta(days=5):
-            _notify_end_trial(user, "5_days")
-        elif timedelta(days=0) <= delta <= timedelta(days=1):
+        if delta == timedelta(days=7):
+            _notify_end_trial(user, "7_days")
+        elif delta == timedelta(days=1):
             _notify_end_trial(user, "1_day")
 
     # === 4️⃣ Inactivity Reminder ===

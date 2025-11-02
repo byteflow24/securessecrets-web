@@ -95,7 +95,7 @@ def _notify_subscription(user, phase):
 
 def _notify_end_trial(user, phase):
     messages = {
-        "5_days": "Your free trial will end in 5 days.",
+        "7_days": "Your free trial will end in a week.",
         "1_day": "Your free trial will end tomorrow.",
     }
     send_and_log_notification(

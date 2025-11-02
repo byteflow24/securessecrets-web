@@ -175,7 +175,11 @@ def check_scheduled_notifications():
         ).all()
 
         for user in users:
-            delta = user.next_billing_date - now
+            next_date = user.next_billing_date
+            if next_date and next_date.tzinfo is None:
+                next_date = next_date.replace(tzinfo=timezone.utc)
+
+            delta = next_date - now
             if timedelta(days=4) <= delta <= timedelta(days=5):
                 _notify_subscription(user, "5_days")
             elif timedelta(days=0) <= delta <= timedelta(days=1):
@@ -185,7 +189,11 @@ def check_scheduled_notifications():
         for user in users:
             if not user.trial_end_date:
                 continue
-            delta = user.trial_end_date - now
+            trial_end = user.trial_end_date
+            if trial_end.tzinfo is None:
+                trial_end = trial_end.replace(tzinfo=timezone.utc)
+
+            delta = trial_end - now
             if timedelta(days=4) <= delta <= timedelta(days=5):
                 _notify_end_trial(user, "5_days")
             elif timedelta(days=0) <= delta <= timedelta(days=1):

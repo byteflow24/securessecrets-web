@@ -1967,10 +1967,13 @@ def trial_end_reminder():
         print(f"User: {user.username}, Trial End Date: {trial_end_date_only}, Days Difference: {days_difference}")
 
         # Check if the trial end date is exactly 7 days or 1 day away
-        if days_difference == 7:
+        if days_difference == 7 and not user.trial_week_reminder_sent:
             email_reminder(user.email, user.username, formatted_trial_end_date, reminder_type="trial_week")
-        elif days_difference == 1:
+            user.trial_week_reminder_sent = True
+        elif days_difference == 1 and not user.trial_day_reminder_sent:
             email_reminder(user.email, user.username, formatted_trial_end_date, reminder_type="trial_day")
+            user.trial_day_reminder_sent = True
+        db.session.commit()
 
 
 

@@ -422,6 +422,32 @@ if not SERVICE_ACCOUNT_FILE or not GCS_BUCKET:
 credentials = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE)
 storage_client = storage.Client(credentials=credentials)
 
+###########################################################################################################################
+
+# Global cache
+_storage_client = None
+_gcs_bucket_name = None
+def get_gcs_client():
+    global _storage_client, _gcs_bucket_name
+
+    if _storage_client is not None:
+        return _storage_client
+
+    # 1. Get bucket name
+    _gcs_bucket_name = os.environ.get("GCS_BUCKET")
+    if not _gcs_bucket_name:
+        raise ValueError("GCS_BUCKET environment variable is missing")
+
+    # 2. Get JSON from secret file content
+    secret_json_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") #"/etc/secrets/gcp-service-account.json" Render mounts here
+    if not os.path.exists(secret_json_path):
+        raise ValueError(f"GCP secret file not found at {secret_json_path}")
+
+    # 3. Load credentials
+    credentials = service_account.Credentials.from_service_account_file(secret_json_path)
+    _storage_client = storage.Client(credentials=credentials)
+    return _storage_client
+
 def upload_to_gcs(file_stream, filename, chunk_size=1024*1024):
     """
     Encrypts and uploads a file to GCS in chunks (streaming, low memory).

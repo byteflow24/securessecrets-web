@@ -131,7 +131,7 @@ def check_scheduled_notifications(self):
 
     # TEST: Force a notification
     test_user = User.query.first()
-    if test_user and not Notification.query.filter_by(user_id=test_user.id, type="test").first():
+    if test_user:
         logger.info(f"Test user found: {test_user.username}, FCM: {test_user.fcm_token}")
         sent = send_and_log_notification(
             test_user.id,
@@ -142,14 +142,7 @@ def check_scheduled_notifications(self):
         logger.info(f"Test notification sent: {sent}")
     else:
         logger.warning("No users in DB!")
-
-    # ✅ Only proceed if there are unsent notifications
-    # pending_notifs = Notification.query.filter(Notification.sent_at.is_(None)).count()
-    # if pending_notifs == 0:
-    #     logger.info("✅ All notifications already sent, skipping.")
-    #     return
-
-    logger.info(f"Processing reminders at {now}")
+    
     # === 1️⃣ Shared Secrets Reminders ===
     secrets = SharedSecret.query.filter_by(received=False).all()
     for secret in secrets:
@@ -216,16 +209,6 @@ def check_scheduled_notifications(self):
     )
 
     for user in inactive_users:
-        already_sent = Notification.query.filter(
-            Notification.user_id == user.id,
-            Notification.type == "inactive_user",
-            Notification.sent_at.isnot(None),
-            Notification.sent_at > now - timedelta(days=30)
-        ).first()
-
-        if already_sent:
-            continue  # skip duplicate
-
         send_and_log_notification(
             user.id,
             "We miss you!",
@@ -241,20 +224,12 @@ def check_scheduled_notifications(self):
         ).first()
 
         if shared_secret:
-            already_sent_warning = Notification.query.filter(
-                Notification.user_id == user.id,
-                Notification.type == "last_login_warning",
-                Notification.sent_at.isnot(None),
-                Notification.sent_at > now - timedelta(days=30)
-            ).first()
-
-            if not already_sent_warning:
-                send_and_log_notification(
-                    user.id,
-                    "Last Login Secret Warning",
-                    "You have an active 'Last Login' shared secret. Avoid opening the app unless you intend to reset its timer.",
-                    "last_login_warning"
-                )
+            send_and_log_notification(
+                user.id,
+                "Last Login Secret Warning",
+                "You have an active 'Last Login' shared secret. Avoid opening the app unless you intend to reset its timer.",
+                "last_login_warning"
+            )
 
 
 

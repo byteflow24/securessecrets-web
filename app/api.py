@@ -1783,8 +1783,8 @@ def test_apple_notifications():
     
 ################## GOOGLE PAYMENT METHOD ##################
     
-# Load service account JSON key
-SERVICE_ACCOUNT_FILE = os.environ.get("SERVICE_ACCOUNT_FILE")  # put path in your backend in Web Server /var/data/uploads/text-to-speech-430010-6ecbe4975ff2.json
+# Load service account JSON key #####Web Server /var/data/uploads/text-to-speech-430010-6ecbe4975ff2.json ####
+SERVICE_ACCOUNT_FILE = os.environ.get("SERVICE_ACCOUNT_FILE")  # env group in /etc/secrets/gpm-service-account.json
 SCOPES = ["https://www.googleapis.com/auth/androidpublisher"]
 
 credentials = service_account.Credentials.from_service_account_file(

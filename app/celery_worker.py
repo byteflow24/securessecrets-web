@@ -131,7 +131,7 @@ def check_scheduled_notifications(self):
 
     # TEST: Force a notification
     test_user = User.query.first()
-    if test_user:
+    if test_user and not Notification.query.filter_by(user_id=test_user.id, type="test").first():
         logger.info(f"Test user found: {test_user.username}, FCM: {test_user.fcm_token}")
         sent = send_and_log_notification(
             test_user.id,
@@ -216,6 +216,16 @@ def check_scheduled_notifications(self):
     )
 
     for user in inactive_users:
+        already_sent = Notification.query.filter(
+            Notification.user_id == user.id,
+            Notification.type == "inactive_user",
+            Notification.sent_at.isnot(None),
+            Notification.sent_at > now - timedelta(days=30)
+        ).first()
+
+        if already_sent:
+            continue  # skip duplicate
+
         send_and_log_notification(
             user.id,
             "We miss you!",
@@ -231,12 +241,20 @@ def check_scheduled_notifications(self):
         ).first()
 
         if shared_secret:
-            send_and_log_notification(
-                user.id,
-                "Last Login Secret Warning",
-                "You have an active 'Last Login' shared secret. Avoid opening the app unless you intend to reset its timer.",
-                "last_login_warning"
-            )
+            already_sent_warning = Notification.query.filter(
+                Notification.user_id == user.id,
+                Notification.type == "last_login_warning",
+                Notification.sent_at.isnot(None),
+                Notification.sent_at > now - timedelta(days=30)
+            ).first()
+
+            if not already_sent_warning:
+                send_and_log_notification(
+                    user.id,
+                    "Last Login Secret Warning",
+                    "You have an active 'Last Login' shared secret. Avoid opening the app unless you intend to reset its timer.",
+                    "last_login_warning"
+                )
 
 
 

@@ -1971,10 +1971,7 @@ def trial_end_reminder():
             email_reminder(user.email, user.username, formatted_trial_end_date, reminder_type="trial_week")
         elif days_difference == 1:
             email_reminder(user.email, user.username, formatted_trial_end_date, reminder_type="trial_day")
-        elif days_difference <= 0:
-            # When the trial ends, reset the trial_end_date to None
-            user.trial_end_date = current_date
-            db.session.commit()
+
 
 
 # Check if user subscription end date

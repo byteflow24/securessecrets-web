@@ -162,7 +162,7 @@ def check_scheduled_notifications(self):
 
         if delta == timedelta(days=30):
             _notify_secret(secret, "month")
-        elif delta == timedelta(days=2):
+        elif timedelta(days=1) <= delta >= timedelta(days=3):
             _notify_secret(secret, "5_days")
         elif delta == timedelta(minutes=60):
             _notify_secret(secret, "hour")

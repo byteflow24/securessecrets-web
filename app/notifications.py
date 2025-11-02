@@ -21,7 +21,6 @@ def create_notification(user_id, title, message, notif_type, related_secret_id=N
         sent_at = datetime.now(),
     )
     db.session.add(notif)
-    print(datetime.now())
     # ⚠️ Don't commit here — let caller commit once after batch
     return notif
 

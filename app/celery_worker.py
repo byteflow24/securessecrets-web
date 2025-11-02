@@ -144,10 +144,10 @@ def check_scheduled_notifications(self):
         logger.warning("No users in DB!")
 
     # ✅ Only proceed if there are unsent notifications
-    pending_notifs = Notification.query.filter(Notification.sent_at.is_(None)).count()
-    if pending_notifs == 0:
-        logger.info("✅ All notifications already sent, skipping.")
-        return
+    # pending_notifs = Notification.query.filter(Notification.sent_at.is_(None)).count()
+    # if pending_notifs == 0:
+    #     logger.info("✅ All notifications already sent, skipping.")
+    #     return
 
     logger.info(f"Processing reminders at {now}")
     # === 1️⃣ Shared Secrets Reminders ===

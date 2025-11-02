@@ -4,19 +4,20 @@ from celery import current_app
 from . import db
 from .models import Notification, User
 from firebase_admin import messaging
+from datetime import datetime
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def create_notification(user_id, title, message, notif_type, related_secret_id=None, scheduled_for=None):
+def create_notification(user_id, title, message, notif_type, related_secret_id=None):
     notif = Notification(
         user_id=user_id,
         title=title,
         message=message,
         type=notif_type,
         related_secret_id=related_secret_id,
-        scheduled_for=scheduled_for,
+        sent_at = datetime.now(),
     )
     db.session.add(notif)
     # ⚠️ Don't commit here — let caller commit once after batch

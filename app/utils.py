@@ -1954,8 +1954,6 @@ def trial_end_reminder():
         days_difference = (trial_end_date_only - current_date).days
         formatted_trial_end_date = trial_end_date.strftime('%d-%m-%Y')
 
-        logger.warning(f"User: {user.username}, Trial End Date: {trial_end_date_only}, Days Difference: {days_difference}")
-
         if days_difference == 7 and not user.trial_week_reminder_sent:
             email_reminder(user.email, user.username, formatted_trial_end_date, reminder_type="trial_week")
             user.trial_week_reminder_sent = True
@@ -1967,6 +1965,7 @@ def trial_end_reminder():
             logger.info(f"Sent 1-day reminder to {user.username}")
 
     db.session.commit()
+
 
 
 

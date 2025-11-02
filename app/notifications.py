@@ -41,19 +41,18 @@ def send_push_notification(fcm_token, title, message):
 
 def send_and_log_notification(user_id, title, message, notif_type, related_secret_id=None):
     """Send push + log notification."""
-    with current_app.app_context():  # ensure app context
-        user = db.session.get(User, user_id)  # SQLAlchemy 2.0 style
-        db.session.expire(user)  # make sure attributes are loaded fresh
-        if not user:
-            logger.error(f"User {user_id} not found")
-            return False
-        
-        logger.info(f"Sending to {user.username} | FCM: {user.fcm_token}")
-        sent = send_push_notification(user.fcm_token, title, message)
-        logger.info(f"Push sent: {sent}")
-        create_notification(user.id, title, message, notif_type, related_secret_id)
-        db.session.commit()
-        return sent
+    user = db.session.get(User, user_id)
+    db.session.expire(user)  # reload from DB
+    if not user:
+        logger.error(f"User {user_id} not found")
+        return False
+
+    logger.info(f"Sending to {user.username} | FCM: {user.fcm_token}")
+    sent = send_push_notification(user.fcm_token, title, message)
+    logger.info(f"Push sent: {sent}")
+    create_notification(user.id, title, message, notif_type, related_secret_id)
+    db.session.commit()
+    return sent
 
 
 def _notify_secret(secret, phase):

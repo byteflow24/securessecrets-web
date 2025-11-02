@@ -143,7 +143,7 @@ def check_scheduled_notifications(self):
     else:
         logger.warning("No users in DB!")
 
-    notification_sent = Notification.query.filter(Notification.sent_at.isnot(None)).first()
+    notification_sent = Notification.query.filter(Notification.sent_at.is_(None)).all()
     if not notification_sent:
 
         # === 1️⃣ Shared Secrets Reminders ===

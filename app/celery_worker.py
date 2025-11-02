@@ -49,10 +49,10 @@ def create_celery_app(app=None):
             'task': 'app.celery_worker.trial_end_reminder_task',
             'schedule': 60,  # ← every 60 seconds
         },
-        'not-paid-reminder-now': {
-            'task': 'app.celery_worker.not_paied_reminder_task',
-            'schedule': 60,
-        },
+        # 'not-paid-reminder-now': {
+        #     'task': 'app.celery_worker.not_paied_reminder_task',
+        #     'schedule': 60,
+        # },
     }
     celery.conf.timezone = 'UTC'
     celery.Task = ContextTask
@@ -115,12 +115,12 @@ def trial_end_reminder_task():
     trial_end_reminder()
     logger.info("trial_end_reminder_task FINISHED")
 
-@celery.task
-def not_paied_reminder_task():
-    logger.info("Running not paid reminder task...")
-    from .utils import not_paied_reminder
-    not_paied_reminder()
-    logger.info("not_paied_reminder_task FINISHED")
+# @celery.task
+# def not_paied_reminder_task():
+#     logger.info("Running not paid reminder task...")
+#     from .utils import not_paied_reminder
+#     not_paied_reminder()
+#     logger.info("not_paied_reminder_task FINISHED")
 
 
 @celery.task

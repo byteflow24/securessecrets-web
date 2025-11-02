@@ -1939,41 +1939,34 @@ def handle_subscription_updated(data):
 def trial_end_reminder():
     logger.info("Sending trial end reminder.")
     
-    # Get the current date (ignore time)
     current_date = datetime.now(timezone.utc).date()
-    
     users = User.query.filter(User.trial_end_date.isnot(None)).all()
-    
+
     for user in users:
-
         if user.username == 'admin':
-            continue  # Skip processing for admin user
+            continue
 
-        # Ensuring trial_end_date is timezone-aware (assumed UTC)
         trial_end_date = user.trial_end_date
         if trial_end_date.tzinfo is None:
             trial_end_date = trial_end_date.replace(tzinfo=timezone.utc)
-        
-        # Get only the date part of trial_end_date (ignore time)
+
         trial_end_date_only = trial_end_date.date()
-
-        # Calculate the difference in days between current_date and trial_end_date_only
         days_difference = (trial_end_date_only - current_date).days
-
-        # Format the trial end date for email
         formatted_trial_end_date = trial_end_date.strftime('%d-%m-%Y')
 
-        # Debug print statement
-        print(f"User: {user.username}, Trial End Date: {trial_end_date_only}, Days Difference: {days_difference}")
+        logger.warning(f"User: {user.username}, Trial End Date: {trial_end_date_only}, Days Difference: {days_difference}")
 
-        # Check if the trial end date is exactly 7 days or 1 day away
         if days_difference == 7 and not user.trial_week_reminder_sent:
             email_reminder(user.email, user.username, formatted_trial_end_date, reminder_type="trial_week")
             user.trial_week_reminder_sent = True
+            logger.info(f"Sent 7-day reminder to {user.username}")
+
         elif days_difference == 1 and not user.trial_day_reminder_sent:
             email_reminder(user.email, user.username, formatted_trial_end_date, reminder_type="trial_day")
             user.trial_day_reminder_sent = True
-        db.session.commit()
+            logger.info(f"Sent 1-day reminder to {user.username}")
+
+    db.session.commit()
 
 
 

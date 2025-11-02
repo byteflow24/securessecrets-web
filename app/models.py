@@ -35,6 +35,7 @@ class User(UserMixin, db.Model):
     trial_day_reminder_sent = db.Column(db.Boolean, default=False)
     subscription_start_date = db.Column(TIMESTAMP, nullable=True)
     next_billing_date = db.Column(TIMESTAMP, nullable=True)
+    unpaid_reminder_sent = db.Column(db.Boolean, default=False)
     subscription_status = db.Column(String(20), nullable=True)
     fialed_payments = db.Column(Integer, nullable=True)
     updated_at = db.Column(TIMESTAMP, nullable=True)

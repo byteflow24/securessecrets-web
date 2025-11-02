@@ -174,7 +174,10 @@ def check_scheduled_notifications(self):
 
     # === 2. Subscription Renewal ===
     for user in User.query.filter(User.username != "admin", User.next_billing_date.isnot(None)).all():
-        delta = user.next_billing_date - now
+        next_date = user.next_billing_date
+        if next_date and next_date.tzinfo is None:
+            next_date = next_date.replace(tzinfo=timezone.utc)
+        delta = next_date - now
         days_left = delta.days
 
         phases = [
@@ -189,7 +192,10 @@ def check_scheduled_notifications(self):
 
     # === 3. Trial End ===
     for user in User.query.filter(User.trial_end_date.isnot(None)).all():
-        delta = user.trial_end_date - now
+        trial_end = user.trial_end_date
+        if trial_end.tzinfo is None:
+            trial_end = trial_end.replace(tzinfo=timezone.utc)
+        delta = trial_end - now
         days_left = delta.days
 
         phases = [

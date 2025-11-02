@@ -106,7 +106,7 @@ def check_scheduled_secrets():
 
             secret.received = True  # Mark it as sent
         db.session.commit()
-        
+
 
 @celery.task
 def trial_end_reminder_task():
@@ -155,6 +155,9 @@ def check_scheduled_notifications():
                 if secret.date_to_send and secret.time_to_send
                 else secret.time_period
             )
+
+            if target_time.tzinfo is None:
+                target_time = target_time.replace(tzinfo=timezone.utc)
 
             delta = target_time - now
 

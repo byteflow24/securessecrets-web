@@ -3,7 +3,7 @@ from celery.schedules import crontab
 from flask import url_for, current_app
 from celery import shared_task
 from .models import SharedSecret, Notification, User, LoginHistory
-from .notifications import _notify_secret, _notify_subscription, _notify_end_trial, send_and_log_notification
+from .notifications import _notify_secret, _notify_subscription, _notify_end_trial, send_and_log_notification, _notify_inactivity_reminder
 from . import db
 from sqlalchemy import func
 from datetime import datetime, timezone, timedelta
@@ -173,22 +173,22 @@ def check_scheduled_notifications(self):
                     logger.info(f"Skipped {phase_name} — already sent")
 
     # === 2. Subscription Renewal ===
-    for user in User.query.filter(User.username != "admin", User.next_billing_date.isnot(None)).all():
-        next_date = user.next_billing_date
-        if next_date and next_date.tzinfo is None:
-            next_date = next_date.replace(tzinfo=timezone.utc)
-        delta = next_date - now
-        days_left = delta.days
+    # for user in User.query.filter(User.username != "admin", User.next_billing_date.isnot(None)).all():
+        # next_date = user.next_billing_date
+        # if next_date and next_date.tzinfo is None:
+        #     next_date = next_date.replace(tzinfo=timezone.utc)
+        # delta = next_date - now
+        # days_left = delta.days
 
-        phases = [
-            ("5_days", 5, "subscription_5_days"),
-            ("1_day", 1, "subscription_1_day"),
-        ]
+        # phases = [
+        #     ("5_days", 5, "subscription_5_days"),
+        #     ("1_day", 1, "subscription_1_day"),
+        # ]
 
-        for phase, days, notif_type in phases:
-            if days_left == days:
-                if not Notification.query.filter_by(user_id=user.id, type=notif_type).first():
-                    _notify_subscription(user, phase)
+        # for phase, days, notif_type in phases:
+        #     if days_left == days:
+        #         if not Notification.query.filter_by(user_id=user.id, type=notif_type).first():
+        #             _notify_subscription(user, phase)
 
     # === 3. Trial End ===
     for user in User.query.filter(User.trial_end_date.isnot(None)).all():
@@ -208,56 +208,63 @@ def check_scheduled_notifications(self):
                 if not Notification.query.filter_by(user_id=user.id, type=notif_type).first():
                     _notify_end_trial(user, phase)
 
-    # === 4️⃣ Inactivity Reminder ===
-    thirty_days_ago = now - timedelta(days=30)
-    inactive_users = (
-        db.session.query(User)
+    # === 4. Inactivity Reminder ===
+    phases = [
+        ("60_days", 60, "inactivity_reminder_60_days"),
+        ("month", 30, "inactivity_reminder_month"),
+        ("2_weeks", 14, "inactivity_reminder_2_weeks"),
+    ]
+
+    users = (
+        db.session.query(User, func.max(LoginHistory.login_time).label("last_login"))
         .join(LoginHistory, User.id == LoginHistory.user_id)
         .group_by(User.id)
-        .having(func.max(LoginHistory.login_time) < thirty_days_ago)
         .all()
     )
 
-    for user in inactive_users:
-        already_sent = Notification.query.filter(
-            Notification.user_id == user.id,
-            Notification.type == "inactive_user",
-            Notification.sent_at.isnot(None),
-            Notification.sent_at > now - timedelta(days=30)
-        ).first()
+    for user, last_login in users:
+        if not last_login:
+            continue
 
-        if already_sent:
-            continue  # skip duplicate
+        delta_days = (now - last_login).days
 
-        send_and_log_notification(
-            user.id,
-            "We miss you!",
-            "You haven’t logged in for a month. Come back and check your secrets!",
-            "inactive_user"
-        )
+        for phase, days, notif_type in phases:
+            # Check if user matches this inactivity window
+            if days <= delta_days < days + 3:
+                already_sent = Notification.query.filter_by(
+                    user_id=user.id,
+                    type=notif_type
+                ).first()
+                if already_sent:
+                    break  # don’t resend the same phase
 
-        shared_secret = SharedSecret.query.filter(
-            SharedSecret.user_id == user.id,
-            SharedSecret.received == False,
-            SharedSecret.time_period.isnot(None),
-            (SharedSecret.date_to_send.is_(None)) & (SharedSecret.time_to_send.is_(None))
-        ).first()
+                _notify_inactivity_reminder(user, phase)
 
-        if shared_secret:
-            already_sent_warning = Notification.query.filter(
-                Notification.user_id == user.id,
-                Notification.type == "last_login_warning",
-                Notification.sent_at.isnot(None),
-                Notification.sent_at > now - timedelta(days=30)
-            ).first()
+                # === Handle Last Login Shared Secret Warning ===
+                shared_secret = SharedSecret.query.filter(
+                    SharedSecret.user_id == user.id,
+                    SharedSecret.received == False,
+                    SharedSecret.time_period.isnot(None),
+                    (SharedSecret.date_to_send.is_(None)) &
+                    (SharedSecret.time_to_send.is_(None))
+                ).first()
 
-            if not already_sent_warning:
-                send_and_log_notification(
-                    user.id,
-                    "Last Login Secret Warning",
-                    "You have an active 'Last Login' shared secret. Avoid opening the app unless you intend to reset its timer.",
-                    "last_login_warning"
-                )
+                if shared_secret:
+                    already_sent_warning = Notification.query.filter(
+                        Notification.user_id == user.id,
+                        Notification.type == "last_login_warning",
+                        Notification.sent_at.isnot(None),
+                        Notification.sent_at > now - timedelta(days=30)
+                    ).first()
+
+                    if not already_sent_warning:
+                        send_and_log_notification(
+                            user.id,
+                            "Last Login Secret Warning",
+                            "You have an active 'Last Login' shared secret. Avoid opening the app unless you intend to reset its timer.",
+                            "last_login_warning"
+                        )
+                break  # stop after sending one reminder phase
 
 
 

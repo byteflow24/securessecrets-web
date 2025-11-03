@@ -103,3 +103,17 @@ def _notify_end_trial(user, phase):
         f"free_trial_{phase}"
     )
 
+def _notify_inactivity_reminder(user, phase):
+    messages = {
+        "60_days": "Your account has been inactive for a long time.",
+        "month": "It's been a month since your last login.",
+        "2_weeks": "You haven’t logged in for 2 weeks.",
+    }
+
+    send_and_log_notification(
+        user.id,
+        "We miss you!",
+        messages[phase],
+        f"inactivity_reminder_{phase}"
+    )
+

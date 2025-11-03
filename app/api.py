@@ -269,7 +269,8 @@ def login_api():
     login_history = LoginHistory(
         user_id=user.id, 
         login_time=datetime.now(timezone.utc), 
-        ip_address=ip_address
+        ip_address=ip_address,
+        time_zone=time_zone
     )
     db.session.add(login_history)
     db.session.commit()

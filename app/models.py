@@ -53,7 +53,6 @@ class User(UserMixin, db.Model):
     notifications = db.relationship('Notification', back_populates='user', cascade="all, delete-orphan")
 
 
-
 class PendingSubscription(db.Model):
     __tablename__ = "pending_subscription"
     id = db.Column(db.Integer, primary_key=True)

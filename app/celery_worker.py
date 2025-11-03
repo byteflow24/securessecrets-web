@@ -3,6 +3,7 @@ from celery.schedules import crontab
 from flask import url_for, current_app
 from celery import shared_task
 from .models import SharedSecret, Notification, User, LoginHistory
+from .utils import trial_end_reminder, email_reminder
 from .notifications import _notify_secret, _notify_subscription, _notify_end_trial, send_and_log_notification, _notify_inactivity_reminder
 from . import db
 from sqlalchemy import func
@@ -155,22 +156,21 @@ def check_scheduled_notifications(self):
 
         for phase_name, threshold, notif_type in phases:
             # Check exact day/hour match
-            if (phase_name == "month" and days_left == threshold) or \
-               (phase_name == "5_days" and 1 <= days_left <= 3) or \
-               (phase_name == "hour" and hours_left == threshold):
+            if (phase_name == "month" and days_left == 30) or \
+                (phase_name == "5_days" and 3 <= days_left <= 5) or \
+                (phase_name == "hour" and hours_left == 1):
 
-                # CHECK: Already sent?
-                already_sent = Notification.query.filter_by(
-                    user_id=secret.user_id or secret.sender_id,
-                    type=notif_type,
-                    related_secret_id=secret.id
-                ).first()
+                    already_sent = Notification.query.filter_by(
+                        user_id=secret.user_id or secret.sender_id,
+                        type=notif_type,
+                        related_secret_id=secret.id
+                    ).first()
 
-                if not already_sent:
-                    _notify_secret(secret, phase_name)
-                    logger.info(f"Sent {phase_name} reminder for secret {secret.id}")
-                else:
-                    logger.info(f"Skipped {phase_name} — already sent")
+                    if not already_sent:
+                        _notify_secret(secret, phase_name)  # ← This now sends BOTH push + email
+                        logger.info(f"Sent {phase_name} reminder (push + email) for secret {secret.id}")
+                    else:
+                        logger.info(f"Skipped {phase_name} — already sent")
 
     # === 2. Subscription Renewal ===
     # for user in User.query.filter(User.username != "admin", User.next_billing_date.isnot(None)).all():
@@ -207,6 +207,8 @@ def check_scheduled_notifications(self):
             if days_left == days:
                 if not Notification.query.filter_by(user_id=user.id, type=notif_type).first():
                     _notify_end_trial(user, phase)
+                    email_reminder(user.email, user.username, user.trial_end_date.strftime('%d-%m-%Y'), reminder_type=phase)
+                    trial_end_reminder()
 
     # === 4. Inactivity Reminder ===
     phases = [

@@ -2471,6 +2471,69 @@ def reset_password_email(email, username, token):
     except Exception as e:
         print(f"An unexpected error occurred while sending email to {email}: {str(e)}")
 
+def secret_reminder(secret, phase):
+    user = secret.user or secret.sender
+    if not user or not user.email:
+        return
+
+    email = user.email
+    username = user.username or email.split('@')[0]
+    title = secret.title or "your secret"
+
+    # Map phase → days/hours
+    phase_info = {
+        "month": {"days": 30, "label": "about a month"},
+        "5_days": {"days": 5, "label": "5 days"},
+        "hour": {"hours": 1, "label": "1 hour"}
+    }
+    info = phase_info[phase]
+
+    subject = f"Your shared secret will be sent in {info['label']}"
+    body = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; color: #333;">
+        <h2>Hi {username},</h2>
+        <p>Your shared secret <strong>"{title}"</strong> will be sent in <strong>{info['label']}</strong>.</p>
+        <p><strong>Warning:</strong> Opening the app will extend the sending date.</p>
+        <br>
+        <p>Best regards,</p>
+        <p><strong>SecuresSecrets Team</strong></p>
+        <div style="padding-left: 30px; margin-top: 20px;">
+            <img src="cid:logo_image" style="width:150px; height:auto;" alt="SecuresSecrets Logo">
+        </div>
+    </body>
+    </html>
+    """
+
+    # Email setup
+    msg = MIMEMultipart("related")
+    msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
+    msg['To'] = email
+    msg['Subject'] = Header(subject, 'utf-8')
+
+    msg.attach(MIMEText(body, 'html'))
+
+    # Attach logo
+    logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
+    try:
+        with open(logo_path, "rb") as img:
+            image = MIMEImage(img.read())
+            image.add_header('Content-ID', '<logo_image>')
+            image.add_header('Content-Disposition', 'inline', filename='logoss.webp')
+            msg.attach(image)
+    except FileNotFoundError:
+        print(f"Logo not found: {logo_path}")
+
+    # Send email
+    try:
+        with smtplib.SMTP(SERVER, PORT) as connection:
+            connection.starttls()
+            connection.login(EMAIL, PSWD)
+            connection.send_message(msg)
+        print(f"Email sent to {email} for {phase} reminder")
+    except Exception as e:
+        print(f"Failed to send email to {email}: {e}")
+
 
 def email_reminder(email, username, trial_end_date, reminder_type):
     # Construct the email message
@@ -2478,7 +2541,7 @@ def email_reminder(email, username, trial_end_date, reminder_type):
     msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = email
 
-    if reminder_type == "trial_week":
+    if reminder_type == "7_days":
         msg['Subject'] = Header('Your SecuresSecrets Trial Ends in 1 Week – Don’t Miss Out!', 'utf-8')
         body = (
             f"<html>"
@@ -2495,7 +2558,7 @@ def email_reminder(email, username, trial_end_date, reminder_type):
             f"</html>"
         )
         
-    elif reminder_type == "trial_day":
+    elif reminder_type == "1_day":
         msg['Subject'] = Header('Your SecuresSecrets Trial Ends Tomorrow – Don’t Miss Out!', 'utf-8')
         body = (
             f"<html>"

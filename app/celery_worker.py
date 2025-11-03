@@ -226,6 +226,9 @@ def check_scheduled_notifications(self):
         if not last_login:
             continue
 
+        if last_login.tzinfo is None:
+            last_login = last_login.replace(tzinfo=timezone.utc)
+
         delta_days = (now - last_login).days
 
         for phase, days, notif_type in phases:

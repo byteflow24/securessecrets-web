@@ -1936,35 +1936,35 @@ def handle_subscription_updated(data):
     print(f"Updated subscription details: {get_subscription_details(subscription_id)}")
 
 # Sends reminder emails to users whose trial periods are nearing their end
-def trial_end_reminder():
-    logger.info("Sending trial end reminder.")
+# def trial_end_reminder():
+#     logger.info("Sending trial end reminder.")
     
-    current_date = datetime.now(timezone.utc).date()
-    users = User.query.filter(User.trial_end_date.isnot(None)).all()
+#     current_date = datetime.now(timezone.utc).date()
+#     users = User.query.filter(User.trial_end_date.isnot(None)).all()
 
-    for user in users:
-        if user.username == 'admin':
-            continue
+#     for user in users:
+#         if user.username == 'admin':
+#             continue
 
-        trial_end_date = user.trial_end_date
-        if trial_end_date.tzinfo is None:
-            trial_end_date = trial_end_date.replace(tzinfo=timezone.utc)
+#         trial_end_date = user.trial_end_date
+#         if trial_end_date.tzinfo is None:
+#             trial_end_date = trial_end_date.replace(tzinfo=timezone.utc)
 
-        trial_end_date_only = trial_end_date.date()
-        days_difference = (trial_end_date_only - current_date).days
-        formatted_trial_end_date = trial_end_date.strftime('%d-%m-%Y')
+#         trial_end_date_only = trial_end_date.date()
+#         days_difference = (trial_end_date_only - current_date).days
+#         formatted_trial_end_date = trial_end_date.strftime('%d-%m-%Y')
 
-        if days_difference == 7 and not user.trial_week_reminder_sent:
-            email_reminder(user.email, user.username, formatted_trial_end_date, reminder_type="trial_week")
-            user.trial_week_reminder_sent = True
-            logger.info(f"Sent 7-day reminder to {user.username}")
+#         if days_difference == 7 and not user.trial_week_reminder_sent:
+#             email_reminder(user.email, user.username, formatted_trial_end_date, reminder_type="trial_week")
+#             user.trial_week_reminder_sent = True
+#             logger.info(f"Sent 7-day reminder to {user.username}")
 
-        elif days_difference == 1 and not user.trial_day_reminder_sent:
-            email_reminder(user.email, user.username, formatted_trial_end_date, reminder_type="trial_day")
-            user.trial_day_reminder_sent = True
-            logger.info(f"Sent 1-day reminder to {user.username}")
+#         elif days_difference == 1 and not user.trial_day_reminder_sent:
+#             email_reminder(user.email, user.username, formatted_trial_end_date, reminder_type="trial_day")
+#             user.trial_day_reminder_sent = True
+#             logger.info(f"Sent 1-day reminder to {user.username}")
 
-    db.session.commit()
+#     db.session.commit()
 
 
 
@@ -2535,70 +2535,74 @@ def secret_reminder(secret, phase):
         print(f"Failed to send email to {email}: {e}")
 
 
-def email_reminder(email, username, trial_end_date, reminder_type):
-    # Construct the email message
-    msg = MIMEMultipart("related")  # Use "related" for images
+def trial_end_email_reminder(email, username, trial_end_date, phase):
+    if not email:
+        return
+
+    subject_map = {
+        "7_days": "Your SecuresSecrets Trial Ends in 1 Week – Don’t Miss Out!",
+        "1_day": "Your SecuresSecrets Trial Ends Tomorrow – Don’t Miss Out!"
+    }
+    body_map = {
+        "7_days": f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; color: #333;">
+            <h2>Hi {username},</h2>
+            <p>We hope you're enjoying your experience with SecuresSecrets!</p>
+            <p>This is a friendly reminder that your free trial will end in <strong>1 week</strong>, on <strong>{trial_end_date}</strong>.</p>
+            <br>
+            <p>Best regards,</p>
+            <p><strong>SecuresSecrets Support Team</strong></p>
+            <div style="padding-left: 30px; margin-top: 20px;">
+                <img src="cid:logo_image" style="width:150px; height:auto;" alt="Logo">
+            </div>
+        </body>
+        </html>
+        """,
+        "1_day": f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; color: #333;">
+            <h2>Hi {username},</h2>
+            <p>We wanted to remind you that your free trial with SecuresSecrets will end <strong>tomorrow</strong>, on <strong>{trial_end_date}</strong>.</p>
+            <p>Please upgrade your plan to continue using all features seamlessly.</p>
+            <br>
+            <p>Best regards,</p>
+            <p><strong>SecuresSecrets Support Team</strong></p>
+            <div style="padding-left: 30px; margin-top: 20px;">
+                <img src="cid:logo_image" style="width:150px; height:auto;" alt="Logo">
+            </div>
+        </body>
+        </html>
+        """
+    }
+
+    msg = MIMEMultipart("related")
     msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = email
+    msg['Subject'] = Header(subject_map[phase], 'utf-8')
 
-    if reminder_type == "7_days":
-        msg['Subject'] = Header('Your SecuresSecrets Trial Ends in 1 Week – Don’t Miss Out!', 'utf-8')
-        body = (
-            f"<html>"
-            f"<body>"
-            f"<h2>Hi {username},</h2>"
-            f"<p>We hope you're enjoying your experience with SecuresSecrets!<p><br>"
-            f"<p>This is a friendly reminder that your free trial will end in 1 week, on {trial_end_date}.</p><br>"
-            f"<p>Best regards,</p>"
-            f"<p>SecuresSecrets Support Team.</p>"
-            f"<div style='padding-left: 30px;'>"
-            f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
-            f"</div>"
-            f"</body>"
-            f"</html>"
-        )
-        
-    elif reminder_type == "1_day":
-        msg['Subject'] = Header('Your SecuresSecrets Trial Ends Tomorrow – Don’t Miss Out!', 'utf-8')
-        body = (
-            f"<html>"
-            f"<body>"
-            f"<h2>Hi {username},</h2>"
-            f"<p>We wanted to remind you that your free trial with SecuresSecrets will end tomorrow, on {trial_end_date}.</p>"
-            f"<p>Please pay your plan so you can continue using all the features seamlessly.</p><br>"
-            f"<p>Best regards,</p>"
-            f"<p>SecuresSecrets Support Team.</p>"
-            f"<div style='padding-left: 30px;'>"
-            f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
-            f"</div>"
-            f"</body>"
-            f"</html>"
-        )
+    msg.attach(MIMEText(body_map[phase], 'html'))
 
-    msg.attach(MIMEText(body, 'html'))
-
-    # Add the logo image to the email
+    # Attach logo
     logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
     try:
         with open(logo_path, "rb") as img:
-            img_data = img.read()
-        image = MIMEImage(img_data, name=os.path.basename(logo_path))
-        image.add_header('Content-ID', '<logo_image>')  # Use this Content-ID in the HTML
-        image.add_header('Content-Disposition', 'inline', filename=os.path.basename(logo_path))
-        msg.attach(image)
-    except FileNotFoundError as e:
-        print(f"Logo image not found at path: {logo_path}")
+            image = MIMEImage(img.read())
+            image.add_header('Content-ID', '<logo_image>')
+            image.add_header('Content-Disposition', 'inline', filename='logoss.webp')
+            msg.attach(image)
+    except FileNotFoundError:
+        print(f"Logo not found: {logo_path}")
 
+    # Send
     try:
-        # Send the email via SMTP
         with smtplib.SMTP(SERVER, PORT) as connection:
             connection.starttls()
             connection.login(EMAIL, PSWD)
             connection.send_message(msg)
-    except smtplib.SMTPException as e:
-        print(f"Failed to send email to {email}. SMTP error: {str(e)}")
+        print(f"Trial email sent to {email} ({phase})")
     except Exception as e:
-        print(f"An unexpected error occurred while sending email to {email}: {str(e)}")
+        print(f"Failed to send trial email to {email}: {e}")
 
 
 # Reminder email to pay the subscription 

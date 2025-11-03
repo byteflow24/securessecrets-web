@@ -101,14 +101,27 @@ def _notify_subscription(user, phase):
 def _notify_end_trial(user, phase):
     messages = {
         "7_days": "Your free trial will end in a week.",
-        "1_day": "Your free trial will end tomorrow.",
+        "1_day": "Your free trial will end tomorrow."
     }
+
+    notif_type = f"free_trial_{phase}"
+
+    # === 1. Send Push ===
     send_and_log_notification(
         user.id,
         "Free Trial Ending Soon",
         messages[phase],
-        f"free_trial_{phase}"
+        notif_type
     )
+
+    # === 2. Send Email ===
+    try:
+        from .utils import trial_end_email_reminder
+        trial_end_date_str = user.trial_end_date.strftime('%d-%m-%Y')
+        trial_end_email_reminder(user.email, user.username, trial_end_date_str, phase)
+    except Exception as e:
+        logger.error(f"Failed to send trial email: {e}")
+
 
 def _notify_inactivity_reminder(user, phase):
     messages = {

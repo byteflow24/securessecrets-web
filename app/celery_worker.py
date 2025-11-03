@@ -206,10 +206,9 @@ def check_scheduled_notifications(self):
         for phase, days, notif_type in phases:
             if days_left == days:
                 if not Notification.query.filter_by(user_id=user.id, type=notif_type).first():
-                    _notify_end_trial(user, phase)
-                    email_reminder(user.email, user.username, user.trial_end_date.strftime('%d-%m-%Y'), reminder_type=phase)
-                    trial_end_reminder()
-
+                    _notify_end_trial(user, phase)  # ← Sends BOTH push + email
+                    logger.info(f"Sent trial {phase} reminder to {user.username}")
+                    
     # === 4. Inactivity Reminder ===
     phases = [
         ("60_days", 60, "inactivity_reminder_60_days"),

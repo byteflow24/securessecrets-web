@@ -3,7 +3,6 @@ from celery.schedules import crontab
 from flask import url_for, current_app
 from celery import shared_task
 from .models import SharedSecret, Notification, User, LoginHistory
-from .utils import trial_end_reminder, email_reminder
 from .notifications import _notify_secret, _notify_subscription, _notify_end_trial, send_and_log_notification, _notify_inactivity_reminder
 from . import db
 from sqlalchemy import func
@@ -46,10 +45,10 @@ def create_celery_app(app=None):
             'task': 'app.celery_worker.check_scheduled_notifications',
             'schedule': crontab(minute='*'),  # ← every minute for testing
         },
-        'trial-end-reminder-now': {
-            'task': 'app.celery_worker.trial_end_reminder_task',
-            'schedule': 60,  # ← every 60 seconds
-        },
+        # 'trial-end-reminder-now': {
+        #     'task': 'app.celery_worker.trial_end_reminder_task',
+        #     'schedule': 60,  # ← every 60 seconds
+        # },
         # 'not-paid-reminder-now': {
         #     'task': 'app.celery_worker.not_paied_reminder_task',
         #     'schedule': 60,
@@ -109,12 +108,12 @@ def check_scheduled_secrets():
         db.session.commit()
 
 
-@celery.task
-def trial_end_reminder_task():
-    logger.info("Running trial end reminder task...")
-    from .utils import trial_end_reminder
-    trial_end_reminder()
-    logger.info("trial_end_reminder_task FINISHED")
+# @celery.task
+# def trial_end_reminder_task():
+#     logger.info("Running trial end reminder task...")
+#     from .utils import trial_end_reminder
+#     trial_end_reminder()
+#     logger.info("trial_end_reminder_task FINISHED")
 
 # @celery.task
 # def not_paied_reminder_task():
@@ -208,7 +207,7 @@ def check_scheduled_notifications(self):
                 if not Notification.query.filter_by(user_id=user.id, type=notif_type).first():
                     _notify_end_trial(user, phase)  # ← Sends BOTH push + email
                     logger.info(f"Sent trial {phase} reminder to {user.username}")
-                    
+
     # === 4. Inactivity Reminder ===
     phases = [
         ("60_days", 60, "inactivity_reminder_60_days"),

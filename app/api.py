@@ -373,7 +373,9 @@ def public_secrets_api():
             secret.last_login = latest_login
             if secret.period:
                 try:
-                    secret.time_period = latest_login + timedelta(days=int(secret.period))
+                    # Only extend if current time_period is still in the future
+                    if not secret.time_period or secret.time_period > datetime.now():
+                        secret.time_period = latest_login + timedelta(days=int(secret.period))
                 except ValueError:
                     continue
 

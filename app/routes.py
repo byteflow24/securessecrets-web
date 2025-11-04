@@ -127,9 +127,11 @@ def home():
             # Handle `period` and calculate `time_period` if `period` is present
             if secret.period:
                 try:
-                    # Calculate the new time period based on the period (e.g., days)
-                    time_period = latest_login + timedelta(days=int(secret.period))
-                    secret.time_period = time_period
+                    # Only extend if current time_period is still in the future
+                    if not secret.time_period or secret.time_period > datetime.now():
+                        # Calculate the new time period based on the period (e.g., days)
+                        time_period = latest_login + timedelta(days=int(secret.period))
+                        secret.time_period = time_period
                 except ValueError:
                     # Skip this secret if `period` is invalid but do not raise an error
                     continue
@@ -618,9 +620,11 @@ def dashboard():
             # Handle `period` and calculate `time_period` if `period` is present
             if secret.period:
                 try:
-                    # Calculate the new time period based on the period (e.g., days)
-                    time_period = latest_login + timedelta(days=int(secret.period))
-                    secret.time_period = time_period
+                    # Only extend if current time_period is still in the future
+                    if not secret.time_period or secret.time_period > datetime.now():
+                        # Calculate the new time period based on the period (e.g., days)
+                        time_period = latest_login + timedelta(days=int(secret.period))
+                        secret.time_period = time_period
                 except ValueError:
                     # Skip this secret if `period` is invalid but do not raise an error
                     continue

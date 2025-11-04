@@ -3,7 +3,7 @@ from io import BytesIO
 from flask import Blueprint, request, jsonify, current_app, url_for, abort, send_file
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
-from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription
+from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription, Notification
 from .utils import generate_token, send_verification_email, decrypt_secret, is_subscription_expired, is_storage_exceeded, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal, apple_ms_to_datetime, is_upgrade, get_gcs_file_size, convert_local_to_utc
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
@@ -2130,3 +2130,48 @@ def update_fcm_token():
 
     return jsonify({'message': 'Token updated successfully'}), 200
 
+
+################################# NOTIFICATIONS API #################################
+@api.route('/notifications', methods=['GET'])
+@jwt_required()
+def notifications():
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Fetch notifications for the current user
+    notifications = (
+        Notification.query
+        .filter_by(user_id=user.id)
+        .order_by(Notification.created_at.desc())
+        .all()
+    )
+
+    # Also include any notifications from the admin (shared, global, etc.)
+    shared_notifications = (
+        Notification.query
+        .filter_by(user_id=0)
+        .order_by(Notification.created_at.desc())
+        .all()
+    )
+
+    all_notifications = notifications + shared_notifications
+
+    return jsonify([
+        {
+            'id': n.id,
+            'title': n.title,
+            'message': n.message,
+            'type': n.type,
+            'related_secret_id': n.related_secret_id,
+            'scheduled_for': n.scheduled_for.isoformat() if n.scheduled_for else None,
+            'sent_at': n.sent_at.isoformat() if n.sent_at else None,
+            'read': n.read,
+            'created_at': n.created_at.isoformat() if n.created_at else None,
+        }
+        for n in all_notifications
+    ]), 200
+
+    

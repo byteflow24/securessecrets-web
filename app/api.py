@@ -2237,7 +2237,7 @@ def delete_notification(id):
             hidden = HiddenNotification(user_id=user_id, notification_id=id)
             db.session.add(hidden)
         db.session.commit()
-        # return jsonify({'message': 'Global notification hidden for this user'}), 200
+        return jsonify({'message': 'Global notification hidden for this user'}), 200
 
     # Otherwise, delete it normally
     if notif.user_id != user_id:

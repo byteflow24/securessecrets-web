@@ -2181,6 +2181,7 @@ def notifications():
         for n in all_notifications
     ]), 200
 
+# ✅ Mark all notifications as read
 @api.route('/notifications/mark-read', methods=['POST'])
 @jwt_required()
 def mark_notifications_read():
@@ -2199,5 +2200,44 @@ def mark_notifications_read():
 
     db.session.commit()
     return jsonify(success=True, updated=updated.rowcount), 200
+
+# ✅ Mark a single notification as read
+@api.route('/notifications/<int:id>/mark-read', methods=['POST'])
+@jwt_required()
+def mark_one_notification_read(id):
+    user_id = get_jwt_identity()
+
+    notif = Notification.query.filter_by(id=id, user_id=user_id).first()
+    if not notif:
+        return jsonify({'error': 'Notification not found'}), 404
+
+    notif.read = True
+    db.session.commit()
+    return jsonify({'message': 'Notification marked as read'}), 200
+
+
+# ✅ Delete a single notification
+@api.route('/notifications/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_notification(id):
+    user_id = get_jwt_identity()
+
+    notif = Notification.query.filter_by(id=id, user_id=user_id).first()
+    if not notif:
+        return jsonify({'error': 'Notification not found'}), 404
+
+    db.session.delete(notif)
+    db.session.commit()
+    return jsonify({'message': 'Notification deleted successfully'}), 200
+
+
+# ✅ Delete all notifications
+@api.route('/notifications', methods=['DELETE'])
+@jwt_required()
+def delete_all_notifications():
+    user_id = get_jwt_identity()
+    Notification.query.filter_by(user_id=user_id).delete()
+    db.session.commit()
+    return jsonify({'message': 'All notifications deleted successfully'}), 200
 
     

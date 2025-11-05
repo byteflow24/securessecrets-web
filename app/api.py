@@ -8,7 +8,7 @@ from .utils import generate_token, send_verification_email, decrypt_secret, is_s
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
 from sqlalchemy.orm import joinedload
-from sqlalchemy import desc
+from sqlalchemy import desc, select, func, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.utils import secure_filename
 import mimetypes, uuid, traceback, time, json, os, requests
@@ -1081,6 +1081,12 @@ def api_profile():
         subscription_expired = is_subscription_expired(user)
         storage_exceeded = is_storage_exceeded(user)
 
+        unread_count = db.session.scalar(
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.user_id == user.id, Notification.read == False)
+        )
+
         if request.method == 'GET':
             login_history = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc()).all()
             last_login = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc()).first()
@@ -1103,7 +1109,8 @@ def api_profile():
                     "storage_used": storage_used_mb,
                     "storage_limit": storage_limit_mb,
                     "subscription_expired": subscription_expired,
-                    "storage_exceeded": storage_exceeded
+                    "storage_exceeded": storage_exceeded,
+                    "unread_notifications": unread_count
                 },
                 login_history=[
                     {
@@ -2173,5 +2180,22 @@ def notifications():
         }
         for n in all_notifications
     ]), 200
+
+@api.route('/notifications/mark-read', methods=['POST'])
+@jwt_required()
+def mark_notifications_read():
+    user = get_jwt_identity()
+    user_id = User.query.get(int(user))
+
+    if not user_id:
+        return jsonify({'error': 'User not found'}), 404
+
+    updated = db.session.execute(
+        update(Notification)
+        .where(Notification.user_id == user_id, Notification.read == False)
+        .values(read=True)
+    )
+    db.session.commit()
+    return jsonify(success=True, updated=updated.rowcount), 200
 
     

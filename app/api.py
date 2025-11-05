@@ -2226,23 +2226,28 @@ def mark_one_notification_read(id):
 def delete_notification(id):
     user_id = get_jwt_identity()
 
-    notif = Notification.query.filter_by(id=id).first()
+    # Fetch only notifications belonging to this user or global
+    notif = Notification.query.filter(
+        (Notification.id == id) &
+        ((Notification.user_id == user_id) | (Notification.user_id == 0))
+    ).first()
+
     if not notif:
         return jsonify({'error': 'Notification not found'}), 404
 
-    # If it's an admin/global notification, mark it as hidden
+    # Admin/global notification
     if notif.user_id == 0:
-        existing = HiddenNotification.query.filter_by(user_id=user_id, notification_id=id).first()
+        existing = HiddenNotification.query.filter_by(
+            user_id=user_id,
+            notification_id=id
+        ).first()
         if not existing:
             hidden = HiddenNotification(user_id=user_id, notification_id=id)
             db.session.add(hidden)
         db.session.commit()
         return jsonify({'message': 'Global notification hidden for this user'}), 200
 
-    # Otherwise, delete it normally
-    if notif.user_id != user_id:
-        return jsonify({'error': 'Not authorized to delete this notification'}), 403
-
+    # User's own notification → delete
     db.session.delete(notif)
     db.session.commit()
     return jsonify({'message': 'Notification deleted successfully'}), 200

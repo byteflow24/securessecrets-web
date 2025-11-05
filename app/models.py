@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from . import db
 from sqlalchemy import Integer, String, ForeignKey, Boolean, DECIMAL, TIMESTAMP, func, Date, Text, text
 from flask_login import UserMixin
@@ -43,6 +44,7 @@ class User(UserMixin, db.Model):
     time_zone = db.Column(db.String(50), nullable=True)
     fcm_token = db.Column(db.String(255), nullable=True)
 
+    # 🔗 Relationships
     secrets = db.relationship('Secret', back_populates='user', cascade="all, delete-orphan")
     payments = db.relationship('Payment', back_populates='user', cascade="all, delete-orphan")
     plan = db.relationship("Plan", foreign_keys=[plan_id], back_populates="users")
@@ -51,6 +53,7 @@ class User(UserMixin, db.Model):
     history_payments = db.relationship('HistoryPayment', back_populates='user')
     login_history = db.relationship('LoginHistory', back_populates='user', cascade="all, delete-orphan")
     notifications = db.relationship('Notification', back_populates='user', cascade="all, delete-orphan")
+    hidden_notifications = db.relationship('HiddenNotification', back_populates='user', cascade="all, delete-orphan")
 
 
 class PendingSubscription(db.Model):
@@ -68,6 +71,7 @@ class PendingSubscription(db.Model):
     payment_source = db.Column(String(50), nullable=True)
     purchase_token = db.Column(db.String(255), nullable=False)
 
+    # 🔗 Relationships
     plan = db.relationship('Plan', back_populates='pending_subscription')
 
 
@@ -99,6 +103,7 @@ class Secret(db.Model):
     starred = db.Column(Boolean, default=False)
     secret_size = db.Column(Integer, nullable=False, default=0)
 
+    # 🔗 Relationships
     user = db.relationship('User', back_populates='secrets')
     shared_secrets = db.relationship('SharedSecret', back_populates='secret', passive_deletes=True, cascade="save-update, merge", lazy='select')
 
@@ -128,6 +133,7 @@ class Payment(db.Model):
     ip_address = db.Column(String(45), nullable=True)
     user_agent = db.Column(String(255), nullable=True)
 
+    # 🔗 Relationships
     user = db.relationship('User', back_populates='payments')
     plan = db.relationship('Plan', back_populates='payments')
 
@@ -150,6 +156,7 @@ class HistoryPayment(db.Model):
     card_last_four = db.Column(String(4), nullable=True)
     authorization_id = db.Column(String(255), nullable=True)
 
+    # 🔗 Relationships
     user = db.relationship('User', back_populates='history_payments')
     plan = db.relationship('Plan', back_populates='history_payments')
 
@@ -198,13 +205,13 @@ class SharedSecret(db.Model):
     public_delete_confirm = db.Column(db.Boolean, default=False)
     received_time = db.Column(TIMESTAMP, nullable=True)
     delete_at = db.Column(TIMESTAMP, nullable=True)
-
     # Snapshot fields
     title = db.Column(db.String(100), nullable=True)
     snapshot_secret = db.Column(db.Text, nullable=True)
     file = db.Column(db.String(255), nullable=True)
     share_date = db.Column(TIMESTAMP, nullable=True)
 
+    # 🔗 Relationships
     user = db.relationship('User', back_populates='shared_secrets')
     secret = db.relationship('Secret', back_populates='shared_secrets', lazy='joined')
     notifications = db.relationship('Notification', back_populates='related_secret', cascade="all, delete-orphan")
@@ -221,11 +228,24 @@ class Notification(db.Model):
     scheduled_for = db.Column(TIMESTAMP, nullable=True)  # when to send (for Celery)
     sent_at = db.Column(TIMESTAMP, nullable=True)
     read = db.Column(db.Boolean, default=False)
-    created_at = db.Column(TIMESTAMP, nullable=True)
+    created_at = db.Column(TIMESTAMP, default=datetime.now(timezone.utc))
 
+    # 🔗 Relationships
     user = db.relationship('User', back_populates='notifications')
     related_secret = db.relationship('SharedSecret', back_populates='notifications')
+    hidden_by_users = db.relationship('HiddenNotification', back_populates='notification', cascade="all, delete-orphan")
 
+
+class HiddenNotification(db.Model):
+    __tablename__ = "hidden_notifications"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    notification_id = db.Column(db.Integer, db.ForeignKey("notifications.id"), nullable=False)
+    created_at = db.Column(TIMESTAMP, default=datetime.now(timezone.utc))
+
+    # 🔗 Relationships
+    user = db.relationship('User', back_populates='hidden_notifications')
+    notification = db.relationship('Notification', back_populates='hidden_by_users')
 
 
 class PublicSecrets(db.Model):

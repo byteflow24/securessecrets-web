@@ -3,7 +3,7 @@ from io import BytesIO
 from flask import Blueprint, request, jsonify, current_app, url_for, abort, send_file
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
-from .models import User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription, Notification
+from .models import HiddenNotification, User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription, Notification
 from .utils import generate_token, send_verification_email, decrypt_secret, is_subscription_expired, is_storage_exceeded, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal, apple_ms_to_datetime, is_upgrade, get_gcs_file_size, convert_local_to_utc
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
@@ -2143,23 +2143,26 @@ def update_fcm_token():
 @jwt_required()
 def notifications():
     user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
 
+    user = User.query.get(int(user_id))
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
-    # Fetch notifications for the current user
+    # Get IDs of notifications the user has hidden
+    hidden_ids = db.session.query(HiddenNotification.notification_id).filter_by(user_id=user_id)
+
+    # Fetch user's own notifications (excluding hidden)
     notifications = (
         Notification.query
-        .filter_by(user_id=user.id)
+        .filter(Notification.user_id == user_id, ~Notification.id.in_(hidden_ids))
         .order_by(Notification.created_at.desc())
         .all()
     )
 
-    # Also include any notifications from the admin (shared, global, etc.)
+    # Fetch global admin notifications (user_id=0), excluding hidden ones
     shared_notifications = (
         Notification.query
-        .filter_by(user_id=0)
+        .filter(Notification.user_id == 0, ~Notification.id.in_(hidden_ids))
         .order_by(Notification.created_at.desc())
         .all()
     )
@@ -2180,6 +2183,7 @@ def notifications():
         }
         for n in all_notifications
     ]), 200
+
 
 # ✅ Mark all notifications as read
 @api.route('/notifications/mark-read', methods=['POST'])
@@ -2222,9 +2226,22 @@ def mark_one_notification_read(id):
 def delete_notification(id):
     user_id = get_jwt_identity()
 
-    notif = Notification.query.filter_by(id=id, user_id=user_id).first()
+    notif = Notification.query.filter_by(id=id).first()
     if not notif:
         return jsonify({'error': 'Notification not found'}), 404
+
+    # If it's an admin/global notification, mark it as hidden
+    if notif.user_id == 0:
+        existing = HiddenNotification.query.filter_by(user_id=user_id, notification_id=id).first()
+        if not existing:
+            hidden = HiddenNotification(user_id=user_id, notification_id=id)
+            db.session.add(hidden)
+        db.session.commit()
+        # return jsonify({'message': 'Global notification hidden for this user'}), 200
+
+    # Otherwise, delete it normally
+    if notif.user_id != user_id:
+        return jsonify({'error': 'Not authorized to delete this notification'}), 403
 
     db.session.delete(notif)
     db.session.commit()
@@ -2236,8 +2253,23 @@ def delete_notification(id):
 @jwt_required()
 def delete_all_notifications():
     user_id = get_jwt_identity()
+
+    # 1️⃣ Delete all user-specific notifications
     Notification.query.filter_by(user_id=user_id).delete()
+
+    # 2️⃣ Hide all global (admin) notifications for this user
+    global_notifs = Notification.query.filter_by(user_id=0).all()
+
+    for notif in global_notifs:
+        # Check if already hidden
+        existing = HiddenNotification.query.filter_by(
+            user_id=user_id, notification_id=notif.id
+        ).first()
+        if not existing:
+            db.session.add(HiddenNotification(user_id=user_id, notification_id=notif.id))
+
     db.session.commit()
+
     return jsonify({'message': 'All notifications deleted successfully'}), 200
 
     

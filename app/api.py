@@ -2177,9 +2177,9 @@ def notifications():
             'type': n.type,
             'related_secret_id': n.related_secret_id,
             'scheduled_for': n.scheduled_for.isoformat() if n.scheduled_for else None,
-            'sent_at': n.sent_at.isoformat() if n.sent_at else None,
+            'sent_at': convert_utc_to_local(n.sent_at.isoformat(), user.time_zone) if n.sent_at else None,
             'read': n.read,
-            'created_at': n.created_at.isoformat() if n.created_at else None,
+            'created_at': convert_utc_to_local(n.created_at.isoformat(), user.time_zone) if n.created_at else None,
         }
         for n in all_notifications
     ]), 200

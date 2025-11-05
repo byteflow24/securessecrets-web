@@ -2184,17 +2184,19 @@ def notifications():
 @api.route('/notifications/mark-read', methods=['POST'])
 @jwt_required()
 def mark_notifications_read():
-    user = get_jwt_identity()
-    user_id = User.query.get(int(user))
+    user_id = get_jwt_identity()  # this is the ID from JWT
 
-    if not user_id:
+    # Optionally, verify user exists
+    user = User.query.get(int(user_id))
+    if not user:
         return jsonify({'error': 'User not found'}), 404
 
     updated = db.session.execute(
         update(Notification)
-        .where(Notification.user_id == user_id, Notification.read == False)
+        .where(Notification.user_id == int(user_id), Notification.read == False)
         .values(read=True)
     )
+
     db.session.commit()
     return jsonify(success=True, updated=updated.rowcount), 200
 

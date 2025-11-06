@@ -499,7 +499,7 @@ def all_secrets_api():
             'id': shared.id,
             'public': bool(shared.public),
             'email': shared.email,
-            'title': shared.title if shared.title else '',
+            'title': get_unique_title(shared.title, user.id) if shared.title else '',
             'secret': shared.snapshot_secret if shared.snapshot_secret else '',
             'file': file_is if file_is else None,
             'date_to_send': convert_utc_to_local(shared.date_to_send, user.time_zone) if shared.date_to_send else None,

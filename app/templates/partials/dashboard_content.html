@@ -244,7 +244,7 @@
                                         {% endif %}
                                         
                                         <!-- Download link -->
-                                        {% if not secret.file.lower().endswith('.pdf') %}
+                                        {% if not public.file.endswith('.pdf') %}
                                             <p><strong>Download Attachment:</strong>
                                                 <a href="{{ public.signed_url }}" class="link-primary">
                                                     <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}

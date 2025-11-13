@@ -253,10 +253,9 @@
                                         </div>
                                         <!-- Download link -->
                                         {% if not public.file.endswith('.pdf') %}
-                                                <a href="{{ public.signed_url }}" class="link-primary small">
-                                                    <i class="bi bi-file-earmark-arrow-down"></i> Download Attachment
-                                                </a>
-                                            </p>
+                                            <a href="{{ public.signed_url }}" class="link-primary small">
+                                                <i class="bi bi-file-earmark-arrow-down"></i> Download Attachment
+                                            </a>
                                         {% endif %}
                                     {% endif %}
                                     <!-- Action links -->

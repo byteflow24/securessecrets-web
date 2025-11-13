@@ -778,6 +778,14 @@ window.addEventListener('DOMContentLoaded', () => {
             });
         }
         
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const year = String(date.getFullYear()).slice(2); // last two digits of year
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
         // Handle form response after submitting
         function handleFormResponse(data, form) {
             const formError = document.getElementById("formError");
@@ -787,7 +795,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     const newSecretHTML = `
                         <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center secret-link">
                             <span>${data.title}</span>
-                            <small>${data.date}</small>
+                            <small>${formatDate(data.date)}</small>
                         </a>`;
                     const noSecretsAlert = secretsList.querySelector(".alert-info");
                     if (noSecretsAlert) noSecretsAlert.remove();

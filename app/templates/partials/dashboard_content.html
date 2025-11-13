@@ -228,25 +228,29 @@
                                     <p style="font-size: 0.75rem;">{{ public.display_time }}</p>
                                 </div>
                                 <div class="secret-wrapper clickable" style="overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; cursor: pointer;">
-                                    <p class="secret-text"><strong>{{ public.title }}:</strong> {{ public.snapshot_secret|safe }}</p>
+                                    <p class="secret-text" style="white-space: pre-line;"><strong>{{ public.title }}:</strong> {{ public.snapshot_secret|safe }}</p>
                                     {% if public.file %}
                                         {% if public.file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) %}
                                             <img src="{{ public.signed_url }}" alt="File Preview" style="max-width: 40%; height: auto;">
                                         {% elif public.file.endswith('.pdf') %}
-                                            <iframe src="{{ public.signed_url }}" style="max-width: 50%; height: auto; border: none;" frameborder="0"></iframe>
+                                            <p><strong>PDF File:</strong> <a href="{{ public.signed_url }}" class="link-primary" target="_blank">
+                                                <i class="bi bi-file-earmark-pdf"></i> View or Download PDF
+                                            </a></p>
                                         {% elif public.file.endswith(('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) %}
                                             <iframe src="https://docs.google.com/viewer?url={{ public.signed_url }}&embedded=true" 
                                                     style="width: 50%; height: auto; border: none;" frameborder="0"></iframe>
                                         {% else %}
                                             <p style="font-size: small;">No preview available for this file type.</p>
                                         {% endif %}
-
+                                        
                                         <!-- Download link -->
-                                        <p><strong>Download Attachment:</strong>
-                                            <a href="{{ public.signed_url }}" class="link-primary">
-                                                <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
-                                            </a>
-                                        </p>
+                                        {% if not secret.file.lower().endswith('.pdf') %}
+                                            <p><strong>Download Attachment:</strong>
+                                                <a href="{{ public.signed_url }}" class="link-primary">
+                                                    <i class="bi bi-file-earmark-arrow-down"></i> {{ public.file }}
+                                                </a>
+                                            </p>
+                                        {% endif %}
                                     {% endif %}
                                     <!-- Action links -->
                                     <div class="mt-2 d-flex justify-content-end gap-3">

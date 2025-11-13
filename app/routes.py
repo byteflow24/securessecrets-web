@@ -771,8 +771,8 @@ def all_secrets():
         if secret.file:
             # Use internal download route
             secret.signed_url = url_for('main.download_file', filename=secret.file)
-        if secret.title:
-            secret.title = get_unique_title(secret.title, current_user.id)
+        # if secret.title:
+        #     secret.title = get_unique_title(secret.title, current_user.id)
 
     # Fetch shared secrets for the current user
     shared_secrets = db.session.execute(

@@ -72,7 +72,7 @@ def subscription_ended(api=False):
                 return redirect(url_for('main.login'))
 
             # Admin bypasses subscription check
-            if current_user.username == 'admin':
+            if current_user.username == 'SecuresSecrets':
                 return func(*args, **kwargs)
 
             trial_valid = current_user.trial_end_date and current_user.trial_end_date.date() >= current_date
@@ -106,7 +106,7 @@ def subscription_ended_flag(func):
         current_date = datetime.now(timezone.utc).date()
         expired = False
 
-        if current_user.is_authenticated and current_user.username != "admin":
+        if current_user.is_authenticated and current_user.username != "SecuresSecrets":
             trial_valid = (
                 current_user.trial_end_date
                 and current_user.trial_end_date.date() >= current_date
@@ -135,7 +135,7 @@ def storage_exceeded_flag(api=False):
                     return jsonify({"success": False, "error": "Unauthorized"}), 401
                 return redirect(url_for('main.login'))
 
-            if current_user.username == 'admin':
+            if current_user.username == 'SecuresSecrets':
                 return func(*args, **kwargs)
 
             storage_exceeded = (
@@ -174,7 +174,7 @@ def is_subscription_expired(user):
     if not user:
         return True  # Treat missing user as expired for safety
     
-    if user.username == "admin":  # ✅ Always allow admin
+    if user.username == "SecuresSecrets":  # ✅ Always allow admin
         return False
 
     current_date = datetime.now(timezone.utc).date()
@@ -195,7 +195,7 @@ def is_storage_exceeded(user):
     Returns:
         bool: True if storage is exceeded, False otherwise.
     """
-    if not user or user.username == 'admin':
+    if not user or user.username == 'SecuresSecrets':
         return False  # Admins always allowed
 
     plan = user.plan

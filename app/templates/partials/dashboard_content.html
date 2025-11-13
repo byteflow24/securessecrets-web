@@ -254,10 +254,10 @@
                                     {% endif %}
                                     <!-- Action links -->
                                     <div class="mt-2 d-flex justify-content-end gap-3">
-                                        {% if public.username != "admin" %}
+                                        {% if public.username != "SecuresSecrets" %}
                                             <a class="text-danger report-btn" data-bs-toggle="modal" data-bs-target="#reportSecretModel" data-id="{{ public.id }}" data-secret="{{ public.snapshot_secret }}" data-file="{{ public.file }}" style="font-size: 0.85rem;">Report</a>
                                         {% endif %}
-                                        {% if current_user.username == "admin" %}
+                                        {% if current_user.username == "SecuresSecrets" %}
                                             <a href="{{ url_for('main.delete_published_secret', pb_secret_id=public.id) }}" class="text-muted" style="font-size: 0.85rem;">Delete</a>
                                         {% endif %}
                                     </div>

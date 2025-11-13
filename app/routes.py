@@ -714,7 +714,7 @@ def dashboard():
             flash('The secret you are reporting does not exist.', 'danger')
             return redirect(request.path)
         
-        if public_secret.user and public_secret.user.username == "admin":
+        if public_secret.user and public_secret.user.username == "SecuresSecrets":
             flash("You cannot report admin's secrets.", "warning")
             return redirect(request.path)
 
@@ -1289,7 +1289,7 @@ def delete_secret(sec_id):
 @login_required
 def delete_shared_secret(secret_id):
 
-    if current_user.username == "admin":
+    if current_user.username == "SecuresSecrets":
         flash('You are not authorized to delete the secret', 'danger')
         return redirect(url_for('main.dashboard'))
     else:
@@ -1371,7 +1371,7 @@ def verify_delete_account(token):
 @login_required
 def delete_published_secret(pb_secret_id):
 
-    if current_user.username != "admin":
+    if current_user.username != "SecuresSecrets":
         flash('You are not authorized to delete the secret', 'danger')
         return redirect(url_for('main.dashboard'))
     else:

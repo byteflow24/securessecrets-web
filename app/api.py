@@ -2041,7 +2041,7 @@ def api_delete_published_secret(pb_secret_id):
     user = User.query.get(int(user_id))
 
     # Check admin authorization
-    if not user or user.username != "admin":
+    if not user or user.username != "SecuresSecrets":
         return jsonify({"error": "You are not authorized to delete this secret."}), 403
 
     secret = SharedSecret.query.get(pb_secret_id)

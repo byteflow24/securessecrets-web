@@ -154,7 +154,7 @@ def register_api():
     phone = data['phone']
     plan_id = data['plan_id']
     transaction_id = data['transaction_id']
-    time_zone = data.get["time_zone"]
+    time_zone = data["time_zone"]
 
     if password != confirm_password:
         return jsonify({'error': 'Passwords do not match'}), 400

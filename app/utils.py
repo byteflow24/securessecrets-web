@@ -2258,7 +2258,7 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
                 price = tx_info.get("price", 0)
 
                 # --- Case 1: Free Trial purchase ---
-                if offer_type and "TRIAL" in offer_type.upper():
+                if offer_type == 1: # Free_Trial
                     if not user.trial_start_date:  # only set once
                         user.trial_start_date = datetime.now(timezone.utc)
                         user.trial_end_date = expiry_dt
@@ -2309,7 +2309,7 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
                     offer_type = tx_info.get("offerType")
                     price = tx_info.get("price", 0)
 
-                    if offer_type and "TRIAL" in offer_type.upper():
+                    if offer_type == 1:
                         if not pending.trial_start_date:
                             pending.trial_start_date = datetime.now(timezone.utc)
                             pending.trial_end_date = expiry_dt

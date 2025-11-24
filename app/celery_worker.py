@@ -109,24 +109,23 @@ def check_scheduled_secrets():
                 send_email_task.apply_async(args=[email, secret.token])
         # --- Send WhatsApp ---
         if secret.phone:
-            phone = secret.phone.strip('{} ').replace(" ", "")
-            file_url = url_for(
-                'main.download_file',
-                filename=secret.file,
-                token=secret.token,
-                _external=True
-            ) if secret.file else None
+            # Split numbers if multiple, strip {} and spaces for each
+            phone_list = [phone.strip("{} ").replace(" ", "")for phone in secret.phone.split(",")]
+
+            file_url = url_for('main.download_file',filename=secret.file,token=secret.token,_external=True) if secret.file else None
             
-            send_whatsapp_message(
-                to_number=phone,
-                secret_content=decrypt_secret(secret.snapshot_secret),
-                file_url=file_url
-            )
+            # Send WhatsApp to each number
+            for phone in phone_list:
+                send_whatsapp_message(
+                    to_number=phone,
+                    secret_content=decrypt_secret(secret.snapshot_secret),
+                    file_url=file_url
+                )
 
-            # Mark it as sent
-            secret.received = True
+        # Mark it as sent
+        secret.received = True
 
-        db.session.commit()
+    db.session.commit()
 
 
 @celery.task(bind=True, base=ContextTask)

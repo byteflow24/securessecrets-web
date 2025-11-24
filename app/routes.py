@@ -6,14 +6,13 @@ from flask_limiter.util import get_remote_address
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
 from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret
-from .utils import get_unique_title, storage_client, GCS_BUCKET, admin_only, current_user_only, subscription_ended_flag, storage_exceeded_flag, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists, _serve_file, delete_from_gcs, get_gcs_file_size, convert_local_to_utc
+from .utils import get_unique_title, storage_client, GCS_BUCKET, send_whatsapp_message, subscription_ended_flag, storage_exceeded_flag, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists, _serve_file, delete_from_gcs, get_gcs_file_size, convert_local_to_utc
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from datetime import date, datetime, timedelta, timezone 
-from twilio.rest import Client
 from google.cloud import storage
 from google.oauth2 import service_account
 from dateutil.relativedelta import relativedelta
@@ -105,7 +104,7 @@ def home():
 
     current_date = datetime.now().date()
     current_time = datetime.now().time()
-
+    # send_whatsapp_message("+97433629868", "Hi dear,\nThis is me Taha, it's my last thing I can tell you.\n Be carful and fully powered, be a great and manage all things by your hands.\n I know you, you can do it, what ever it will take.\n\n\n This secret has been privded by Secures Secrets from someone you know.")
     # Check if the user logged in recently and update the time period or scheduled date
     for secret in shared_secret:
         # Get the most recent login date for the user
@@ -342,7 +341,7 @@ def login():
     if form.validate_on_submit():
         password = form.password.data
         # print(form.user.data)
-        user = db.session.execute(db.select(User).where((User.email == form.user.data.lower().strip()) | (User.username == form.user.data.lower()))).scalar()
+        user = db.session.execute(db.select(User).where((func.lower(User.email) == form.user.data.lower().strip()) | (func.lower(User.username) == form.user.data.lower()))).scalar()
         
         if not user:
             flash("Email/ username does not exist.", "danger")
@@ -810,6 +809,7 @@ def all_secrets():
             shared.share_date_local = convert_utc_to_local(shared.time_period, current_user.time_zone)
         else:
             shared.share_date_local = None
+    
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
@@ -1045,19 +1045,23 @@ def share():
 
     # Default variable initialization
     sharing_type = None
-    email, public, token, time_period, date, time, last_login, date_time_combined = None, False, None, None, None, None, None, None
+    email, public, phone, token, time_period, date, time, last_login, date_time_combined = None, False, None, None, None, None, None, None, None
 
     if form.validate_on_submit():
         # print("Form submission data:", form.data)
         # Determine sharing type
         login_emails = [email.strip() for email in form.email_login.data.split(',') if email.strip()]
         scheduled_emails = [email.strip() for email in form.email_scheduled.data.split(',') if email.strip()]
+        login_phones = [p.strip() for p in form.phone_login.data.split(',') if p.strip()]
+        scheduled_phones = [p.strip() for p in form.phone_scheduled.data.split(',') if p.strip()]
+
         if form.date_period.data:
             sharing_type = "last_login"
-            if not login_emails and not form.public_login.data:
+            if not login_emails and not login_phones and not form.public_login.data:
                 return jsonify({"success": False, "message": "Email or Public must be selected for Last Login Check"}), 400
 
             email = login_emails
+            phone = login_phones
             public = form.public_login.data
             date_period = form.date_period.data
 
@@ -1079,7 +1083,7 @@ def share():
                 message = f"Your secret will be shared after {date_period} day/s from the last login"
         elif form.date.data and form.time.data:
             sharing_type = "scheduled"
-            if not scheduled_emails and not form.public_scheduled.data:
+            if not scheduled_emails and not scheduled_phones and not form.public_scheduled.data:
                 return jsonify({"success": False, "message": "Email or Public must be selected for Scheduled Sharing"}), 400
 
             date = form.date.data
@@ -1088,6 +1092,7 @@ def share():
                 time = datetime.strptime(time, "%H:%M").time()
 
             email = scheduled_emails
+            phone = scheduled_phones
             public = form.public_scheduled.data
             
             # Ensure 'time' is a datetime.time object before combining
@@ -1104,7 +1109,7 @@ def share():
 
         # Create and save the shared secret
         try:
-            if email:
+            if email or phone:
                 token = generate_token()
 
             secret = Secret.query.filter_by(id=request.args.get("secret_id")).first()
@@ -1117,6 +1122,7 @@ def share():
                 user_id=current_user.id,
                 secret_id=secret.id,
                 email=email,
+                phone=phone,
                 username=current_user.username,
                 public=public,
                 title=secret.title,

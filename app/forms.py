@@ -175,6 +175,35 @@ class ShareForm(FlaskForm):
         "Share to Public", validators=[Optional()],
         render_kw={"class": "form-check-input"}
     )
+    # WhatsApp phone field (for login sharing)
+    phone_login = StringField(
+        "WhatsApp Number:",
+        validators=[
+            Optional(),
+            Regexp(
+                r'^\+\d{8,15}$',
+                message="Phone must be in format +974xxxxxxxx"
+            )
+        ],
+        render_kw={"class": "form-control", "placeholder": "+974xxxxxxxx"}
+    )
+    # WhatsApp phone field (for scheduled sharing)
+    phone_scheduled = StringField(
+        "WhatsApp Number:",
+        validators=[
+            Optional(),
+            Regexp(
+                r'^\+\d{8,15}$',
+                message="Phone must be in format +974xxxxxxxx"
+            )
+        ],
+        render_kw={"class": "form-control", "placeholder": "+974xxxxxxxx"}
+    )
+    # Hidden fields to store comma-separated WhatsApp numbers
+    phones_login = HiddenField("Phones Login")
+
+    phones_scheduled = HiddenField("Phones Scheduled")
+
     date_period = StringField(
         "Share the secret after last login by:",
         validators=[

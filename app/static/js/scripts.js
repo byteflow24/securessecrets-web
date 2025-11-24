@@ -1079,7 +1079,70 @@ window.addEventListener('DOMContentLoaded', () => {
                         }
                         errorDiv.textContent = message;
                     }
-                }                
+                }
+
+                // ---------- WhatsApp phone handling ----------
+
+                // Get visible phone fields
+                const phoneLoginInput = this.querySelector('input[name="phone_login"]');
+                const phoneScheduledInput = this.querySelector('input[name="phone_scheduled"]');
+
+                // Hidden fields to store final cleaned values
+                const phonesLoginHidden = this.querySelector('input[name="phones_login"]');
+                const phonesScheduledHidden = this.querySelector('input[name="phones_scheduled"]');
+
+                // Helper: validate phone format
+                function isValidPhone(number) {
+                    return /^\+\d{6,15}$/.test(number.trim());
+                }
+
+                // Process Last Login WhatsApp numbers
+                if (phoneLoginInput && phoneLoginInput.value.trim()) {
+                    const numbers = phoneLoginInput.value
+                        .split(',')
+                        .map(n => n.trim())
+                        .filter(n => n);
+
+                    if (numbers.length > 5) {
+                        isValid = false;
+                        addValidationError(phoneLoginInput, "Maximum 5 WhatsApp numbers allowed.");
+                    }
+
+                    numbers.forEach(num => {
+                        if (!isValidPhone(num)) {
+                            isValid = false;
+                            addValidationError(phoneLoginInput, "Invalid format. Use +974xxxxxxx style.");
+                        }
+                    });
+
+                    if (isValid) {
+                        phonesLoginHidden.value = numbers.join(',');
+                    }
+                }
+
+                // Process Scheduled WhatsApp numbers
+                if (phoneScheduledInput && phoneScheduledInput.value.trim()) {
+                    const numbers = phoneScheduledInput.value
+                        .split(',')
+                        .map(n => n.trim())
+                        .filter(n => n);
+
+                    if (numbers.length > 5) {
+                        isValid = false;
+                        addValidationError(phoneScheduledInput, "Maximum 5 WhatsApp numbers allowed.");
+                    }
+
+                    numbers.forEach(num => {
+                        if (!isValidPhone(num)) {
+                            isValid = false;
+                            addValidationError(phoneScheduledInput, "Invalid format. Use +974xxxxxxx style.");
+                        }
+                    });
+
+                    if (isValid) {
+                        phonesScheduledHidden.value = numbers.join(',');
+                    }
+                }
         
                 if (!isValid) {
                     formError.style.display = "block";

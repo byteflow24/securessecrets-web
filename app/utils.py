@@ -17,6 +17,7 @@ from google.cloud import recaptchaenterprise_v1, storage
 from google.oauth2 import service_account
 from google.cloud.recaptchaenterprise_v1 import Assessment
 from itsdangerous import URLSafeTimedSerializer
+from twilio.rest import Client
 from io import BytesIO
 import logging, uuid, json, pytz, jwt, base64, requests, secrets, re, os, smtplib, time, tempfile
 
@@ -411,7 +412,7 @@ def serve_file(abs_path, filename):
 ############################ Storing Users Files ############################
 # Set Google credentials (Render: store JSON as env var or mount it as secret file)
 # Load credentials
-# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/Users/mymac/Downloads/securessecrets-5ebbe62714c1.json"
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/Users/mymac/Downloads/securessecrets-5ebbe62714c1.json"
 
 SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
 GCS_BUCKET = os.environ.get("GCS_BUCKET")
@@ -2412,6 +2413,30 @@ def update_google_subscription(subscription_id, transaction_id, purchase_token, 
         db.session.rollback()
         print("❌ Error updating subscription:", e)
         return False
+    
+############## CREATE WHATSAPP MESSAGES ##############
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"
+client = Client(TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN)
+
+def send_whatsapp_message(to_number: str, secret_content: str = None, file_url: str = None):
+    """
+    Send WhatsApp message with optional media via Twilio.
+    """
+    if not secret_content and not file_url:
+        raise ValueError("Either secret_content or file_url must be provided.")
+
+    message_body = f"Hi there 👋,\n\n\"{secret_content}\"\n\nThis secret has been shared with you securely by the Secures Secrets Team." if secret_content else ""
+
+    response = client.messages.create(
+        body=message_body,
+        from_=TWILIO_WHATSAPP_NUMBER,
+        to=f"whatsapp:{to_number}",
+        media_url=[file_url] if file_url else None
+    )
+
+    return response.sid
 
 
 ############## GENERETE TOKEN & CONFIRMATION DELETE ACCOUNT ##############

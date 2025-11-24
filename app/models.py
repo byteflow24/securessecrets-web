@@ -194,6 +194,7 @@ class SharedSecret(db.Model):
     username = db.Column(String(50), nullable=True)
     email = db.Column(db.String(255), nullable=True)
     public = db.Column(db.Boolean, default=False)
+    phone = db.Column(db.String(90), nullable=True)
     last_login = db.Column(TIMESTAMP, nullable=True)
     period = db.Column(db.String(5), nullable=True)
     time_period = db.Column(TIMESTAMP, nullable=True)

@@ -2,10 +2,12 @@ from celery import Celery
 from celery.schedules import crontab
 from flask import url_for, current_app
 from celery import shared_task
+
+from .utils import decrypt_secret, send_whatsapp_message
 from .models import SharedSecret, Notification, User, LoginHistory
 from .notifications import _notify_secret, _notify_subscription, _notify_end_trial, send_and_log_notification, _notify_inactivity_reminder
 from . import db
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from datetime import datetime, timezone, timedelta
 import logging
 import os
@@ -45,14 +47,6 @@ def create_celery_app(app=None):
             'task': 'app.celery_worker.check_scheduled_notifications',
             'schedule': crontab(minute='*'),  # ← every minute for testing
         },
-        # 'trial-end-reminder-now': {
-        #     'task': 'app.celery_worker.trial_end_reminder_task',
-        #     'schedule': 60,  # ← every 60 seconds
-        # },
-        # 'not-paid-reminder-now': {
-        #     'task': 'app.celery_worker.not_paied_reminder_task',
-        #     'schedule': 60,
-        # },
     }
     celery.conf.timezone = 'UTC'
     celery.Task = ContextTask
@@ -68,7 +62,6 @@ class ContextTask(celery.Task):
             return super().__call__(*args, **kwargs)
 
 celery = create_celery_app()
-
 
 
 # Celery task for sending the email asynchronously
@@ -89,38 +82,51 @@ def send_email_task(email, token):
 
 @shared_task
 def check_scheduled_secrets():
-    now = datetime.now()
-    scheduled_secrets = SharedSecret.query.filter(
-        SharedSecret.date_to_send == now.date(),
-        SharedSecret.time_to_send == now.time().replace(second=0, microsecond=0),
-        SharedSecret.received == False
+    now_dt = datetime.now()
+    now_date = now_dt.date()
+    now_time = now_dt.time()
+
+    due_secrets = SharedSecret.query.filter(
+        SharedSecret.received == False,
+        or_(
+            and_(
+                SharedSecret.date_to_send == now_date,
+                SharedSecret.time_to_send == now_time
+            ),
+            SharedSecret.time_period == now_dt
+        )
     ).all()
 
-    for secret in scheduled_secrets:
-        # Split emails if multiple, strip curly braces and spaces for each
-        email_list = [email.strip("{}").strip() for email in secret.email.split(",")]
-        
-        for email in email_list:
-            # Send each email using the task
-            send_email_task.apply_async(args=[email, secret.token])
+    for secret in due_secrets:
 
-            secret.received = True  # Mark it as sent
+        # --- Send Email ---
+        if secret.email:
+            # Split emails if multiple, strip curly braces and spaces for each
+            email_list = [email.strip("{}").strip() for email in secret.email.split(",")]
+            
+            for email in email_list:
+                # Send each email using the task
+                send_email_task.apply_async(args=[email, secret.token])
+        # --- Send WhatsApp ---
+        if secret.phone:
+            phone = secret.phone.strip('{} ').replace(" ", "")
+            file_url = url_for(
+                'main.download_file',
+                filename=secret.file,
+                token=secret.token,
+                _external=True
+            ) if secret.file else None
+            
+            send_whatsapp_message(
+                to_number=phone,
+                secret_content=decrypt_secret(secret.snapshot_secret),
+                file_url=file_url
+            )
+
+            # Mark it as sent
+            secret.received = True
+
         db.session.commit()
-
-
-# @celery.task
-# def trial_end_reminder_task():
-#     logger.info("Running trial end reminder task...")
-#     from .utils import trial_end_reminder
-#     trial_end_reminder()
-#     logger.info("trial_end_reminder_task FINISHED")
-
-# @celery.task
-# def not_paied_reminder_task():
-#     logger.info("Running not paid reminder task...")
-#     from .utils import not_paied_reminder
-#     not_paied_reminder()
-#     logger.info("not_paied_reminder_task FINISHED")
 
 
 @celery.task(bind=True, base=ContextTask)
@@ -171,23 +177,6 @@ def check_scheduled_notifications(self):
                     else:
                         logger.info(f"Skipped {phase_name} — already sent")
 
-    # === 2. Subscription Renewal ===
-    # for user in User.query.filter(User.username != "admin", User.next_billing_date.isnot(None)).all():
-        # next_date = user.next_billing_date
-        # if next_date and next_date.tzinfo is None:
-        #     next_date = next_date.replace(tzinfo=timezone.utc)
-        # delta = next_date - now
-        # days_left = delta.days
-
-        # phases = [
-        #     ("5_days", 5, "subscription_5_days"),
-        #     ("1_day", 1, "subscription_1_day"),
-        # ]
-
-        # for phase, days, notif_type in phases:
-        #     if days_left == days:
-        #         if not Notification.query.filter_by(user_id=user.id, type=notif_type).first():
-        #             _notify_subscription(user, phase)
 
     # === 3. Trial End ===
     for user in User.query.filter(User.trial_end_date.isnot(None)).all():

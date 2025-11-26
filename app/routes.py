@@ -11,7 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload
-from sqlalchemy import desc, func
+from sqlalchemy import and_, desc, func, or_
 from datetime import date, datetime, timedelta, timezone 
 from google.cloud import storage
 from google.oauth2 import service_account
@@ -101,6 +101,11 @@ def home():
             (SharedSecret.time_period != None) | (SharedSecret.time_to_send != None))
         .options(joinedload(SharedSecret.user), joinedload(SharedSecret.secret))
     ).scalars().all()
+
+    # send_whatsapp_message(
+    #                 to_number="+97433629868",
+    #                 secret_content="This is me, can you see that",
+    #             )
 
     current_date = datetime.now().date()
     current_time = datetime.now().time()
@@ -232,7 +237,7 @@ def how_works():
             })
     return render_template('how.html', show_header=True, show_footer=True)
 
-
+    
 # Registeration server @sign-up
 @main.route('/register', methods=['GET', 'POST'])
 @require_pricing_session()

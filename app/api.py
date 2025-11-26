@@ -499,6 +499,7 @@ def all_secrets_api():
             'id': shared.id,
             'public': bool(shared.public),
             'email': shared.email,
+            'phone': shared.phone,
             'title': get_unique_title(shared.title, user.id) if shared.title else '',
             'secret': shared.snapshot_secret if shared.snapshot_secret else '',
             'file': file_is if file_is else None,
@@ -944,11 +945,12 @@ def share_secret_api():
     if data.get("date_period"):
         date_period = int(data["date_period"])
         emails = [e.strip() for e in data.get("email_login", "").split(",") if e.strip()]
+        phones = [e.strip() for e in data.get("phone_login", "").split(",") if e.strip()]
         public = data.get("public_login", False)
         confirm_deletion = data.get("public_confirm_deletion", False)
 
-        if not emails and not public:
-            return jsonify(success=False, message="You must provide emails or enable public sharing for last login"), 400
+        if not emails and not public and not phones:
+            return jsonify(success=False, message="You must provide emails, phones, or enable public sharing for last login"), 400
         
         last_login_entry = LoginHistory.query.filter_by(user_id=user.id).order_by(LoginHistory.login_time.desc()).first()
         if not last_login_entry:
@@ -956,12 +958,13 @@ def share_secret_api():
 
         last_login = last_login_entry.login_time
         time_period = last_login + timedelta(days=date_period)
-        token = generate_token() if emails else None
+        token = generate_token() if emails or phones else None
 
         shared_secret = SharedSecret(
             user_id=user.id,
             secret_id=secret_id,
             email=emails or None,
+            phone=phones or None,
             username=user.username,
             public=public,
             title=secret.title,
@@ -983,11 +986,12 @@ def share_secret_api():
     # === SCHEDULED SHARING ===
     if data.get("date") and data.get("time"):
         emails = [e.strip() for e in data.get("email_scheduled", "").split(",") if e.strip()]
+        phones = [e.strip() for e in data.get("phone_scheduled", "").split(",") if e.strip()]
         public = data.get("public_scheduled", False)
         confirm_deletion = data.get("scheduled_confirm_deletion", False)
 
-        if not emails and not public:
-            return jsonify(success=False, message="You must provide emails or enable public sharing for scheduled sharing"), 400
+        if not emails and not public and not phones:
+            return jsonify(success=False, message="You must provide emails, phones, or enable public sharing for scheduled sharing"), 400
 
         try:
             date_str = data["date"]
@@ -1002,12 +1006,13 @@ def share_secret_api():
         share_datetime_local = convert_utc_to_local(share_datetime_utc, user.time_zone)
         print(f"Secret will be shared (UTC): {share_datetime_utc} | Local user time: {share_datetime_local}")
         
-        token = generate_token() if emails else None
+        token = generate_token() if emails or phones else None
 
         shared_secret = SharedSecret(
             user_id=user.id,
             secret_id=secret_id,
             email=emails or None,
+            phone=phones or None,
             username=user.username,
             public=public,
             title=secret.title,

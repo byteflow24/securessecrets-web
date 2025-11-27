@@ -2413,30 +2413,76 @@ def update_google_subscription(subscription_id, transaction_id, purchase_token, 
         db.session.rollback()
         print("❌ Error updating subscription:", e)
         return False
-    
+
+############## FIELS EXTENSION ##############
+AUDIO_EXT = {
+    'mp3', 'm4a', 'wav', 'ogg', 'aac', 'flac', 'opus'
+}
+VIDEO_EXT = {
+    'mp4', 'mov', 'mkv', 'webm', 'avi', 'flv', 'mpeg', 'mpg'
+}
+IMAGE_EXT = {
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'bmp', 'tiff'
+}
+DOC_EXT = {
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'
+}
+COMPRESSED_EXT = {
+    'zip', 'rar', '7z', 'tar', 'gz'
+}
+
+
+def classify_extension(ext: str) -> str:
+    ext = ext.lower()
+    if ext in AUDIO_EXT:
+        return "audio"
+    if ext in VIDEO_EXT:
+        return "video"
+    if ext in IMAGE_EXT:
+        return "image"
+    if ext in DOC_EXT:
+        return "document"
+    if ext in COMPRESSED_EXT:
+        return "compressed"
+    return "other"
+
 ############## CREATE WHATSAPP MESSAGES ##############
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"
 client = Client(TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN)
 
-def send_whatsapp_message(to_number: str, secret_content: str = None, file_url: str = None):
+def send_whatsapp_message(to_number: str, secret_content: str, file_url: str = None):
     """
-    Send WhatsApp message with optional media via Twilio.
+    Universal WhatsApp sender that supports all file types
+    and avoids WhatsApp's text+media limitations.
     """
-    if not secret_content and not file_url:
-        raise ValueError("Either secret_content or file_url must be provided.")
 
-    message_body = f"Hi there 👋,\n\n\"{secret_content}\"\n\nThis secret has been shared with you securely by the Secures Secrets Team." if secret_content else ""
+    # ---- Determine file extension ----
+    file_type = None
+    if file_url:
+        path = urlparse(file_url).path
+        ext = path.split('.')[-1].lower()
+        file_type = classify_extension(ext)
 
-    response = client.messages.create(
-        body=message_body,
-        from_=TWILIO_WHATSAPP_NUMBER,
-        to=f"whatsapp:{to_number}",
-        media_url=[file_url] if file_url else None
-    )
+    # ---- Always send the text message FIRST ----
+    if secret_content:
+        client.messages.create(
+            body=f"Hi there 👋,\n\n\"{secret_content}\"\n\nThis secret has been shared with you securely.",
+            from_=TWILIO_WHATSAPP_NUMBER,
+            to=f"whatsapp:{to_number}",
+        )
 
-    return response.sid
+    # ---- If file exists, send it as a SECOND message ----
+    if file_url:
+        # Audio & Video MUST be sent alone. Images/docs *can* attach text, but we already sent text.
+        client.messages.create(
+            from_=TWILIO_WHATSAPP_NUMBER,
+            to=f"whatsapp:{to_number}",
+            media_url=[file_url]
+        )
+
+    return True
 
 
 ############## GENERETE TOKEN & CONFIRMATION DELETE ACCOUNT ##############

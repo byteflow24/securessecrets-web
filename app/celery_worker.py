@@ -101,16 +101,26 @@ def check_scheduled_secrets():
     for secret in scheduled_secrets:
 
         # --- Send Email ---
-       if secret.email:
-        email_value = secret.email.get("value") or ""
-        if email_value:
+        if secret.email:
+            if isinstance(secret.email, dict):
+                email_value = secret.email.get("value", "")
+            elif isinstance(secret.email, str):
+                email_value = secret.email.strip("{} ").replace(" ", "")
+            else:
+                email_value = ""
+
             send_email_task.apply_async(args=[email_value, secret.token])
 
         # --- Send WhatsApp ---
         if secret.phone:
-            phone_value = secret.phone.get("value") or ""
+            if isinstance(secret.phone, dict):
+                phone_value = secret.phone.get("value", "")
+            elif isinstance(secret.phone, str):
+                phone_value = secret.phone.strip("{} ").replace(" ", "")
+            else:
+                phone_value = ""
 
-            file_url = url_for('main.download_file',filename=secret.file,token=secret.token,_external=True) if secret.file else None
+            file_url = url_for('main.download_file',filename=secret.file,token=secret.token,_external=True, twilio="true") if secret.file else None
             
             if phone_value:
                 send_whatsapp_message(

@@ -102,14 +102,9 @@ def home():
         .options(joinedload(SharedSecret.user), joinedload(SharedSecret.secret))
     ).scalars().all()
 
-    # send_whatsapp_message(
-    #                 to_number="+97433629868",
-    #                 secret_content="This is me, can you see that",
-    #             )
-
     current_date = datetime.now().date()
     current_time = datetime.now().time()
-    # send_whatsapp_message("+97433629868", "Hi dear,\nThis is me Taha, it's my last thing I can tell you.\n Be carful and fully powered, be a great and manage all things by your hands.\n I know you, you can do it, what ever it will take.\n\n\n This secret has been privded by Secures Secrets from someone you know.")
+    # send_whatsapp_message("+97433629868", "Hi dear,\nThis is me Taha, it's my last thing I can tell you.\n Be carful and fully powered, be a great and manage all things by your hands.\n I know you, you can do it, what ever it will take.\n\n\n This secret has been privded by Secures Secrets from someone you know.", file_url)
     # Check if the user logged in recently and update the time period or scheduled date
     for secret in shared_secret:
         # Get the most recent login date for the user
@@ -1854,6 +1849,10 @@ def paypal_webhook():
 @main.route('/downloads/<filename>')
 def download_file(filename):
     try:
+        # Allow Twilio access
+        if request.args.get("twilio") == "true":
+            return _serve_file(filename, as_attachment=True)
+        
         # Check if the request is for a preview
         is_preview = request.args.get('preview', 'false').lower() == 'true'
 

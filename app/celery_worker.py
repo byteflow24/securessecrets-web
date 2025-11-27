@@ -101,24 +101,20 @@ def check_scheduled_secrets():
     for secret in scheduled_secrets:
 
         # --- Send Email ---
-        if secret.email:
-            # Split emails if multiple, strip curly braces and spaces for each
-            email_list = [email.strip("{}").strip() for email in secret.email.split(",")]
-            
-            for email in email_list:
-                # Send each email using the task
-                send_email_task.apply_async(args=[email, secret.token])
+       if secret.email:
+        email_value = secret.email.get("value") or ""
+        if email_value:
+            send_email_task.apply_async(args=[email_value, secret.token])
+
         # --- Send WhatsApp ---
         if secret.phone:
-            # Split numbers if multiple, strip {} and spaces for each
-            phone_list = [phone.strip("{} ").replace(" ", "")for phone in secret.phone.split(",")]
+            phone_value = secret.phone.get("value") or ""
 
             file_url = url_for('main.download_file',filename=secret.file,token=secret.token,_external=True) if secret.file else None
             
-            # Send WhatsApp to each number
-            for phone in phone_list:
+            if phone_value:
                 send_whatsapp_message(
-                    to_number=phone,
+                    to_number=phone_value,
                     secret_content=decrypt_secret(secret.snapshot_secret),
                     file_url=file_url
                 )

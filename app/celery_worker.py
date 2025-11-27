@@ -102,32 +102,40 @@ def check_scheduled_secrets():
 
         # --- Send Email ---
         if secret.email:
+            emails = []
             if isinstance(secret.email, dict):
-                email_value = secret.email.get("value", "")
+                emails = [secret.email.get("value", "")]
             elif isinstance(secret.email, str):
-                email_value = secret.email.strip("{} ").replace(" ", "")
-            else:
-                email_value = ""
-
-            send_email_task.apply_async(args=[email_value, secret.token])
+                # Split by comma, strip braces and spaces
+                emails = [e.strip("{} ").strip() for e in secret.email.split(",") if e.strip()]
+            
+            for email_value in emails:
+                if email_value:
+                    send_email_task.apply_async(args=[email_value, secret.token])
 
         # --- Send WhatsApp ---
         if secret.phone:
+            phones = []
             if isinstance(secret.phone, dict):
-                phone_value = secret.phone.get("value", "")
+                phones = [secret.phone.get("value", "")]
             elif isinstance(secret.phone, str):
-                phone_value = secret.phone.strip("{} ").replace(" ", "")
-            else:
-                phone_value = ""
-
-            file_url = url_for('main.download_file',filename=secret.file,token=secret.token,_external=True, twilio="true") if secret.file else None
+                phones = [p.strip("{} ").replace(" ", "") for p in secret.phone.split(",") if p.strip()]
             
-            if phone_value:
-                send_whatsapp_message(
-                    to_number=phone_value,
-                    secret_content=decrypt_secret(secret.snapshot_secret),
-                    file_url=file_url
-                )
+            file_url = url_for(
+                'main.download_file',
+                filename=secret.file,
+                token=secret.token,
+                _external=True,
+                twilio="true"
+            ) if secret.file else None
+            
+            for phone_value in phones:
+                if phone_value:
+                    send_whatsapp_message(
+                        to_number=phone_value,
+                        secret_content=decrypt_secret(secret.snapshot_secret),
+                        file_url=file_url
+                    )
 
         # Mark it as sent
         secret.received = True

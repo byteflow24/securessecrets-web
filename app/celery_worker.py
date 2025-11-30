@@ -43,9 +43,9 @@ def create_celery_app(app=None):
             'task': 'app.celery_worker.check_scheduled_secrets',
             'schedule': crontab(minute='*'), # ← every minute for testing
         },
-        'check_last_login-every-minute': { # check_last_login
+        'check_last_login-every-minute': {
             'task': 'app.celery_worker.check_last_login',
-            'schedule': crontab(minute='*'), # ← every minute for testing
+            'schedule': crontab(minute='*'),
         },
         'check-scheduled-notifications-every-minute': {
             'task': 'app.celery_worker.check_scheduled_notifications',
@@ -139,7 +139,7 @@ def check_scheduled_secrets():
     db.session.commit()
 
 @celery.task
-def check_last_login():
+def check_last_login(name="app.celery_worker.check_last_login"):
     last_login_secrets = SharedSecret.query.filter(
         SharedSecret.time_period == datetime.now(),
         SharedSecret.received == False
@@ -188,7 +188,6 @@ def check_last_login():
         secret.received = True
 
     db.session.commit()
-
 
 
 @celery.task(bind=True, base=ContextTask)

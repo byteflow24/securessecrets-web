@@ -39,22 +39,18 @@ def create_celery_app(app=None):
     celery.conf.worker_prefetch_multiplier = 1
     celery.conf.broker_connection_retry_on_startup = True
     celery.conf.beat_schedule = {
-        'check-scheduled-secrets-every-minute': {
+        'check-scheduled-secrets-every-minute': { # check_scheduled_secrets
             'task': 'app.celery_worker.check_scheduled_secrets',
-            'schedule': crontab(minute='*'),
+            'schedule': crontab(minute='*'), # ← every minute for testing
         },
-        'check-scheduled-notifications-every-minute': {  # ← renamed
+        'check_last_login-every-minute': { # check_last_login
+            'task': 'app.celery_worker.check_last_login',
+            'schedule': crontab(minute='*'), # ← every minute for testing
+        },
+        'check-scheduled-notifications-every-minute': {
             'task': 'app.celery_worker.check_scheduled_notifications',
             'schedule': crontab(minute='*'),  # ← every minute for testing
         },
-        # 'trial-end-reminder-now': {
-        #     'task': 'app.celery_worker.trial_end_reminder_task',
-        #     'schedule': 60,  # ← every 60 seconds
-        # },
-        # 'not-paid-reminder-now': {
-        #     'task': 'app.celery_worker.not_paied_reminder_task',
-        #     'schedule': 60,
-        # },
     }
     celery.conf.timezone = 'UTC'
     celery.Task = ContextTask
@@ -143,51 +139,56 @@ def check_scheduled_secrets():
     db.session.commit()
 
 @celery.task
-def send_whatsapp_scheduled_task():
-    now = datetime.now()
-    secrets = SharedSecret.query.filter(
-        SharedSecret.date_to_send == now.date(),
-        SharedSecret.time_to_send <= now.time(),
-        SharedSecret.received == False,
-        SharedSecret.phone != None
+def check_last_login():
+    last_login_secrets = SharedSecret.query.filter(
+        SharedSecret.time_period == datetime.now(),
+        SharedSecret.received == False
     ).all()
 
-    for share in secrets:
-        clean_phone = share.phone.replace(" ", "").strip("{}")
+    for secret in last_login_secrets:
 
-        file_url = None
-        if share.file:
+        # --- Send Email ---
+        if secret.email:
+            emails = []
+            if isinstance(secret.email, dict):
+                emails = [secret.email.get("value", "")]
+            elif isinstance(secret.email, str):
+                # Split by comma, strip braces and spaces
+                emails = [e.strip("{} ").strip() for e in secret.email.split(",") if e.strip()]
+            
+            for email_value in emails:
+                if email_value:
+                    send_email_task.apply_async(args=[email_value, secret.token])
+
+        # --- Send WhatsApp ---
+        if secret.phone:
+            phones = []
+            if isinstance(secret.phone, dict):
+                phones = [secret.phone.get("value", "")]
+            elif isinstance(secret.phone, str):
+                phones = [p.strip("{} ").replace(" ", "") for p in secret.phone.split(",") if p.strip()]
+            
             file_url = url_for(
                 'main.download_file',
-                filename=share.file,
-                token=share.token,
-                _external=True
-            )
+                filename=secret.file,
+                token=secret.token,
+                _external=True,
+                twilio="true"
+            ) if secret.file else None
+            
+            for phone_value in phones:
+                if phone_value:
+                    send_whatsapp_message(
+                        to_number=phone_value,
+                        secret_content=decrypt_secret(secret.snapshot_secret),
+                        file_url=file_url
+                    )
 
-        send_whatsapp_message(
-            to_number=clean_phone,
-            secret_content=share.snapshot_secret,
-            file_url=file_url
-        )
+        # Mark it as sent
+        secret.received = True
 
-        share.received = True
-        db.session.commit()
+    db.session.commit()
 
-
-
-# @celery.task
-# def trial_end_reminder_task():
-#     logger.info("Running trial end reminder task...")
-#     from .utils import trial_end_reminder
-#     trial_end_reminder()
-#     logger.info("trial_end_reminder_task FINISHED")
-
-# @celery.task
-# def not_paied_reminder_task():
-#     logger.info("Running not paid reminder task...")
-#     from .utils import not_paied_reminder
-#     not_paied_reminder()
-#     logger.info("not_paied_reminder_task FINISHED")
 
 
 @celery.task(bind=True, base=ContextTask)

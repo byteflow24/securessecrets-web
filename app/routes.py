@@ -1079,7 +1079,7 @@ def share():
 
             # Calculate the time period
             if date_period:
-                time_period = last_login + timedelta(days=int(date_period))
+                time_period = (last_login + timedelta(days=int(date_period))).replace(second=0, microsecond=0)
                 message = f"Your secret will be shared after {date_period} day/s from the last login"
         elif form.date.data and form.time.data:
             sharing_type = "scheduled"

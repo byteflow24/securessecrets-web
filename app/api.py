@@ -956,8 +956,8 @@ def share_secret_api():
         if not last_login_entry:
             return jsonify(success=False, message="Last login time not found"), 400
 
-        last_login = last_login_entry.login_time
-        time_period = last_login + timedelta(days=date_period)
+        last_login = last_login_entry.login_time.replace(second=0, microsecond=0)
+        time_period = (last_login + timedelta(days=date_period)).replace(second=0, microsecond=0)
         token = generate_token() if emails or phones else None
 
         shared_secret = SharedSecret(

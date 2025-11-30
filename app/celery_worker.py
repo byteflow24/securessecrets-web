@@ -138,10 +138,12 @@ def check_scheduled_secrets():
 
     db.session.commit()
 
-@celery.task
-def check_last_login(name="app.celery_worker.check_last_login"):
+@celery.task(name="app.celery_worker.check_last_login")
+def check_last_login():
+    
+    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
     last_login_secrets = SharedSecret.query.filter(
-        SharedSecret.time_period == datetime.now(),
+        SharedSecret.time_period == now,
         SharedSecret.received == False
     ).all()
 

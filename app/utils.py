@@ -1819,7 +1819,9 @@ def handle_subscription_created(data):
     print(f"[SUB CREATED] ID={subscription_id}, PLAN={plan_id}, EMAIL={subscriber_email}, STATUS={status}")
 
     # Find plan in DB
-    matching_plan = Plan.query.filter(Plan.paypal_plan_id.contains(plan_id)).first()
+    matching_plan = Plan.query.filter(
+        Plan.paypal_plan_id.contains([plan_id])
+    ).first()
     if not matching_plan:
         print(f"[SUB CREATED] No matching plan for PayPal plan ID {plan_id}")
         return

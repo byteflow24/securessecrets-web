@@ -189,7 +189,6 @@ def register_api():
         payment_source=pending.payment_source,
         transaction_id=transaction_id,
         time_zone=time_zone if time_zone else None,
-        status=None,
 
         # ✅ carry over trial info if it existed in PendingSubscription
         trial_start_date=pending.trial_start_date,
@@ -300,6 +299,10 @@ def dashboard_api():
     user = db.session.get(User, int(user_id))
     if not user:
         return jsonify({'error': 'User not found'}), 404
+    
+    if user.status == "new" and user.payment_source != "site":
+        user.status = ""
+    db.session.commit()
     
     subscription_expired = is_subscription_expired(user)
 

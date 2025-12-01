@@ -277,7 +277,8 @@ def register():
             country_code=form.code.data,
             phone=form.phone.data,
             plan_id=plan_id,
-            email_token = generate_token()
+            email_token=generate_token(),
+            payment_source="site"
         )
         db.session.add(new_user)
         try:
@@ -579,7 +580,7 @@ def dashboard():
     
     # cancel_subscription('I-JWXGEDPYF9XT', 'I was testing only')
     # redirect the new users to the payment page to continue using the account
-    if current_user.status == "new" and current_user.payment_source == "PayPal":
+    if current_user.status == "new" and current_user.payment_source == "site":
         return redirect(url_for("main.payment"))
         
     # counting secrets for each user
@@ -1676,10 +1677,10 @@ def confirm_email(token):
         user.is_confirmed = True
         user.email_token = None  # Remove the token after confirmation
         user.status = 'new'
-        # Save subscription details
-        if not user.trial_end_date or user.trial_end_date.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
-            user.trial_start_date = datetime.now(timezone.utc)
-            user.trial_end_date = datetime.now(timezone.utc) + timedelta(days=13)
+        # # Save subscription details
+        # if not user.trial_end_date or user.trial_end_date.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        #     user.trial_start_date = datetime.now(timezone.utc)
+        #     user.trial_end_date = datetime.now(timezone.utc) + timedelta(days=13)
 
         db.session.commit()
         logout_user()

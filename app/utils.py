@@ -1808,37 +1808,40 @@ def handle_payment_success(data):
 
 # Triggered when subscription created
 def handle_subscription_created(data):
-    subscription_id = data['resource']['id']
-    plan_id = data['resource']['plan_id']
-    start_time = data['resource']['start_time']
-    status = data['resource']['status']
+    resource = data["resource"]
+    subscription_id = resource["id"]
+    plan_id = resource["plan_id"]
+    start_time = resource.get("start_time")
+    status = resource.get("status", "PENDING")
 
-    # ✅ Handle missing subscriber field
-    subscriber_email = data['resource'].get('subscriber', {}).get('email_address', 'unknown')
+    subscriber_email = resource.get("subscriber", {}).get("email_address", "unknown")
 
-    print(f"Subscription Created: ID: {subscription_id}, Plan ID: {plan_id}, Email: {subscriber_email}, Status: {status}")
+    print(f"[SUB CREATED] ID={subscription_id}, PLAN={plan_id}, EMAIL={subscriber_email}, STATUS={status}")
 
-    # Get all plans and find the one that matches new_plan_id
-    plans = Plan.query.all()
-    matching_plan = next((plan for plan in plans if plan_id in plan.paypal_plan_id), None)
-
+    # Find plan in DB
+    matching_plan = Plan.query.filter(Plan.paypal_plan_id.contains(plan_id)).first()
     if not matching_plan:
-        print(f"No matching plan found for PayPal plan ID {plan_id}")
-        return  # Stop execution if no matching plan is found
-    
+        print(f"[SUB CREATED] No matching plan for PayPal plan ID {plan_id}")
+        return
 
-    # Assuming you have the user record, update their subscription info
+    # Find the user
     user = User.query.filter_by(paypal_subscription_id=subscription_id).first()
-    if user.status == "ACTIVE":
+    if not user:
+        print(f"[SUB CREATED] No user found for subscription ID {subscription_id}")
+        return
+
+    # If user already active, override PayPal status
+    if user.subscription_status == "ACTIVE":
         status = "ACTIVE"
 
-    if user:
-        user.paypal_subscription_id = subscription_id
-        user.plan_id = matching_plan.id
-        user.subscription_start_date = start_time
-        user.subscription_status = status
-        db.session.commit()
-        print(f"User {user.id} subscription updated to {status}")
+    # Update subscription
+    user.plan_id = matching_plan.id
+    user.subscription_start_date = start_time
+    user.subscription_status = status
+
+    db.session.commit()
+    print(f"[SUB CREATED] User {user.id} subscription set to {status}")
+
 
 # Triggered when subscription activated.
 def handle_subscription_activated(data):

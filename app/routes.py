@@ -684,13 +684,10 @@ def dashboard():
             
     
     subscription_approval = get_subscription_details(current_user.paypal_subscription_id)
-    if not subscription_approval:
-        approval_link = "pass"  # or set a default value like "pass"
+    if subscription_approval.get("status") == "APPROVAL_PENDING":
+        approval_link = next((link["href"] for link in subscription_approval.get("links", []) if link["rel"] == "resend"), None)
     else:
-        if subscription_approval.get("status") == "APPROVAL_PENDING":
-            approval_link = next((link["href"] for link in subscription_approval.get("links", []) if link["rel"] == "approve"), None)
-        else:
-            approval_link = "pass"
+        approval_link = "pass"
 
     
     # Report submission

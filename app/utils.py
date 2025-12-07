@@ -2459,26 +2459,40 @@ client = Client(TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN)
 
 def send_whatsapp_message(to_number: str, secret_content: str, file_url: str = None):
     """
-    Send WhatsApp message using Twilio Messaging Service.
-    Handles text and media.
+    Send WhatsApp message using Twilio Messaging Service and approved template.
+    Handles text via template and optional media separately.
     """
 
-    message_data = {
-        "messaging_service_sid": TWILIO_MESSAGING_SERVICE_SID,
-        "to": f"whatsapp:{to_number}"
-    }
-
-    # ---- Add text ----
+    # ---- Send template message ----
     if secret_content:
-        message_data["body"] = f"Hi there 👋,\n\n\"{secret_content}\"\n\nThis secret has been shared with you securely."
+        message = client.messages.create(
+            messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
+            to=f"whatsapp:{to_number}",
+            content_template={
+                "name": "send_secret_1",  # approved template name
+                "language": {"code": "en"},
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {"type": "text", "text": secret_content}
+                        ]
+                    }
+                ]
+            }
+        )
+        # print(f"Template Message SID: {message.sid}")
 
-    # ---- Add media ----
+    # ---- Send media if exists ----
     if file_url:
-        message_data["media_url"] = [file_url]
+        media_message = client.messages.create(
+            messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
+            to=f"whatsapp:{to_number}",
+            media_url=[file_url]
+        )
+        # print(f"Media Message SID: {media_message.sid}")
 
-    message = client.messages.create(**message_data)
-    print(f"Message SID: {message.sid}, To: {to_number}")
-    return message.sid
+    return True
 
 
 ############## GENERETE TOKEN & CONFIRMATION DELETE ACCOUNT ##############

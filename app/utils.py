@@ -2453,7 +2453,7 @@ def classify_extension(ext: str) -> str:
 ############## CREATE WHATSAPP MESSAGES ##############
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-TWILIO_WHATSAPP_NUMBER = "whatsapp:+15558020320"
+TWILIO_WHATSAPP_NUMBER = "whatsapp:+17815126648"
 client = Client(TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN)
 
 def send_whatsapp_message(to_number: str, secret_content: str, file_url: str = None):

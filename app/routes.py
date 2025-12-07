@@ -104,7 +104,7 @@ def home():
 
     current_date = datetime.now().date()
     current_time = datetime.now().time()
-    # send_whatsapp_message("+97433629868", "Hi dear,\nThis is me Taha, it's my last thing I can tell you.\n Be carful and fully powered, be a great and manage all things by your hands.\n I know you, you can do it, what ever it will take.\n\n\n This secret has been privded by Secures Secrets from someone you know.", file_url)
+    # send_whatsapp_message("+97433629868", "Hi dear,\nThis is me Taha, it's my last thing I can tell you.\n Be carful and fully powered, be a great and manage all things by your hands.\n I know you, you can do it, what ever it will take.\n\n\n This secret has been privded by Secures Secrets from someone you know.")
     # Check if the user logged in recently and update the time period or scheduled date
     for secret in shared_secret:
         # Get the most recent login date for the user

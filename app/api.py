@@ -505,7 +505,7 @@ def all_secrets_api():
             'phone': shared.phone,
             'title': get_unique_title(shared.title, user.id) if shared.title else '',
             'secret': shared.snapshot_secret if shared.snapshot_secret else '',
-            'file': file_is if file_is else None,
+            'file': file_is,
             'date_to_send': convert_utc_to_local(shared.date_to_send, user.time_zone) if shared.date_to_send else None,
             'time_to_send': shared.time_to_send.isoformat() if shared.time_to_send else None,
             "share_date": convert_utc_to_local(shared.share_date, user.time_zone) if shared.share_date else None,

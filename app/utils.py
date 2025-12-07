@@ -2453,40 +2453,32 @@ def classify_extension(ext: str) -> str:
 ############## CREATE WHATSAPP MESSAGES ##############
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-TWILIO_WHATSAPP_NUMBER = "whatsapp:+17815126648"
+# TWILIO_WHATSAPP_NUMBER = "whatsapp:+17815126648"
+TWILIO_MESSAGING_SERVICE_SID = os.environ.get("TWILIO_MESSAGING_SERVICE_SID")
 client = Client(TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN)
 
 def send_whatsapp_message(to_number: str, secret_content: str, file_url: str = None):
     """
-    Universal WhatsApp sender that supports all file types
-    and avoids WhatsApp's text+media limitations.
+    Send WhatsApp message using Twilio Messaging Service.
+    Handles text and media.
     """
 
-    # ---- Determine file extension ----
-    file_type = None
-    if file_url:
-        path = urlparse(file_url).path
-        ext = path.split('.')[-1].lower()
-        file_type = classify_extension(ext)
+    message_data = {
+        "messaging_service_sid": TWILIO_MESSAGING_SERVICE_SID,
+        "to": f"whatsapp:{to_number}"
+    }
 
-    # ---- Always send the text message FIRST ----
+    # ---- Add text ----
     if secret_content:
-        client.messages.create(
-            body=f"Hi there 👋,\n\n\"{secret_content}\"\n\nThis secret has been shared with you securely.",
-            from_=TWILIO_WHATSAPP_NUMBER,
-            to=f"whatsapp:{to_number}",
-        )
+        message_data["body"] = f"Hi there 👋,\n\n\"{secret_content}\"\n\nThis secret has been shared with you securely."
 
-    # ---- If file exists, send it as a SECOND message ----
+    # ---- Add media ----
     if file_url:
-        # Audio & Video MUST be sent alone. Images/docs *can* attach text, but we already sent text.
-        client.messages.create(
-            from_=TWILIO_WHATSAPP_NUMBER,
-            to=f"whatsapp:{to_number}",
-            media_url=[file_url]
-        )
+        message_data["media_url"] = [file_url]
 
-    return True
+    message = client.messages.create(**message_data)
+    print(f"Message SID: {message.sid}, To: {to_number}")
+    return message.sid
 
 
 ############## GENERETE TOKEN & CONFIRMATION DELETE ACCOUNT ##############

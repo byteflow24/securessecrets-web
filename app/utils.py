@@ -2457,42 +2457,40 @@ TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 TWILIO_MESSAGING_SERVICE_SID = os.environ.get("TWILIO_MESSAGING_SERVICE_SID")
 client = Client(TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN)
 
-def send_whatsapp_message(to_number: str, secret_content: str, file_url: str = None):
+def send_whatsapp_message(to_number: str, sender_name: str, secret_text: str, timestamp: str, file_url: str = None):
     """
-    Send WhatsApp message using Twilio Messaging Service and approved template.
-    Handles text via template and optional media separately.
+    Sends template: secret_received
+    Then sends media if file_url is provided.
     """
 
-    # ---- Send template message ----
-    if secret_content:
-        message = client.messages.create(
-            messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
-            to=f"whatsapp:{to_number}",
-            content_template={
-                "name": "send_secret_1",  # approved template name
-                "language": {"code": "en"},
-                "components": [
-                    {
-                        "type": "body",
-                        "parameters": [
-                            {"type": "text", "text": secret_content}
-                        ]
-                    }
-                ]
-            }
-        )
-        # print(f"Template Message SID: {message.sid}")
+    # ---- 1) Send the template ----
+    template_msg = client.messages.create(
+        messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
+        to=f"whatsapp:{to_number}",
+        template_name="secret_received",
+        template_language="en",
+        template_parameters=[
+            sender_name,     # {{sender_name}}
+            timestamp,       # {{timestamp}}
+            secret_text      # {{secret_text}}
+        ]
+    )
 
-    # ---- Send media if exists ----
+    # ---- 2) Optional media ----
+    media_msg_sid = None
     if file_url:
         media_message = client.messages.create(
             messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
             to=f"whatsapp:{to_number}",
             media_url=[file_url]
         )
-        # print(f"Media Message SID: {media_message.sid}")
+        media_msg_sid = media_message.sid
 
-    return True
+    return {
+        "template_sid": template_msg.sid,
+        "media_sid": media_msg_sid
+    }
+
 
 
 ############## GENERETE TOKEN & CONFIRMATION DELETE ACCOUNT ##############

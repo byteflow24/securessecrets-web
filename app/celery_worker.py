@@ -129,7 +129,9 @@ def check_scheduled_secrets():
                 if phone_value:
                     send_whatsapp_message(
                         to_number=phone_value,
+                        sender_name="Secures Secrets Team",
                         secret_content=decrypt_secret(secret.snapshot_secret),
+                        timestamp=now,
                         file_url=file_url
                     )
 
@@ -140,7 +142,7 @@ def check_scheduled_secrets():
 
 @celery.task(name="app.celery_worker.check_last_login")
 def check_last_login():
-    
+
     now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
     last_login_secrets = SharedSecret.query.filter(
         SharedSecret.time_period == now,

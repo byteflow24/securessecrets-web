@@ -130,8 +130,8 @@ def check_scheduled_secrets():
                     send_whatsapp_message(
                         to_number=phone_value,
                         sender_name="Secures Secrets Team",
-                        secret_content=decrypt_secret(secret.snapshot_secret),
-                        timestamp=now,
+                        secret_text=decrypt_secret(secret.snapshot_secret),
+                        timestamp=str(now),
                         file_url=file_url
                     )
 
@@ -184,7 +184,9 @@ def check_last_login():
                 if phone_value:
                     send_whatsapp_message(
                         to_number=phone_value,
-                        secret_content=decrypt_secret(secret.snapshot_secret),
+                        sender_name="Secures Secrets Team",
+                        secret_text=decrypt_secret(secret.snapshot_secret),
+                        timestamp=str(now),
                         file_url=file_url
                     )
 

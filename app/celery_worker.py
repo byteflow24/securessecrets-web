@@ -71,7 +71,7 @@ celery = create_celery_app()
 
 # Celery task for sending the email asynchronously
 @celery.task
-def send_email_task(email, token, fname, lname):
+def send_email_task(email, token, fname, lname, login_check_del, scheduled_check_del):
     logger.info("Task started")
     from .utils import send_secret_email
     
@@ -82,7 +82,7 @@ def send_email_task(email, token, fname, lname):
     clean_email = email.strip("{}").strip()  # Strip both curly braces and extra spaces
 
     # Call the email sending function
-    send_secret_email(clean_email, secret_url, fname, lname)
+    send_secret_email(clean_email, secret_url, fname, lname, login_check_del, scheduled_check_del)
 
 
 @shared_task
@@ -107,7 +107,14 @@ def check_scheduled_secrets():
             
             for email_value in emails:
                 if email_value:
-                    send_email_task.apply_async(args=[email_value, secret.token, secret.first_name, secret.last_name])
+                    send_email_task.apply_async(args=[
+                        email_value,
+                        secret.token,
+                        secret.first_name,
+                        secret.last_name,
+                        secret.public_confirm_deletion,
+                        secret.scheduled_confirm_deletion
+                        ])
 
         # --- Send WhatsApp ---
         if secret.phone:
@@ -162,7 +169,14 @@ def check_last_login():
             
             for email_value in emails:
                 if email_value:
-                    send_email_task.apply_async(args=[email_value, secret.token, secret.first_name, secret.last_name])
+                    send_email_task.apply_async(args=[
+                        email_value,
+                        secret.token,
+                        secret.first_name,
+                        secret.last_name,
+                        secret.public_confirm_deletion,
+                        secret.scheduled_confirm_deletion
+                        ])
 
         # --- Send WhatsApp ---
         if secret.phone:

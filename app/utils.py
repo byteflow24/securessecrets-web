@@ -2594,7 +2594,7 @@ def secret_reminder(secret, phase):
     msg['To'] = email
     msg['Subject'] = Header(subject, 'utf-8')
 
-    msg.attach(MIMEText(body, 'html'))
+    msg.attach(MIMEText(body, 'html', 'utf-8'))
 
     # Attach logo
     logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
@@ -2741,7 +2741,7 @@ def reminder_to_pay_email(username, email, plan_name, days_left):
             f"</html>"
         )
 
-    msg.attach(MIMEText(body, 'html'))
+    msg.attach(MIMEText(body, 'html', 'utf-8'))
 
     # Add the logo image to the email
     logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
@@ -2815,7 +2815,7 @@ def send_payment_email(email, username, plan_name, payment_amount, payment_date,
         f"</html>"
     )
 
-    msg.attach(MIMEText(body, 'html'))
+    msg.attach(MIMEText(body, 'html', 'utf-8'))
 
     # Add inline logo image
     logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
@@ -2864,7 +2864,7 @@ def send_payment_failed_email(email, username, failure_status, plan_name, card_t
         f"</html>"
     )
 
-    msg.attach(MIMEText(body, 'html'))
+    msg.attach(MIMEText(body, 'html', 'utf-8'))
 
     # Add the logo image to the email
     logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
@@ -2913,7 +2913,7 @@ def send_verification_email(user_email, username, token):
         f"</html>"
     )
 
-    msg.attach(MIMEText(body, 'html'))
+    msg.attach(MIMEText(body, 'html', 'utf-8'))
 
     # Add the logo image to the email
     logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
@@ -2939,28 +2939,38 @@ def send_verification_email(user_email, username, token):
         print(f"An unexpected error occurred while sending email to {user_email}: {str(e)}")
 
 # Sending the eamil
-def send_secret_email(email, secret_url, fname, lname):
+def send_secret_email(email, secret_url, fname, lname, login_check_del, scheduled_check_del):
     # Construct the email message
     msg = MIMEMultipart("related")
     msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
     msg['To'] = email
     msg['Subject'] = Header('Important: Access Your Secret', 'utf-8')
     # Email body
-    body = (
-        f"<html>"
-        f"<body>"
-        f"<p>Hi there,</p>"
-        f"<p>This secret has been shared with from <strong>{fname} {lname}</strong> you securely and privately. Only you have access to this information. "
-        f"Feel at ease knowing your privacy is protected.</p>"
-        f"<p><a href='{secret_url}'>Click here to view the secret</a></p>"
-        f"<p><small>Note: the link will be deleted 1 hour after you open this link.</small></p>"
-        f"<p>Best regards,</p>"
-        f"<p>SecuresSecrets Support Team.</p>"
-        f"<img src='cid:logo_image' style='width:150px; height:auto; margin-top:10px;' alt='SecuresSecrets Logo'>"
-        f"</body>"
-        f"</html>"
-    )
-    msg.attach(MIMEText(body, 'html'))
+    body = f"""
+    <html>
+    <body>
+        <p>Hi there,</p>
+        <p>This secret has been shared with you from <strong>{fname} {lname}</strong> securely and privately. 
+        Only you have access to this information. Feel at ease knowing your privacy is protected.</p>
+
+        <p><a href="{secret_url}">Click here to view the secret</a></p>
+    """
+
+    # Conditionally add the delete-after-1-hour note
+    if login_check_del or scheduled_check_del:
+        body += """
+        <p><small>Note: This link will be deleted 1 hour after it is opened.</small></p>
+        """
+
+    # Finish the email body
+    body += """
+        <p>Best regards,</p>
+        <p>SecuresSecrets Support Team</p>
+        <img src="cid:logo_image" style="width:150px; height:auto; margin-top:10px;" alt="SecuresSecrets Logo">
+    </body>
+    </html>
+    """
+    msg.attach(MIMEText(body, 'html', 'utf-8'))
 
     # Add inline logo image
     logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
@@ -3014,7 +3024,7 @@ def contact_email(name, email, subject, message):
         f"</body>"
         f"</html>"
     )
-    msg.attach(MIMEText(body, 'html'))
+    msg.attach(MIMEText(body, 'html', 'utf-8'))
 
     # Add inline logo image
     logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
@@ -3104,7 +3114,7 @@ def send_report_email(secret_id, secret, secret_file, report_details):
         f"</html>"
     )
 
-    msg.attach(MIMEText(body, 'html'))
+    msg.attach(MIMEText(body, 'html', 'utf-8'))
 
     logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')
     try:
@@ -3171,7 +3181,7 @@ def send_delete_account_email(user, verification_link, instructions=""):
     </html>
     """
 
-    msg.attach(MIMEText(body, 'html'))
+    msg.attach(MIMEText(body, 'html', 'utf-8'))
 
     # Attach logo
     logo_path = os.path.join(os.path.dirname(__file__), 'static/assets/images/logoss.webp')

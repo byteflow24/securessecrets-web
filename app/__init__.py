@@ -90,6 +90,8 @@ def create_app():
                 "https://csi.gstatic.com "
                 "https://www.paypal.com "
                 "https://api-m.paypal.com; "
+                "https://cdn.jsdelivr.net "
+                "https://cdnjs.cloudflare.com; "
             "frame-src 'self' "
                 "https://*.googletagmanager.com "
                 "https://*.googlesyndication.com "

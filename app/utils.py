@@ -19,7 +19,7 @@ from google.cloud.recaptchaenterprise_v1 import Assessment
 from itsdangerous import URLSafeTimedSerializer
 from twilio.rest import Client
 from io import BytesIO
-import logging, uuid, json, pytz, jwt, base64, requests, secrets, re, os, smtplib, time, tempfile
+import logging, uuid, json, pytz, jwt, base64, requests, secrets, re, os, smtplib, time, tempfile, json
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -2453,34 +2453,40 @@ def classify_extension(ext: str) -> str:
 ############## CREATE WHATSAPP MESSAGES ##############
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-# TWILIO_WHATSAPP_NUMBER = "whatsapp:+17815126648"
+TWILIO_WHATSAPP_NUMBER = "whatsapp:+17815126648"
 TWILIO_MESSAGING_SERVICE_SID = os.environ.get("TWILIO_MESSAGING_SERVICE_SID")
+CONTENT_SID = os.environ.get("CONTENT_SID")
 client = Client(TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN)
 
-def send_whatsapp_message(to_number: str, sender_name: str, secret_text: str, timestamp: str, file_url: str = None):
+def send_whatsapp_message(to_number: str, sender_name: str, secret_text: str, timestamp: datetime, file_url: str = None):
     """
-    Sends template: secret_received
-    Then sends media if file_url is provided.
+    Sends WhatsApp template message: secret_received
+    Then optionally sends media if file_url is provided.
     """
 
-    # ---- 1) Send the template ----
+    # ---- Convert datetime to string ----
+    if isinstance(timestamp, datetime):
+        timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        timestamp_str = str(timestamp)
+
+    # ---- 1) Send template message ----
     template_msg = client.messages.create(
-        messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
+        content_sid=CONTENT_SID,
         to=f"whatsapp:{to_number}",
-        template_name="secret_received",
-        template_language="en",
-        template_parameters=[
-            sender_name,     # {{sender_name}}
-            timestamp,       # {{timestamp}}
-            secret_text      # {{secret_text}}
-        ]
+        from_=TWILIO_WHATSAPP_NUMBER,
+        content_variables=json.dumps({
+            "sender_name": sender_name,
+            "timestamp": timestamp_str,
+            "secret_text": secret_text
+        })
     )
 
     # ---- 2) Optional media ----
     media_msg_sid = None
     if file_url:
         media_message = client.messages.create(
-            messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
+            from_=TWILIO_WHATSAPP_NUMBER,
             to=f"whatsapp:{to_number}",
             media_url=[file_url]
         )
@@ -2490,8 +2496,6 @@ def send_whatsapp_message(to_number: str, sender_name: str, secret_text: str, ti
         "template_sid": template_msg.sid,
         "media_sid": media_msg_sid
     }
-
-
 
 ############## GENERETE TOKEN & CONFIRMATION DELETE ACCOUNT ##############
     
@@ -2935,7 +2939,7 @@ def send_verification_email(user_email, username, token):
         print(f"An unexpected error occurred while sending email to {user_email}: {str(e)}")
 
 # Sending the eamil
-def send_secret_email(email, secret_url):
+def send_secret_email(email, secret_url, fname, lname):
     # Construct the email message
     msg = MIMEMultipart("related")
     msg['From'] = formataddr(('SecuresSecrets Team', EMAIL))
@@ -2946,7 +2950,7 @@ def send_secret_email(email, secret_url):
         f"<html>"
         f"<body>"
         f"<p>Hi there,</p>"
-        f"<p>This secret has been shared with you securely and privately. Only you have access to this information. "
+        f"<p>This secret has been shared with from <strong>{fname} {lname}</strong> you securely and privately. Only you have access to this information. "
         f"Feel at ease knowing your privacy is protected.</p>"
         f"<p><a href='{secret_url}'>Click here to view the secret</a></p>"
         f"<p><small>Note: the link will be deleted 1 hour after you open this link.</small></p>"

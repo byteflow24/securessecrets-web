@@ -212,6 +212,10 @@ class SharedSecret(db.Model):
     file = db.Column(db.String(255), nullable=True)
     share_date = db.Column(TIMESTAMP, nullable=True)
 
+    # User will enter his/her name if shared with email or whatsApp number
+    first_name = db.Column(String(25), nullable=True)
+    last_name = db.Column(String(25), nullable=True)
+
     # 🔗 Relationships
     user = db.relationship('User', back_populates='shared_secrets')
     secret = db.relationship('Secret', back_populates='shared_secrets', lazy='joined')

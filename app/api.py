@@ -952,6 +952,9 @@ def share_secret_api():
         public = data.get("public_login", False)
         confirm_deletion = data.get("public_confirm_deletion", False)
 
+        fname = data.get("fname", "")
+        lname = data.get("lname", "")
+
         if not emails and not public and not phones:
             return jsonify(success=False, message="You must provide emails, phones, or enable public sharing for last login"), 400
         
@@ -979,7 +982,9 @@ def share_secret_api():
             public_delete_confirm=confirm_deletion,
             token=token,
             received=False,
-            share_date=time_period
+            share_date=time_period,
+            first_name=fname,
+            last_name=lname
         )
         db.session.add(shared_secret)
         db.session.commit()
@@ -992,6 +997,9 @@ def share_secret_api():
         phones = [e.strip() for e in data.get("phone_scheduled", "").split(",") if e.strip()]
         public = data.get("public_scheduled", False)
         confirm_deletion = data.get("scheduled_confirm_deletion", False)
+        fname = data.get("fname", "")
+        lname = data.get("lname", "")
+
 
         if not emails and not public and not phones:
             return jsonify(success=False, message="You must provide emails, phones, or enable public sharing for scheduled sharing"), 400
@@ -1026,7 +1034,9 @@ def share_secret_api():
             schedule_delete_confirm=confirm_deletion,
             token=token,
             received=False,
-            share_date=share_datetime_utc
+            share_date=share_datetime_utc,
+            first_name=fname,
+            last_name=lname
         )
         db.session.add(shared_secret)
         db.session.commit()

@@ -215,6 +215,18 @@ class ShareForm(FlaskForm):
         render_kw={"class": "form-control", "style": "width: 150px; border-radius: 10px;"}
     )
 
+    first_name = StringField(
+        "First Name",
+        validators=[Optional(), Length(min=1, max=50)],
+        render_kw={"class": "form-control", "placeholder": "Your first name"}
+    )
+
+    last_name = StringField(
+        "Last Name",
+        validators=[Optional(), Length(min=1, max=50)],
+        render_kw={"class": "form-control", "placeholder": "Your last name"}
+    )
+
     submit = SubmitField("Send", render_kw={"class": "btn btn-primary w-50"})
 
 

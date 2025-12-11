@@ -1052,6 +1052,11 @@ window.addEventListener('DOMContentLoaded', () => {
                 const datePeriodInput = this.querySelector('input[name="date_period"]');
                 const dateInput = this.querySelector('input[name="date"]');
                 const timeInput = this.querySelector('input[name="time"]');
+
+                const nameFields = this.querySelector("#nameFields");
+                const firstNameInput = this.querySelector('input[name="first_name"]');
+                const lastNameInput = this.querySelector('input[name="last_name"]');
+
         
                 // Determine and set the sharing_type
                 if (datePeriodInput && datePeriodInput.value.trim()) {
@@ -1117,6 +1122,18 @@ window.addEventListener('DOMContentLoaded', () => {
 
                     if (isValid) {
                         phonesLoginHidden.value = numbers.join(',');
+                    }
+                }
+
+                // Handle errors for the first/ last name here
+                if (nameFields.style.display === "block") {
+                    if (!firstNameInput.value.trim()) {
+                        isValid = false;
+                        addValidationError(firstNameInput, "First name is required.");
+                    }
+                    if (!lastNameInput.value.trim()) {
+                        isValid = false;
+                        addValidationError(lastNameInput, "Last name is required.");
                     }
                 }
 
@@ -1193,7 +1210,31 @@ window.addEventListener('DOMContentLoaded', () => {
                     formError.textContent = "An unexpected error occurred.";
                 });
             });
-        });        
+            // Attach input listeners to toggle name fields
+            ['email_login', 'phone_login', 'email_scheduled', 'phone_scheduled'].forEach(name => {
+                const input = form.querySelector(`input[name="${name}"]`);
+                if (input) {
+                    input.addEventListener('input', () => toggleNameFields(form));
+                }
+            });
+        });
+        
+        function toggleNameFields(form) {
+            const inputs = [
+                form.querySelector('input[name="email_login"]'),
+                form.querySelector('input[name="phone_login"]'),
+                form.querySelector('input[name="email_scheduled"]'),
+                form.querySelector('input[name="phone_scheduled"]')
+            ];
+
+            const shouldShow = inputs.some(input => input && input.value.trim().length > 0);
+
+            const nameContainer = form.querySelector('#nameFields');
+            if (nameContainer) {
+                nameContainer.style.display = shouldShow ? "block" : "none";
+            }
+        }
+
         
     
         // Clear errors and reset form on modal close

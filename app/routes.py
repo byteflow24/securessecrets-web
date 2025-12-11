@@ -104,6 +104,14 @@ def home():
 
     current_date = datetime.now().date()
     current_time = datetime.now().time()
+    # send_whatsapp_message(
+    #     to_number="+97455676464",
+    #     sender_name="Secures Secrets Team",
+    #     secret_text="Hi dear, this is a secret message.",
+    #     timestamp=datetime.now(),
+    #     # file_url=file_url
+    # )
+
     # send_whatsapp_message("+97433629868", "Hi dear,\nThis is me Taha, it's my last thing I can tell you.\n Be carful and fully powered, be a great and manage all things by your hands.\n I know you, you can do it, what ever it will take.\n\n\n This secret has been privded by Secures Secrets from someone you know.")
     # Check if the user logged in recently and update the time period or scheduled date
     for secret in shared_secret:
@@ -684,7 +692,9 @@ def dashboard():
             
     
     subscription_approval = get_subscription_details(current_user.paypal_subscription_id)
-    if subscription_approval.get("status") == "APPROVAL_PENDING":
+    if current_user.username != "SecuresSecrets" or current_user.payment_source == "Apple Pay" or current_user.payment_source == "Google Play":
+        approval_link = "pass"
+    elif subscription_approval.get("status") == "APPROVAL_PENDING":
         approval_link = next((link["href"] for link in subscription_approval.get("links", []) if link["rel"] == "resend"), None)
     else:
         approval_link = "pass"
@@ -1043,7 +1053,7 @@ def share():
 
     # Default variable initialization
     sharing_type = None
-    email, public, phone, token, time_period, date, time, last_login, date_time_combined = None, False, None, None, None, None, None, None, None
+    email, public, phone, token, time_period, date, time, last_login, date_time_combined, first_name, last_name = None, False, None, None, None, None, None, None, None, None, None
 
     if form.validate_on_submit():
         # print("Form submission data:", form.data)
@@ -1052,6 +1062,9 @@ def share():
         scheduled_emails = [email.strip() for email in form.email_scheduled.data.split(',') if email.strip()]
         login_phones = [p.strip() for p in form.phone_login.data.split(',') if p.strip()]
         scheduled_phones = [p.strip() for p in form.phone_scheduled.data.split(',') if p.strip()]
+
+        first_name = form.first_name.data if form.first_name.data else None
+        last_name = form.last_name.data if form.last_name.data else None
 
         if form.date_period.data:
             sharing_type = "last_login"
@@ -1140,6 +1153,8 @@ def share():
                 time_to_send=time_str if sharing_type == "scheduled" else None,
                 received=False,
                 schedule_delete_confirm=form.scheduled_confirm_deletion.data if sharing_type == "scheduled" else False,
+                first_name=first_name,
+                last_name=last_name,
             )
             db.session.add(new_shared_secret)
             db.session.commit()
@@ -1293,7 +1308,7 @@ def delete_secret(sec_id):
 @login_required
 def delete_shared_secret(secret_id):
 
-    if current_user.username == "SecuresSecrets":
+    if not current_user.username:
         flash('You are not authorized to delete the secret', 'danger')
         return redirect(url_for('main.dashboard'))
     else:

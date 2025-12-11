@@ -71,7 +71,7 @@ celery = create_celery_app()
 
 # Celery task for sending the email asynchronously
 @celery.task
-def send_email_task(email, token):
+def send_email_task(email, token, fname, lname):
     logger.info("Task started")
     from .utils import send_secret_email
     
@@ -82,7 +82,7 @@ def send_email_task(email, token):
     clean_email = email.strip("{}").strip()  # Strip both curly braces and extra spaces
 
     # Call the email sending function
-    send_secret_email(clean_email, secret_url)
+    send_secret_email(clean_email, secret_url, fname, lname)
 
 
 @shared_task
@@ -107,7 +107,7 @@ def check_scheduled_secrets():
             
             for email_value in emails:
                 if email_value:
-                    send_email_task.apply_async(args=[email_value, secret.token])
+                    send_email_task.apply_async(args=[email_value, secret.token, secret.first_name, secret.last_name])
 
         # --- Send WhatsApp ---
         if secret.phone:
@@ -129,7 +129,7 @@ def check_scheduled_secrets():
                 if phone_value:
                     send_whatsapp_message(
                         to_number=phone_value,
-                        sender_name="Secures Secrets Team",
+                        sender_name=f"{secret.first_name} {secret.last_name}",
                         secret_text=decrypt_secret(secret.snapshot_secret),
                         timestamp=str(now),
                         file_url=file_url
@@ -162,7 +162,7 @@ def check_last_login():
             
             for email_value in emails:
                 if email_value:
-                    send_email_task.apply_async(args=[email_value, secret.token])
+                    send_email_task.apply_async(args=[email_value, secret.token, secret.first_name, secret.last_name])
 
         # --- Send WhatsApp ---
         if secret.phone:
@@ -184,7 +184,7 @@ def check_last_login():
                 if phone_value:
                     send_whatsapp_message(
                         to_number=phone_value,
-                        sender_name="Secures Secrets Team",
+                        sender_name=f"{secret.first_name} {secret.last_name}",
                         secret_text=decrypt_secret(secret.snapshot_secret),
                         timestamp=str(now),
                         file_url=file_url

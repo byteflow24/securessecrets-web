@@ -63,6 +63,7 @@ def create_app():
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
+
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
                 "https://code.jquery.com "
                 "https://cdn.jsdelivr.net "
@@ -77,21 +78,26 @@ def create_app():
                 "https://www.gstatic.com "
                 "https://www.paypal.com "
                 "https://www.paypalobjects.com; "
+
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+
             "font-src 'self' https://fonts.gstatic.com https://use.fontawesome.com https://cdn.jsdelivr.net; "
+
             "img-src 'self' data: "
                 "https://*.google-analytics.com "
                 "https://*.googlesyndication.com "
                 "https://*.adtrafficquality.google; "
+
             "connect-src 'self' "
                 "https://*.googletagmanager.com "
                 "https://*.google-analytics.com "
                 "https://*.adtrafficquality.google "
                 "https://csi.gstatic.com "
                 "https://www.paypal.com "
-                "https://api-m.paypal.com; "
+                "https://api-m.paypal.com "
                 "https://cdn.jsdelivr.net "
                 "https://cdnjs.cloudflare.com; "
+
             "frame-src 'self' "
                 "https://*.googletagmanager.com "
                 "https://*.googlesyndication.com "
@@ -100,11 +106,13 @@ def create_app():
                 "https://www.google.com "
                 "https://www.paypal.com "
                 "https://www.sandbox.paypal.com; "
+
             "frame-ancestors 'self'; "
             "base-uri 'self'; "
             "form-action 'self'; "
             "object-src 'none'; "
-            "media-src 'self';"
+            "media-src 'self'; "
+            "source-map 'none';"
         )
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["X-Content-Type-Options"] = "nosniff"

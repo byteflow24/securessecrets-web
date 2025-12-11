@@ -112,8 +112,8 @@ def check_scheduled_secrets():
                         secret.token,
                         secret.first_name,
                         secret.last_name,
-                        secret.public_confirm_deletion,
-                        secret.scheduled_confirm_deletion
+                        secret.public_delete_confirm,
+                        secret.schedule_delete_confirm
                         ])
 
         # --- Send WhatsApp ---
@@ -174,8 +174,8 @@ def check_last_login():
                         secret.token,
                         secret.first_name,
                         secret.last_name,
-                        secret.public_confirm_deletion,
-                        secret.scheduled_confirm_deletion
+                        secret.public_delete_confirm,
+                        secret.schedule_delete_confirm
                         ])
 
         # --- Send WhatsApp ---

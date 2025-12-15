@@ -1723,6 +1723,16 @@ def resend_verification():
         flash('Your account is already confirmed or you are not logged in.', 'warning')
     return redirect(url_for('main.confirmation_pending', user=is_user.id))
 
+# Will redirect the user to the app if app instulled, else the to the site
+@main.route('/app/login')
+def app_login_redirect():
+    query = request.query_string.decode()
+    target = '/login'
+    if query:
+        target += '?' + query
+    return redirect(target)
+
+
 # Billing page
 @main.route('/billing', methods=['GET'])
 @login_required

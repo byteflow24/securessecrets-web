@@ -2898,20 +2898,63 @@ def send_verification_email(user_email, username, token):
     # Use external=True to generate an absolute URL
     verification_url = url_for('main.confirm_email', token=token, _external=True)
     
-    body = (
-        f"<html>"
-        f"<body>"
-        f"<h2>Hi {username},</h2>"
-        f"<p>Thank you for signing up to SecuresSecrets. Before we can continue, we need to validate your email address.</p>"
-        f"<p>Please click the link below to verify your email:</p>"
-        f"<p><a href='{verification_url}'>{verification_url}</a></p>"
-        f"<p>Best regards,<br>SecuresSecrets Support Team.</p>"
-        f"<div style='padding-left: 30px;'>"
-        f"<img src='cid:logo_image' style='width:150px; height:auto;' alt='Logo'>"
-        f"</div>"
-        f"</body>"
-        f"</html>"
-    )
+    body = f"""
+    <html>
+    <body style="margin:0; padding:0; font-family: Arial, sans-serif; background-color:#f7f7f7;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+            <td align="center" style="padding:40px 20px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px; background:#ffffff; border-radius:12px; padding:32px;">
+                
+                <tr>
+                <td>
+                    <h2 style="margin-top:0; color:#111;">Hi {username},</h2>
+
+                    <p style="color:#444; font-size:14px; line-height:1.6;">
+                    Welcome to <strong>Secures Secrets</strong> 👋  
+                    Please confirm your email address to activate your account.
+                    </p>
+
+                    <div style="text-align:center; margin:30px 0;">
+                    <a href="{verification_url}"
+                        style="
+                        background-color:#4F46E5;
+                        color:#ffffff;
+                        text-decoration:none;
+                        padding:14px 28px;
+                        border-radius:8px;
+                        font-size:14px;
+                        font-weight:600;
+                        display:inline-block;">
+                        Verify Email Address
+                    </a>
+                    </div>
+
+                    <p style="color:#666; font-size:12px; line-height:1.5;">
+                    This verification link will expire in <strong>24 hours</strong>.
+                    If you did not create an account, you can safely ignore this email.
+                    </p>
+
+                    <p style="color:#444; font-size:14px; margin-top:24px;">
+                    Best regards,<br>
+                    <strong>SecuresSecrets Team</strong>
+                    </p>
+
+                    <div style="margin-top:24px;">
+                    <img src="cid:logo_image" alt="SecuresSecrets Logo" style="width:140px;">
+                    </div>
+
+                </td>
+                </tr>
+
+            </table>
+            </td>
+        </tr>
+        </table>
+    </body>
+    </html>
+    """
+
 
     msg.attach(MIMEText(body, 'html', 'utf-8'))
 

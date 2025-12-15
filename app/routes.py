@@ -1377,7 +1377,7 @@ def verify_delete_account(token):
         # Log out after deletion
         logout_user()
         flash("Your account has been permanently deleted. We're sad to see you go.", "success")
-        return redirect(url_for('main.login'))
+        return redirect('https://www.securessecrets.com/app/login?deleted=true')
 
     except SQLAlchemyError as e:
         db.session.rollback()
@@ -1689,16 +1689,12 @@ def confirm_email(token):
         user.is_confirmed = True
         user.email_token = None  # Remove the token after confirmation
         user.status = 'new'
-        # # Save subscription details
-        # if not user.trial_end_date or user.trial_end_date.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
-        #     user.trial_start_date = datetime.now(timezone.utc)
-        #     user.trial_end_date = datetime.now(timezone.utc) + timedelta(days=13)
 
         db.session.commit()
         logout_user()
         flash('Your email has been verified, login now', 'success')
 
-    return redirect(url_for('main.login'))
+    return redirect('https://www.securessecrets.com/app/login?verified=true')
 
 # Notify registerer to check email for verification
 @main.route('/confirmation-pending')

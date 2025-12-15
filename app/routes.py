@@ -1377,7 +1377,7 @@ def verify_delete_account(token):
         # Log out after deletion
         logout_user()
         flash("Your account has been permanently deleted. We're sad to see you go.", "success")
-        return redirect('https://www.securessecrets.com/app/login?deleted=true')
+        return redirect('securessecrets://app/login?deleted=true')
 
     except SQLAlchemyError as e:
         db.session.rollback()
@@ -1694,7 +1694,7 @@ def confirm_email(token):
         logout_user()
         flash('Your email has been verified, login now', 'success')
 
-    return redirect('https://www.securessecrets.com/app/login?verified=true')
+    return redirect('securessecrets://app/login?verified=true')
 
 # Notify registerer to check email for verification
 @main.route('/confirmation-pending')
@@ -1731,6 +1731,14 @@ def app_login_redirect():
     if query:
         target += '?' + query
     return redirect(target)
+
+@main.route("/.well-known/apple-app-site-association", methods=["GET"])
+def apple_app_site_association():
+    # Make sure this file exists in your project
+    return send_file(
+        "static/apple-app-site-association",
+        mimetype="application/json"
+    )
 
 
 # Billing page

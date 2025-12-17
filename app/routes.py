@@ -956,6 +956,16 @@ def upload_file():
     if not current_user.is_authenticated:
         return jsonify(error='User not authenticated'), 401
 
+    ALLOWED_EXTENSIONS = (
+        '.jpg', '.jpeg', '.png',
+        '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt',
+        '.aac', '.mp3', '.ogg', '.wav',
+        '.mp4', '.3gp'
+    )
+
+    if not file.filename.lower().endswith(ALLOWED_EXTENSIONS):
+        return jsonify(error=f"Unsupported file type. Supported types: {', '.join(ALLOWED_EXTENSIONS)}"), 400
+
     try:
         # ✅ Get file size safely
         file.seek(0, os.SEEK_END)
@@ -1434,9 +1444,19 @@ def update_secret(secret_id):
         old_file_size_to_subtract = 0
         filename = secret.file
 
+        ALLOWED_EXTENSIONS = (
+            '.jpg', '.jpeg', '.png',
+            '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt',
+            '.aac', '.mp3', '.ogg', '.wav',
+            '.mp4', '.3gp'
+        )
+
         if form.file.data:
             file = form.file.data
             original_filename = secure_filename(file.filename)
+
+            if not file.filename.lower().endswith(ALLOWED_EXTENSIONS):
+                return jsonify(error=f"Unsupported file type. Supported types: {', '.join(ALLOWED_EXTENSIONS)}"), 400
 
             # Generate new unique filename (keep extension)
             unique_prefix = uuid.uuid4().hex

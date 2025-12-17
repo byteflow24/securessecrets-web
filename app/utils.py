@@ -2455,13 +2455,15 @@ TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = "whatsapp:+17815126648"
 TWILIO_MESSAGING_SERVICE_SID = os.environ.get("TWILIO_MESSAGING_SERVICE_SID")
-CONTENT_SID = os.environ.get("CONTENT_SID")
+TEXT_CONTENT_SID = os.environ.get("TEXT_CONTENT_SID")
+MEDIA_CONTENT_SID = os.environ.get("MEDIA_CONTENT_SID")
 client = Client(TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN)
 
-def send_whatsapp_message(to_number: str, sender_name: str, secret_text: str, timestamp: datetime, file_url: str = None):
+def send_whatsapp_message(to_number: str, sender_name: str, secret_text: str, timestamp: datetime, file_url: str | None = None):
     """
-    Sends WhatsApp template message: secret_received
-    Then optionally sends media if file_url is provided.
+    Sends WhatsApp message using:
+    - Text template if no media
+    - Media template if media exists
     """
 
     # ---- Convert datetime to string ----
@@ -2470,11 +2472,34 @@ def send_whatsapp_message(to_number: str, sender_name: str, secret_text: str, ti
     else:
         timestamp_str = str(timestamp)
 
-    # ---- 1) Send template message ----
-    template_msg = client.messages.create(
-        content_sid=CONTENT_SID,
-        to=f"whatsapp:{to_number}",
+        # ==============================
+    # CASE 1: MEDIA TEMPLATE
+    # ==============================
+    if file_url:
+        msg = client.messages.create(
+            content_sid=MEDIA_CONTENT_SID,
+            from_=TWILIO_WHATSAPP_NUMBER,
+            to=f"whatsapp:{to_number}",
+            content_variables=json.dumps({
+                "sender_name": sender_name,
+                "timestamp": timestamp_str,
+                "message": secret_text or "Please see the attached file.",
+                "media_url": file_url
+            })
+        )
+
+        return {
+            "template_type": "media",
+            "sid": msg.sid
+        }
+
+    # ==============================
+    # CASE 2: TEXT TEMPLATE
+    # ==============================
+    msg = client.messages.create(
+        content_sid=TEXT_CONTENT_SID,
         from_=TWILIO_WHATSAPP_NUMBER,
+        to=f"whatsapp:{to_number}",
         content_variables=json.dumps({
             "sender_name": sender_name,
             "timestamp": timestamp_str,
@@ -2482,19 +2507,9 @@ def send_whatsapp_message(to_number: str, sender_name: str, secret_text: str, ti
         })
     )
 
-    # ---- 2) Optional media ----
-    media_msg_sid = None
-    if file_url:
-        media_message = client.messages.create(
-            from_=TWILIO_WHATSAPP_NUMBER,
-            to=f"whatsapp:{to_number}",
-            media_url=[file_url]
-        )
-        media_msg_sid = media_message.sid
-
     return {
-        "template_sid": template_msg.sid,
-        "media_sid": media_msg_sid
+        "template_type": "text",
+        "sid": msg.sid
     }
 
 ############## GENERETE TOKEN & CONFIRMATION DELETE ACCOUNT ##############

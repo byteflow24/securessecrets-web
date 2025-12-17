@@ -657,6 +657,17 @@ def upload_file_api():
     file = request.files['file']
     if file.filename == '':
         return jsonify(error='No selected file'), 400
+    
+    ALLOWED_EXTENSIONS = (
+        '.jpg', '.jpeg', '.png',
+        '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt',
+        '.aac', '.mp3', '.ogg', '.wav',
+        '.mp4', '.3gp'
+    )
+
+    if file and not file.filename.lower().endswith(ALLOWED_EXTENSIONS):
+        return jsonify(error=f"Unsupported file type. Supported types: {', '.join(ALLOWED_EXTENSIONS)}"), 400
+
 
     try:
         # ✅ Calculate file size safely without reading full content
@@ -735,6 +746,16 @@ def update_secret_api(secret_id):
 
     if not title or (not secret_text and not secret.file and not file):
         return jsonify(success=False, error="Title and secret or file are required."), 400
+    
+    ALLOWED_EXTENSIONS = (
+        '.jpg', '.jpeg', '.png',
+        '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt',
+        '.aac', '.mp3', '.ogg', '.wav',
+        '.mp4', '.3gp'
+    )
+
+    if not file.filename.lower().endswith(ALLOWED_EXTENSIONS):
+        return jsonify(error=f"Unsupported file type. Supported types: {', '.join(ALLOWED_EXTENSIONS)}"), 400
 
     try:
         # Encrypt new secret

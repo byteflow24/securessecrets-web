@@ -3,8 +3,8 @@
     "apps": [],
     "details": [
       {
-        "appID": "TEAM_ID.com.yourcompany.securessecrets",
-        "paths": [ "/app/login", "/verify-delete-account/*" ]
+        "appID": "32S9S384RF.com.byteflowdigital.securessecrets",
+        "paths": [ "/app/login", "/verify-delete-account/*", "/login", "/" ]
       }
     ]
   }

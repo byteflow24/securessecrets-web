@@ -754,7 +754,7 @@ def update_secret_api(secret_id):
         '.mp4', '.3gp'
     )
 
-    if not file.filename.lower().endswith(ALLOWED_EXTENSIONS):
+    if file and not file.filename.lower().endswith(ALLOWED_EXTENSIONS):
         return jsonify(error=f"Unsupported file type. Supported types: {', '.join(ALLOWED_EXTENSIONS)}"), 400
 
     try:

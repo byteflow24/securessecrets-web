@@ -503,7 +503,7 @@ def all_secrets_api():
             'public': bool(shared.public),
             'email': shared.email,
             'phone': shared.phone,
-            'title': get_unique_title(shared.title, user.id) if shared.title else '',
+            'title': shared.title,
             'secret': shared.snapshot_secret if shared.snapshot_secret else '',
             'file': file_is,
             'date_to_send': convert_utc_to_local(shared.date_to_send, user.time_zone) if shared.date_to_send else None,

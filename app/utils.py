@@ -18,7 +18,6 @@ from google.oauth2 import service_account
 from google.cloud.recaptchaenterprise_v1 import Assessment
 from itsdangerous import URLSafeTimedSerializer
 from twilio.rest import Client
-from twilio.base.exceptions import TwilioRestException
 from io import BytesIO
 import logging, uuid, json, pytz, jwt, base64, requests, secrets, re, os, smtplib, time, tempfile, json
 
@@ -2456,51 +2455,47 @@ TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = "whatsapp:+17815126648"
 TWILIO_MESSAGING_SERVICE_SID = os.environ.get("TWILIO_MESSAGING_SERVICE_SID")
-TEXT_CONTENT_SID = os.environ.get("TEXT_CONTENT_SID")
-MEDIA_CONTENT_SID = os.environ.get("MEDIA_CONTENT_SID")
+CONTENT_SID = os.environ.get("CONTENT_SID")
 client = Client(TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN)
 
-def send_whatsapp_message(to_number: str, sender_name: str, secret_text: str, timestamp: datetime, file_url: str | None = None):
-    
+def send_whatsapp_message(to_number: str, sender_name: str, secret_text: str, timestamp: datetime, file_url: str = None):
     """
-    Sends WhatsApp message using:
-    - Text template if no media
-    - Media template if media exists
+    Sends WhatsApp template message: secret_received
+    Then optionally sends media if file_url is provided.
     """
-    
-    timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S") if isinstance(timestamp, datetime) else str(timestamp)
-    
-    variables = {
-        "sender_name": sender_name,
-        "timestamp": timestamp_str
-    }
 
-    try:
-        if file_url:
-            variables["message"] = secret_text or "Please see the attached file."
-            variables["media_url"] = file_url
-            msg = client.messages.create(
-                content_sid=MEDIA_CONTENT_SID,
-                from_=TWILIO_WHATSAPP_NUMBER,
-                to=f"whatsapp:{to_number}",
-                content_variables=json.dumps(variables)
-            )
-            return {"template_type": "media", "sid": msg.sid}
-        
-        variables["secret_text"] = secret_text
-        msg = client.messages.create(
-            content_sid=TEXT_CONTENT_SID,
+    # ---- Convert datetime to string ----
+    if isinstance(timestamp, datetime):
+        timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        timestamp_str = str(timestamp)
+
+    # ---- 1) Send template message ----
+    template_msg = client.messages.create(
+        content_sid=CONTENT_SID,
+        to=f"whatsapp:{to_number}",
+        from_=TWILIO_WHATSAPP_NUMBER,
+        content_variables=json.dumps({
+            "sender_name": sender_name,
+            "timestamp": timestamp_str,
+            "secret_text": secret_text
+        })
+    )
+
+    # ---- 2) Optional media ----
+    media_msg_sid = None
+    if file_url:
+        media_message = client.messages.create(
             from_=TWILIO_WHATSAPP_NUMBER,
             to=f"whatsapp:{to_number}",
-            content_variables=json.dumps(variables)
+            media_url=[file_url]
         )
-        return {"template_type": "text", "sid": msg.sid}
+        media_msg_sid = media_message.sid
 
-    except TwilioRestException as e:
-        # Log or handle Twilio-specific errors
-        print(f"Twilio error: {e}")
-        return {"template_type": "error", "error": str(e)}
-
+    return {
+        "template_sid": template_msg.sid,
+        "media_sid": media_msg_sid
+    }
 
 ############## GENERETE TOKEN & CONFIRMATION DELETE ACCOUNT ##############
     

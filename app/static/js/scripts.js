@@ -658,29 +658,29 @@ window.addEventListener('DOMContentLoaded', () => {
                 });
 
                 xhr.addEventListener('load', function () {
-                    if (xhr.status === 200) {
-                        const response = JSON.parse(xhr.responseText);
-                        if (response.filename) {
-                            document.getElementById('uploadedFileName').value = response.filename; // Set hidden input
-                            if (response.storageInfo) {
-                                // Update storage info from the upload response if available
-                                updateStorageInfo(response.storageInfo.used, response.storageInfo.total);
-                            } else {
-                                console.warn("Storage info missing, fetching from server...");
-                                fetchStorageInfo();
-                            }
-                            resolve(response.filename);
-                        } else {
-                            reject('Filename missing from upload response');
-                        }
+                    let response;
+                    try {
+                        response = JSON.parse(xhr.responseText);
+                    } catch (e) {
+                        response = {};
+                    }
+
+                    if (xhr.status === 200 && response.filename) {
+                        document.getElementById('uploadedFileName').value = response.filename;
+                        resolve(response.filename);
                     } else {
-                        const errorMessage = `Upload failed with status ${xhr.status}: ${xhr.statusText}`;
-                        console.error(errorMessage);
-                        document.getElementById('errorFlash').textContent = errorMessage;
-                        document.getElementById('errorFlash').style.display = 'block';
-                        reject(errorMessage);
+                        // Show the server error if provided, otherwise fallback
+                        const serverError = response.error || `Upload failed with status ${xhr.status}: ${xhr.statusText}`;
+                        console.error(serverError);
+                        const errorFlash = document.getElementById('errorFlash');
+                        if (errorFlash) {
+                            errorFlash.textContent = serverError;
+                            errorFlash.style.display = 'block';
+                        }
+                        reject(serverError);
                     }
                 });
+
                 
 
                 xhr.addEventListener('error', function () {

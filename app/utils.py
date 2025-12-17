@@ -2468,7 +2468,7 @@ def send_whatsapp_message(to_number: str, sender_name: str, secret_text: str, ti
     - Media template if media exists
     """
     
-    timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S") if isinstance(timestamp, datetime) else str(timestamp)
+    timestamp_str = timestamp.strftime("%b %d, %Y %I:%M %p") if isinstance(timestamp, datetime) else str(timestamp)
     
     variables = {
         "sender_name": sender_name,

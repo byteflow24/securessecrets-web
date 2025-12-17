@@ -133,14 +133,18 @@ def check_scheduled_secrets():
             ) if secret.file else None
             
             for phone_value in phones:
-                if phone_value:
+                if not phone_value:
+                    continue
+                try:
                     send_whatsapp_message(
                         to_number=phone_value,
-                        sender_name=f"{secret.first_name} {secret.last_name}",
+                        sender_name=f"{(secret.first_name or '').title()} {(secret.last_name or '').title()}",
                         secret_text=decrypt_secret(secret.snapshot_secret),
                         timestamp=str(now),
                         file_url=file_url
                     )
+                except Exception as e:
+                    print(f"[❌ WhatsApp error] Failed to send to {phone_value}: {e}")
 
         # Mark it as sent
         secret.received = True
@@ -195,14 +199,18 @@ def check_last_login():
             ) if secret.file else None
             
             for phone_value in phones:
-                if phone_value:
+                if not phone_value:
+                    continue
+                try:
                     send_whatsapp_message(
                         to_number=phone_value,
-                        sender_name=f"{secret.first_name} {secret.last_name}",
+                        sender_name=f"{(secret.first_name or '').title()} {(secret.last_name or '').title()}",
                         secret_text=decrypt_secret(secret.snapshot_secret),
                         timestamp=str(now),
                         file_url=file_url
                     )
+                except Exception as e:
+                    print(f"[❌ WhatsApp error] Failed to send to {phone_value}: {e}")
 
         # Mark it as sent
         secret.received = True

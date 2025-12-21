@@ -220,6 +220,7 @@ class SharedSecret(db.Model):
     user = db.relationship('User', back_populates='shared_secrets')
     secret = db.relationship('Secret', back_populates='shared_secrets', lazy='joined')
     notifications = db.relationship('Notification', back_populates='related_secret', cascade="all, delete-orphan")
+    whatsapp_pending = db.relationship('WhatsAppPendingSecret',back_populates='shared_secret',cascade='all, delete-orphan',lazy='dynamic')
 
 class Notification(db.Model):
     __tablename__ = "notifications"
@@ -264,4 +265,17 @@ class PublicSecrets(db.Model):
     file = db.Column(String, nullable=True)
     share_date = db.Column(TIMESTAMP, nullable=True)
 
+class WhatsAppPendingSecret(db.Model):
+    __tablename__ = 'whatsapp_pending_secret'
+    id = db.Column(db.Integer, primary_key=True)
+    phone = db.Column(db.String(32), index=True)
+    secret_id = db.Column(db.Integer, db.ForeignKey("shared_secrets.id"))
+    created_at = db.Column(TIMESTAMP, default=datetime.now(timezone.utc))
+    viewed = db.Column(db.Boolean, default=False)
 
+    # ✅ Relationship
+    shared_secret = db.relationship('SharedSecret',back_populates='whatsapp_pending')
+
+    __table_args__ = (
+        db.UniqueConstraint('phone', 'secret_id', name='uq_whatsapp_phone_secret'),
+    )

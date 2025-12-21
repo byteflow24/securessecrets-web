@@ -2451,6 +2451,13 @@ def classify_extension(ext: str) -> str:
         return "compressed"
     return "other"
 
+def normalize_phone(phone):
+    phone = phone.replace(" ", "")
+    if not phone.startswith("+"):
+        raise ValueError("Phone must include country code")
+    return f"whatsapp:{phone}"
+
+
 ############## CREATE WHATSAPP MESSAGES ##############
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
@@ -2460,7 +2467,7 @@ TEXT_CONTENT_SID = os.environ.get("TEXT_CONTENT_SID")
 MEDIA_CONTENT_SID = os.environ.get("MEDIA_CONTENT_SID")
 client = Client(TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN)
 
-def send_whatsapp_message(to_number: str, sender_name: str, secret_text: str, timestamp: datetime, file_url: str | None = None):
+def send_whatsapp_message(to_number: str, sender_name: str, timestamp: datetime):
     
     """
     Sends WhatsApp message using:
@@ -2469,52 +2476,19 @@ def send_whatsapp_message(to_number: str, sender_name: str, secret_text: str, ti
     """
     
     timestamp_str = timestamp.strftime("%b %d, %Y %I:%M %p") if isinstance(timestamp, datetime) else str(timestamp)
-    
-    variables = {
-        "sender_name": sender_name,
-        "timestamp": timestamp_str
-    }
 
     try:
         # ==============================
-        # CASE 1: MEDIA TEMPLATE
-        # ==============================
-        if file_url:
-            variables["message"] = secret_text or "Please see the attached file."
-            variables["media_url"] = file_url
-            msg = client.messages.create(
-                content_sid=MEDIA_CONTENT_SID,
-                from_=TWILIO_WHATSAPP_NUMBER,
-                to=f"whatsapp:{to_number}",
-                content_variables=json.dumps(variables)
-            )
-            return {"template_type": "media", "sid": msg.sid}
-        
-
-        # ==============================
-        # CASE 2: TEXT TEMPLATE <send_secrets>
-        # ==============================
-
-        # variables["secret_text"] = secret_text
-        # msg = client.messages.create(
-        #     content_sid=TEXT_CONTENT_SID,
-        #     from_=TWILIO_WHATSAPP_NUMBER,
-        #     to=f"whatsapp:{to_number}",
-        #     content_variables=json.dumps(variables)
-        # )
-
-        # ==============================
-        # CASE 2: TEXT TEMPLATE <secret_delivery>
+        # TEXT TEMPLATE <secret_delivery>
         # ==============================
         
         msg = client.messages.create(
             content_sid=TEXT_CONTENT_SID,
             from_=TWILIO_WHATSAPP_NUMBER,
-            to=f"whatsapp:{to_number}",
+            to=to_number,
             content_variables=json.dumps({
                 "1": sender_name,
                 "2": timestamp_str,
-                "3": secret_text
             })
         )
         return {"template_type": "text", "sid": msg.sid}

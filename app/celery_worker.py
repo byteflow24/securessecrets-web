@@ -3,8 +3,8 @@ from celery.schedules import crontab
 from flask import url_for, current_app
 from celery import shared_task
 
-from .utils import decrypt_secret, send_whatsapp_message
-from .models import SharedSecret, Notification, User, LoginHistory
+from .utils import decrypt_secret, normalize_phone, send_whatsapp_message
+from .models import SharedSecret, Notification, User, LoginHistory, WhatsAppPendingSecret
 from .notifications import _notify_secret, _notify_subscription, _notify_end_trial, send_and_log_notification, _notify_inactivity_reminder
 from . import db
 from sqlalchemy import func
@@ -88,9 +88,12 @@ def send_email_task(email, token, fname, lname, login_check_del, scheduled_check
 @shared_task
 def check_scheduled_secrets():
     now = datetime.now()
+    window_start = now.replace(second=0, microsecond=0)
+    window_end = window_start + timedelta(minutes=1)
+
     scheduled_secrets = SharedSecret.query.filter(
         SharedSecret.date_to_send == now.date(),
-        SharedSecret.time_to_send == now.time().replace(second=0, microsecond=0),
+        SharedSecret.time_to_send.between(window_start.time(),window_end.time()),
         SharedSecret.received == False
     ).all()
 
@@ -110,8 +113,8 @@ def check_scheduled_secrets():
                     send_email_task.apply_async(args=[
                         email_value,
                         secret.token,
-                        secret.first_name,
-                        secret.last_name,
+                        (secret.first_name or '').title(),
+                        (secret.last_name or '').title(),
                         secret.public_delete_confirm,
                         secret.schedule_delete_confirm
                         ])
@@ -124,30 +127,43 @@ def check_scheduled_secrets():
             elif isinstance(secret.phone, str):
                 phones = [p.strip("{} ").replace(" ", "") for p in secret.phone.split(",") if p.strip()]
             
-            file_url = url_for(
-                'main.download_file',
-                filename=secret.file,
-                token=secret.token,
-                _external=True,
-                twilio="true"
-            ) if secret.file else None
+            # file_url = url_for(
+            #     'main.download_file',
+            #     filename=secret.file,
+            #     token=secret.token,
+            #     _external=True,
+            #     twilio="true"
+            # ) if secret.file else None
             
             for phone_value in phones:
                 if not phone_value:
                     continue
                 try:
+                    normalized_phone = normalize_phone(phone_value)
+                    # Create pending record
+                    exists = WhatsAppPendingSecret.query.filter_by(
+                        phone=normalized_phone,
+                        secret_id=secret.id,
+                        viewed=False
+                    ).first()
+
+                    if not exists:
+                        db.session.add(
+                            WhatsAppPendingSecret(
+                                phone=normalized_phone,
+                                secret_id=secret.id
+                            )
+                        )
+
                     send_whatsapp_message(
-                        to_number=phone_value,
+                        to_number=normalized_phone,
                         sender_name=f"{(secret.first_name or '').title()} {(secret.last_name or '').title()}",
-                        secret_text=decrypt_secret(secret.snapshot_secret),
-                        timestamp=str(now),
-                        file_url=file_url
+                        # secret_text=decrypt_secret(secret.snapshot_secret),
+                        timestamp=now
+                        # file_url=file_url
                     )
                 except Exception as e:
                     print(f"[❌ WhatsApp error] Failed to send to {phone_value}: {e}")
-
-        # Mark it as sent
-        secret.received = True
 
     db.session.commit()
 
@@ -176,12 +192,12 @@ def check_last_login():
                     send_email_task.apply_async(args=[
                         email_value,
                         secret.token,
-                        secret.first_name,
-                        secret.last_name,
+                        (secret.first_name or '').title(),
+                        (secret.last_name or '').title(),
                         secret.public_delete_confirm,
                         secret.schedule_delete_confirm
                         ])
-
+                    
         # --- Send WhatsApp ---
         if secret.phone:
             phones = []
@@ -190,30 +206,43 @@ def check_last_login():
             elif isinstance(secret.phone, str):
                 phones = [p.strip("{} ").replace(" ", "") for p in secret.phone.split(",") if p.strip()]
             
-            file_url = url_for(
-                'main.download_file',
-                filename=secret.file,
-                token=secret.token,
-                _external=True,
-                twilio="true"
-            ) if secret.file else None
+            # file_url = url_for(
+            #     'main.download_file',
+            #     filename=secret.file,
+            #     token=secret.token,
+            #     _external=True,
+            #     twilio="true"
+            # ) if secret.file else None
             
             for phone_value in phones:
                 if not phone_value:
                     continue
                 try:
+                    normalized_phone = normalize_phone(phone_value)
+                    # Create pending record
+                    exists = WhatsAppPendingSecret.query.filter_by(
+                        phone=normalized_phone,
+                        secret_id=secret.id,
+                        viewed=False
+                    ).first()
+
+                    if not exists:
+                        db.session.add(
+                            WhatsAppPendingSecret(
+                                phone=normalized_phone,
+                                secret_id=secret.id
+                            )
+                        )
+
                     send_whatsapp_message(
-                        to_number=phone_value,
+                        to_number=normalized_phone,
                         sender_name=f"{(secret.first_name or '').title()} {(secret.last_name or '').title()}",
-                        secret_text=decrypt_secret(secret.snapshot_secret),
-                        timestamp=str(now),
-                        file_url=file_url
+                        # secret_text=decrypt_secret(secret.snapshot_secret),
+                        timestamp=now
+                        # file_url=file_url
                     )
                 except Exception as e:
                     print(f"[❌ WhatsApp error] Failed to send to {phone_value}: {e}")
-
-        # Mark it as sent
-        secret.received = True
 
     db.session.commit()
 

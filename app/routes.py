@@ -5,19 +5,18 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from . import db, csrf
 from .forms import SecretForm, RegisterForm, LoginForm, SearchForm, ShareForm, ProfileForm, ChangePasswordForm, PlanUpgradeForm, ForgetPaswdForm, ContactUsForm
-from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret
+from .models import User, LoginHistory, Secret, Payment, Plan, SharedSecret, WhatsAppPendingSecret
 from .utils import get_unique_title, storage_client, GCS_BUCKET, send_whatsapp_message, subscription_ended_flag, storage_exceeded_flag, require_pricing_session, subscription_ended, convert_utc_to_local, generate_token, send_verification_email, is_safe_url, decrypt_secrets, get_subscription_details, create_assessment, is_suspicious_input, get_access_token, create_product, deactivate_plan, create_plan, call_plans, create_new_subscription, cancel_subscription, verify_paypal_webhook, change_subscription_plan, handle_payment_success, handle_subscription_created, handle_subscription_activated, handle_subscription_canceled, handle_subscription_suspended, handle_subscription_updated, handle_payment_failed, is_encrypted, encrypt_secret, decrypt_secret, send_payment_email, reset_password_email, send_report_email, contact_email, serve_file, generate_delete_token, send_delete_account_email, confirm_delete_token, upload_to_gcs, get_signed_url, gcs_file_exists, _serve_file, delete_from_gcs, get_gcs_file_size, convert_local_to_utc
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload
 from sqlalchemy import and_, desc, func, or_
-from datetime import date, datetime, timedelta, timezone 
-from google.cloud import storage
-from google.oauth2 import service_account
-from dateutil.relativedelta import relativedelta
-from io import BytesIO
-import pytz, paypalrestsdk, uuid, time, json, os, traceback, requests, logging, jwt, mimetypes, psutil
+from datetime import date, datetime, timedelta 
+from twilio.rest import Client
+from twilio.base.exceptions import TwilioRestException
+from twilio.request_validator import RequestValidator
+import pytz, paypalrestsdk, uuid, time, json, os, requests, logging, jwt, mimetypes, psutil
 
 # Handle Google Application Credentials
 if "GOOGLE_APPLICATION_CREDENTIALS_JSON" in os.environ:
@@ -1240,6 +1239,94 @@ def only_for_you(token):
         )
     else:
         return "Invalid or expired link", 404
+    
+
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+TWILIO_WHATSAPP_NUMBER = os.environ.get("TWILIO_WHATSAPP_NUMBER")
+
+client = Client(TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN)
+validator = RequestValidator(TWILIO_AUTH_TOKEN)
+
+@main.route("/webhooks/whatsapp", methods=["POST"])
+def whatsapp_webhook():
+    signature = request.headers.get("X-Twilio-Signature")
+    url = request.url
+    params = request.form.to_dict()
+
+    if not validator.validate(url, params, signature):
+        return "Invalid signature", 403
+
+    from_number = request.form.get("From")
+    body = (request.form.get("Body") or "").strip().lower()
+
+    print(f"Incoming WhatsApp from:\n{from_number}: {body}")
+
+    if body not in ["view", "open", "yes", "ok"]:
+        client.messages.create(
+            from_=TWILIO_WHATSAPP_NUMBER,
+            to=from_number,
+            body="Reply VIEW to access the secure secret."
+        )
+        return "OK", 200
+
+    # Get latest pending secret
+    pending = (
+        WhatsAppPendingSecret.query
+        .filter_by(phone=from_number, viewed=False)
+        .order_by(WhatsAppPendingSecret.created_at.desc())
+        .first()
+    )
+
+    if not pending:
+        client.messages.create(
+            from_=TWILIO_WHATSAPP_NUMBER,
+            to=from_number,
+            body="No pending secrets found."
+        )
+        return "OK", 200
+
+    secret = SharedSecret.query.get(pending.secret_id)
+
+    if not secret:
+        pending.viewed = True
+        db.session.commit()
+        client.messages.create(
+            from_=TWILIO_WHATSAPP_NUMBER,
+            to=from_number,
+            body="This secret is no longer available."
+        )
+        return "OK", 200
+    
+    # Send secret text
+    if secret.snapshot_secret:
+        client.messages.create(
+            from_=TWILIO_WHATSAPP_NUMBER,
+            to=from_number,
+            body=decrypt_secret(secret.snapshot_secret)
+        )
+
+    # Send file if exists
+    if secret.file:
+        file_url = url_for(
+            'main.download_file',
+            filename=secret.file,
+            token=secret.token,
+            _external=True,
+            twilio="true"
+        )
+
+        client.messages.create(
+            from_=TWILIO_WHATSAPP_NUMBER,
+            to=from_number,
+            media_url=[file_url]
+        )
+
+    secret.received = True
+    pending.viewed = True
+    db.session.commit()
+
+    return "OK", 200
 
 # # Toggle pinned
 # @main.route('/toggle_pin/<int:secret_id>', methods=['POST'])

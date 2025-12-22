@@ -1217,6 +1217,8 @@ window.addEventListener('DOMContentLoaded', () => {
                     input.addEventListener('input', () => toggleNameFields(form));
                 }
             });
+            // Sync initial state
+            toggleNameFields(form);
         });
         
         function toggleNameFields(form) {
@@ -1227,13 +1229,25 @@ window.addEventListener('DOMContentLoaded', () => {
                 form.querySelector('input[name="phone_scheduled"]')
             ];
 
-            const shouldShow = inputs.some(input => input && input.value.trim().length > 0);
+            const shouldShow = inputs.some(input => input && input.value.trim());
 
             const nameContainer = form.querySelector('#nameFields');
-            if (nameContainer) {
-                nameContainer.style.display = shouldShow ? "block" : "none";
+            const firstName = form.querySelector('input[name="first_name"]');
+            const lastName = form.querySelector('input[name="last_name"]');
+
+            if (!nameContainer) return;
+
+            if (shouldShow) {
+                nameContainer.style.display = "block";
+            } else {
+                nameContainer.style.display = "none";
+
+                // Optional cleanup
+                if (firstName) firstName.value = "";
+                if (lastName) lastName.value = "";
             }
         }
+
 
         
     

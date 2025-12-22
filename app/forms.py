@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, PasswordField, FileField, TextAreaField, SelectField, EmailField, DateField, BooleanField, DateTimeField, HiddenField, TelField, TextAreaField
 from wtforms.validators import DataRequired, Optional, Length, Regexp, Email, AnyOf
-from .utils import email_domain_validator, validate_period, is_future_date_or_today, is_future_time_today
+from .utils import email_domain_validator, validate_period, is_future_date_or_today, is_future_time_today, validate_phones
 
 
 # WTForm for creating a secret
@@ -178,25 +178,13 @@ class ShareForm(FlaskForm):
     # WhatsApp phone field (for login sharing)
     phone_login = StringField(
         "WhatsApp Number:",
-        validators=[
-            Optional(),
-            Regexp(
-                r'^\+\d{8,15}$',
-                message="Phone must be in format +974xxxxxxxx"
-            )
-        ],
+        validators=[Optional(), validate_phones],
         render_kw={"class": "form-control", "placeholder": "+974xxxxxxxx"}
     )
     # WhatsApp phone field (for scheduled sharing)
     phone_scheduled = StringField(
         "WhatsApp Number:",
-        validators=[
-            Optional(),
-            Regexp(
-                r'^\+\d{8,15}$',
-                message="Phone must be in format +974xxxxxxxx"
-            )
-        ],
+        validators=[Optional(), validate_phones],
         render_kw={"class": "form-control", "placeholder": "+974xxxxxxxx"}
     )
     # Hidden fields to store comma-separated WhatsApp numbers

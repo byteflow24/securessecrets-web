@@ -293,6 +293,20 @@ def email_domain_validator(form, field):
         if not match:
             raise ValidationError(f"'{email}' is not a valid email address.")
         
+# Validition for the phone number list
+def validate_phones(form, field):
+    if not field.data:
+        return
+
+    numbers = [n.strip() for n in field.data.split(',') if n.strip()]
+
+    if len(numbers) > 5:
+        raise ValidationError("Maximum 5 WhatsApp numbers allowed.")
+
+    for num in numbers:
+        if not re.match(r'^\+\d{6,15}$', num):
+            raise ValidationError("Invalid WhatsApp number format.")
+        
 
 # ensure the field accepts only numbers between 1 and 360
 def validate_period(form, field):

@@ -1249,6 +1249,7 @@ client = Client(TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN)
 validator = RequestValidator(TWILIO_AUTH_TOKEN)
 
 @main.route("/webhooks/whatsapp", methods=["POST"])
+@csrf.exempt
 def whatsapp_webhook():
     signature = request.headers.get("X-Twilio-Signature")
     url = request.url

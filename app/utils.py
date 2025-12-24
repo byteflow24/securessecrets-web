@@ -2354,11 +2354,18 @@ def update_user_subscription(original_transaction_id, product_id, status, expire
         return False
     
 
-def update_google_subscription(subscription_id, transaction_id, purchase_token, status, expiry_dt=None, subscription_info=None):
+def update_google_subscription(
+    subscription_id,
+    transaction_id,
+    purchase_token,
+    status,
+    expiry_dt=None,
+    subscription_info=None
+):
     try:
         base_tx_id = transaction_id[:24] if transaction_id else None
 
-        # --- Try user lookup ---
+        # --- Lookup user ---
         user = None
         if base_tx_id:
             user = User.query.filter_by(transaction_id=base_tx_id).first()
@@ -2370,30 +2377,29 @@ def update_google_subscription(subscription_id, transaction_id, purchase_token, 
             print(f"⚠️ Plan not found for app_product_id: {subscription_id}")
             return False
 
-        # === Trial detection logic (only if we have subscription_info) ===
+        # === Trial detection (only from Google response) ===
         is_in_trial = False
         trial_start_dt = None
-        trial_end_dt = expiry_dt  # current period end = trial end if in trial
+        trial_end_dt = expiry_dt  # Current period end = trial end if in trial
 
         if subscription_info:
             payment_state = subscription_info.get("paymentState")
             price_micros = subscription_info.get("priceAmountMicros", 0)
             start_time_ms = subscription_info.get("startTimeMillis")
 
-            # Currently in free trial
-            if payment_state == 2:  # Free trial
+            if payment_state == 2:  # Active free trial
                 is_in_trial = True
-            elif payment_state == 1 and price_micros == 0:  # Paid but current phase free
+            elif payment_state == 1 and price_micros == 0:  # Rare: charged but current phase free
                 is_in_trial = True
 
             if start_time_ms:
-                trial_start_dt = datetime.fromtimestamp(start_time_ms / 1000, tz=timezone.utc)
+                trial_start_dt = datetime.fromtimestamp(int(start_time_ms) / 1000, tz=timezone.utc)
 
-        # --- Update User if exists ---
+        # --- Update User ---
         if user:
             user_plan = Plan.query.get(user.plan_id) if user.plan_id else None
 
-            # Plan upgrade/downgrade logic
+            # Upgrade/downgrade logic
             if current_plan and user_plan:
                 if current_plan.price > user_plan.price:
                     user.plan_id = current_plan.id
@@ -2401,7 +2407,7 @@ def update_google_subscription(subscription_id, transaction_id, purchase_token, 
                     print(f"⚡ Immediate UPGRADE → {current_plan.plan}")
                 elif current_plan.price < user_plan.price:
                     user.next_plan_id = current_plan.id
-                    print(f"⏳ Deferred DOWNGRADE scheduled → {current_plan.plan}")
+                    print(f"⏳ Deferred DOWNGRADE → {current_plan.plan}")
                 else:
                     user.plan_id = current_plan.id
 
@@ -2414,33 +2420,43 @@ def update_google_subscription(subscription_id, transaction_id, purchase_token, 
                     user.next_plan_id = None
                     print(f"✅ Applied deferred downgrade → {next_plan.plan}")
 
-            # Always update core subscription fields
+            # Core fields
             user.subscription_status = status
-            if expiry_dt:
-                user.next_billing_date = expiry_dt
+            user.next_billing_date = expiry_dt
             user.updated_at = datetime.now(timezone.utc)
             if base_tx_id:
                 user.transaction_id = base_tx_id
             if purchase_token:
                 user.purchase_token = purchase_token
 
-            # === SET TRIAL DATES (only if not already set) ===
-            if is_in_trial and subscription_info:
-                if not user.trial_start_date and trial_start_dt:
+            # === Handle trial: set only once, when first seen in trial ===
+            if is_in_trial and trial_start_dt:
+                if not user.trial_start_date:  # Only set once
                     user.trial_start_date = trial_start_dt
                     user.trial_end_date = trial_end_dt
                     print(f"🎁 Google Free Trial STARTED for {user.email}: "
-                          f"{trial_start_dt} → {trial_end_dt}")
-                # Optional: mark subscription start if first time
-                if not user.subscription_start_date:
-                    user.subscription_start_date = trial_start_dt or datetime.now(timezone.utc)
+                          f"{trial_start_dt.date()} → {trial_end_dt.date()}")
+                # Optional: update end date if trial extended (rare)
+                elif user.trial_end_date < trial_end_dt:
+                    user.trial_end_date = trial_end_dt
+                    print(f"🔄 Google Trial extended to {trial_end_dt.date()}")
+
+            # Optional: record overall subscription start
+            if not user.subscription_start_date and trial_start_dt:
+                user.subscription_start_date = trial_start_dt
+
+            # Optional: detect trial → paid conversion
+            if not is_in_trial and user.trial_start_date and user.trial_end_date:
+                if user.subscription_status != "ACTIVE":  # in case it wasn't marked
+                    user.subscription_status = "ACTIVE"
+                    print(f"💳 Google Trial CONVERTED to paid for {user.email}")
 
             db.session.commit()
-            print(f"✅ User {user.email} updated → plan={user.plan_id}, status={status}, "
-                  f"trial={'Yes' if is_in_trial else 'No/Ended'}")
+            print(f"✅ User {user.email} updated | Plan: {current_plan.plan} | "
+                  f"Status: {status} | Trial: {'Active' if is_in_trial else 'No/Ended'}")
             return True
 
-        # --- PendingSubscription fallback ---
+        # --- PendingSubscription ---
         pending = None
         if base_tx_id:
             pending = PendingSubscription.query.filter_by(transaction_id=base_tx_id).first()
@@ -2452,23 +2468,20 @@ def update_google_subscription(subscription_id, transaction_id, purchase_token, 
             pending.expires_date = expiry_dt
             pending.updated_at = datetime.now(timezone.utc)
 
-            # Set trial on pending too
-            if is_in_trial and subscription_info:
-                if not pending.trial_start_date and trial_start_dt:
-                    pending.trial_start_date = trial_start_dt
-                    pending.trial_end_date = trial_end_dt
-                    print(f"📌 Pending Google Free Trial STARTED: {trial_start_dt} → {trial_end_dt}")
+            if is_in_trial and trial_start_dt and not pending.trial_start_date:
+                pending.trial_start_date = trial_start_dt
+                pending.trial_end_date = trial_end_dt
+                print(f"📌 Pending Google Free Trial STARTED: {trial_start_dt.date()} → {trial_end_dt.date()}")
 
             db.session.commit()
-            print(f"📌 Updated PendingSubscription {pending.transaction_id} → status={status}")
             return True
 
-        print(f"⚠️ No User or PendingSubscription found for tx={transaction_id}, token={purchase_token}")
+        print(f"⚠️ No matching User/Pending for Google subscription")
         return False
 
     except Exception as e:
         db.session.rollback()
-        print("❌ Error updating Google subscription:", e)
+        print("❌ Error in update_google_subscription:", e)
         import traceback
         traceback.print_exc()
         return False

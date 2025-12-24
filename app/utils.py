@@ -2468,9 +2468,10 @@ def update_google_subscription(
             pending.expires_date = expiry_dt
             pending.updated_at = datetime.now(timezone.utc)
 
-            if is_in_trial and trial_start_dt and not pending.trial_start_date:
-                pending.trial_start_date = trial_start_dt
-                pending.trial_end_date = trial_end_dt
+            if is_in_trial and trial_start_dt:
+                if not pending.trial_start_date or not pending.trial_end_date:
+                    pending.trial_start_date = trial_start_dt
+                    pending.trial_end_date = trial_end_dt
                 print(f"📌 Pending Google Free Trial STARTED: {trial_start_dt.date()} → {trial_end_dt.date()}")
 
             db.session.commit()

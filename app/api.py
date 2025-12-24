@@ -1879,14 +1879,26 @@ def verify_google_subscription():
         order_id = result.get("orderId")
         base_tx_id = order_id[:24] if order_id else transaction_id
 
-        expiry_time_ms = int(result.get("expiryTimeMillis", 0))
-        expiry_dt = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc) if expiry_time_ms else None
 
         trial_start = None
         trial_end = None
-        if "introductoryPriceInfo" in result or result.get("paymentState") == 0:
-            trial_start = datetime.fromtimestamp(int(result.get("startTimeMillis", 0)) / 1000, tz=timezone.utc)
-            trial_end = datetime.fromtimestamp(int(result.get("expiryTimeMillis", 0)) / 1000, tz=timezone.utc)
+
+        payment_state = result.get("paymentState")
+        price_micros = result.get("priceAmountMicros", 0)
+        start_time_ms = result.get("startTimeMillis")
+        expiry_time_ms = result.get("expiryTimeMillis")
+        expiry_dt = datetime.fromtimestamp(int(expiry_time_ms) / 1000, tz=timezone.utc) if int(expiry_time_ms) else None
+
+        is_in_trial = False
+        if payment_state == 2:  # Active free trial
+            is_in_trial = True
+        elif payment_state == 1 and price_micros == 0:  # Current phase free
+            is_in_trial = True
+
+        if is_in_trial and start_time_ms and expiry_time_ms:
+            trial_start = datetime.fromtimestamp(int(start_time_ms) / 1000, tz=timezone.utc)
+            trial_end = datetime.fromtimestamp(int(expiry_time_ms) / 1000, tz=timezone.utc)
+            print(f"🎁 Detected Google free trial: {trial_start.date()} → {trial_end.date()}")
 
     except Exception as e:
         print("⚠️ Google verification failed:", e)

@@ -1874,6 +1874,8 @@ def verify_google_subscription():
             token=purchase_token
         ).execute()
 
+        print(result)
+
         order_id = result.get("orderId")
         base_tx_id = order_id[:24] if order_id else transaction_id
 
@@ -1945,38 +1947,48 @@ def google_notifications():
     print("📩 Raw Google Play notification:", data)
 
     try:
-        message_data = data.get("message", {}).get("data")
-        if not message_data:
-            return jsonify({"error": "No message data"}), 400
+        # Handle Pub/Sub subscription verification ping (empty or no message.data)
+        if not data or "message" not in data:
+            print("⚪ Pub/Sub health check / verification ping")
+            return jsonify({"success": True}), 200
 
+        message = data["message"]
+        message_data = message.get("data")
+
+        # If no data → likely another type of ping
+        if not message_data:
+            print("⚪ Empty message data – acknowledging")
+            return jsonify({"success": True}), 200
+
+        # Decode the base64 payload
         decoded_bytes = base64.b64decode(message_data)
         decoded_json = json.loads(decoded_bytes)
         print("📩 Decoded Google RTDN payload:", decoded_json)
 
+        # === Handle TEST NOTIFICATION ===
+        if "testNotification" in decoded_json:
+            print("🧪 TEST NOTIFICATION received and acknowledged")
+            return jsonify({"success": True}), 200
+
+        # === Handle real subscription notifications ===
         subscription_notification = decoded_json.get("subscriptionNotification", {})
+        if not subscription_notification:
+            print("⚠️ Unexpected payload format – no subscriptionNotification")
+            return jsonify({"success": True}), 200  # Still ack to avoid retries
+
         subscription_id = subscription_notification.get("subscriptionId")
         purchase_token = subscription_notification.get("purchaseToken")
         notification_type = subscription_notification.get("notificationType")
 
-        # Map Google RTDN notificationType → internal statuses
-        # status_map = {
-        #     1: "RECOVERED",    # SUBSCRIPTION_RECOVERED
-        #     2: "RENEWAL",      # SUBSCRIPTION_RENEWAL
-        #     3: "ACTIVE",       # SUBSCRIPTION_PURCHASED
-        #     4: "ON_HOLD",      # SUBSCRIPTION_IN_GRACE_PERIOD
-        #     5: "CANCELED",     # SUBSCRIPTION_CANCELED
-        #     6: "RESTARTED",    # SUBSCRIPTION_RESTARTED
-        #     7: "ACTIVE",       # SUBSCRIPTION_RENEWED
-        #     8: "REVOKED",      # SUBSCRIPTION_REVOKED
-        # }
-        # status = status_map.get(notification_type, "UNKNOWN")
+        if not subscription_id or not purchase_token:
+            print(f"⚠️ Missing subscriptionId or purchaseToken in notification: {subscription_notification}")
+            return jsonify({"success": True}), 200  # Ack anyway
 
-        # Simplified mapping
-        # inactive_states = [4, 5, 8]       # ON_HOLD, CANCELED, REVOKED → INACTIVE
-        active_states = [1, 2, 3, 6, 7]   # RECOVERED, RENEWAL, PURCHASED, RESTARTED, RENEWED → ACTIVE
+        # Map notification type to status
+        active_states = [1, 2, 3, 6, 7]  # RECOVERED, RENEWED, PURCHASED, RESTARTED, RENEWAL
         status = "ACTIVE" if notification_type in active_states else "INACTIVE"
 
-        # --- Fetch latest subscription info from Google ---
+        # Fetch latest state from Google (highly recommended for accuracy)
         service = build("androidpublisher", "v3", credentials=credentials)
         subscription_info = service.purchases().subscriptions().get(
             packageName=PACKAGE_NAME,
@@ -1989,18 +2001,28 @@ def google_notifications():
         expiry_time_ms = int(subscription_info.get("expiryTimeMillis", 0))
         expiry_dt = datetime.fromtimestamp(expiry_time_ms / 1000, tz=timezone.utc) if expiry_time_ms else None
 
-        # Use only the base transaction id
         order_id = subscription_info.get("orderId")
-        base_transaction_id = order_id[:24] if order_id else order_id
+        base_transaction_id = order_id[:24] if order_id else None
 
-        # --- Update local DB ---
-        update_google_subscription(subscription_id, base_transaction_id, purchase_token, status, expiry_dt)
+        # Update your database
+        update_google_subscription(
+            subscription_id=subscription_id,
+            transaction_id=base_transaction_id,
+            purchase_token=purchase_token,
+            status=status,
+            expiry_dt=expiry_dt,
+            subscription_info=subscription_info
+        )
 
+        print(f"✅ Processed notification type {notification_type} for {subscription_id}")
         return jsonify({"success": True}), 200
 
     except Exception as e:
+        # CRITICAL: Log the error but STILL return 200 to stop retries
         print("❌ Error handling Google notification:", e)
-        return jsonify({"error": "internal server error"}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": True}), 200  # Do NOT return 500!
     
 
 # === Change Plan via Google Subscription ===

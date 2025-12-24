@@ -158,12 +158,12 @@ def check_scheduled_secrets():
                     send_whatsapp_message(
                         to_number=normalized_phone,
                         sender_name=f"{(secret.first_name or '').title()} {(secret.last_name or '').title()}",
-                        # secret_text=decrypt_secret(secret.snapshot_secret),
                         timestamp=now
-                        # file_url=file_url
                     )
                 except Exception as e:
                     print(f"[❌ WhatsApp error] Failed to send to {phone_value}: {e}")
+        
+        secret.received = True
 
     db.session.commit()
 
@@ -243,6 +243,8 @@ def check_last_login():
                     )
                 except Exception as e:
                     print(f"[❌ WhatsApp error] Failed to send to {phone_value}: {e}")
+
+        secret.received = True
 
     db.session.commit()
 

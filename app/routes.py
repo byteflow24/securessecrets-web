@@ -1322,7 +1322,6 @@ def whatsapp_webhook():
             media_url=[file_url]
         )
 
-    secret.received = True
     pending.viewed = True
     db.session.commit()
 

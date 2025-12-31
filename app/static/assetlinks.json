@@ -3,7 +3,7 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.byteflowdigital.securessecrets",
+      "package_name": "com.byteflowdigital.secures_secrets",
       "sha256_cert_fingerprints": [
         "08:B1:0A:D3:98:58:50:D0:FA:08:10:4E:0B:A6:9F:24:24:69:90:06:4B:EB:1F:63:99:1D:07:03:7C:F6:DD:C2"
       ]

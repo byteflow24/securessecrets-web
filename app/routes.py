@@ -370,7 +370,7 @@ def login():
             ip_address = request.remote_addr  # This retrieves the client's IP address
     
             # Add a new entry in the LoginHistory table
-            login_history = LoginHistory(user_id=user.id, login_time=convert_utc_to_local(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user.time_zone), ip_address=ip_address)
+            login_history = LoginHistory(user_id=user.id, login_time=convert_utc_to_local(datetime.now().strftime("%Y-%m-%d %H:%M"), user.time_zone), ip_address=ip_address)
             db.session.add(login_history)
             db.session.commit()
             # No need for the Session timeout in this page
@@ -1613,7 +1613,7 @@ def update_secret(secret_id):
                 "id": secret.id,
                 "secret": decrypted_secret,
                 "file": secret.file,
-                "date": secret.date.strftime("%Y-%m-%d %H:%M:%S"),
+                "date": secret.date.strftime("%Y-%m-%d %H:%M"),
                 "file_preview": secret.file.lower().endswith(
                     ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.mov')
                 )

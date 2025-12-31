@@ -338,7 +338,7 @@ def dashboard_api():
         "plan_id": user.plan_id,
         "next_billing_date": next_billing_date,
         "secrets_count": f"{secrets_count}/10" if plan_name == 'Basic' else secrets_count,
-        "last_login": convert_utc_to_local(last_login.strftime('%Y-%m-%d %H:%M:%S'), user.time_zone) if convert_utc_to_local(last_login, user.time_zone) else None,
+        "last_login": convert_utc_to_local(last_login.strftime('%Y-%m-%d %H:%M'), user.time_zone) if convert_utc_to_local(last_login, user.time_zone) else None,
         "storage_used_mb": storage_used_mb,
         "storage_limit_mb": storage_limit_mb,
         "storage_percentage": storage_percentage,
@@ -1340,7 +1340,7 @@ def billing_api():
         'id': payment.id,
         'amount': payment.amount,
         'status': payment.status,
-        'payment_date': payment.payment_date.strftime('%Y-%m-%d %H:%M:%S'),
+        'payment_date': payment.payment_date.strftime('%Y-%m-%d %H:%M'),
         'transaction_id': payment.transaction_id,
         'plan_name': payment.plan.plan if payment.plan else None
     } for payment in history_payment]

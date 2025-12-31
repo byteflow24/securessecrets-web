@@ -371,14 +371,14 @@ def convert_utc_to_local(utc_time, time_zone):
         try:
             utc_time = datetime.fromisoformat(utc_time.replace("Z", "+00:00"))
         except ValueError:
-            utc_time = datetime.strptime(utc_time, "%Y-%m-%d %H:%M:%S")
+            utc_time = datetime.strptime(utc_time, "%Y-%m-%d %H:%M")
             utc_time = pytz.utc.localize(utc_time)
 
     if utc_time.tzinfo is None:
         utc_time = pytz.utc.localize(utc_time)
 
     local_time = utc_time.astimezone(local_tz)
-    return local_time.strftime("%Y-%m-%d %H:%M:%S")
+    return local_time.strftime("%Y-%m-%d %H:%M")
 
 
 def convert_local_to_utc(local_time, time_zone):
@@ -394,7 +394,7 @@ def convert_local_to_utc(local_time, time_zone):
         local_tz = pytz.utc
 
     if isinstance(local_time, str):
-        local_time = datetime.strptime(local_time, "%Y-%m-%d %H:%M:%S")
+        local_time = datetime.strptime(local_time, "%Y-%m-%d %H:%M")
 
     if local_time.tzinfo is None:
         local_dt = local_tz.localize(local_time)
@@ -1536,7 +1536,7 @@ def create_new_subscription(user, new_plan_id):
 
     # Start in 5 minutes (or adjust as needed)
     future_time = datetime.now(timezone.utc) + timedelta(minutes=5)
-    start_time = future_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    start_time = future_time.strftime("%Y-%m-%dT%H:%MZ")
 
     data = {
         "plan_id": new_plan_id,

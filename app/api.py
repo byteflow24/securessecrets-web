@@ -307,7 +307,13 @@ def dashboard_api():
     subscription_expired = is_subscription_expired(user)
 
     secrets_count = Secret.query.filter_by(user_id=user.id).count()
-    last_login = user.login_history[-1].login_time if user.login_history else None
+    last_login_record = (
+        LoginHistory.query
+        .filter_by(user_id=user.id)
+        .order_by(LoginHistory.login_time.desc())
+        .first()
+    )
+    last_login = last_login_record.login_time if last_login_record else None
 
     plan_name = user.plan.plan if user.plan else 'INACTIVE'
     next_billing_date = user.next_billing_date.strftime('%Y-%m-%d') if user.next_billing_date else 'INACTIVE'

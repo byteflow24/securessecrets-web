@@ -65,3 +65,4 @@ celerybeat.pid
 
 # # New additions
 uploads/*
+securessecrets-loadtest/*

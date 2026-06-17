@@ -2,7 +2,6 @@ from celery import Celery
 from celery.schedules import crontab
 from flask import url_for, current_app
 from celery import shared_task
-
 from .utils import decrypt_secret, normalize_phone, send_whatsapp_message
 from .models import SharedSecret, Notification, User, LoginHistory, WhatsAppPendingSecret
 from .notifications import _notify_secret, _notify_subscription, _notify_end_trial, send_and_log_notification, _notify_inactivity_reminder
@@ -66,7 +65,6 @@ class ContextTask(celery.Task):
             return super().__call__(*args, **kwargs)
 
 celery = create_celery_app()
-
 
 
 # Celery task for sending the email asynchronously

@@ -32,7 +32,6 @@ def upgrade():
                existing_type=postgresql.JSONB(astext_type=sa.Text()),
                type_=sa.JSON(),
                nullable=False)
-        batch_op.create_unique_constraint(None, ['plan'])
 
     with op.batch_alter_table('shared_secrets', schema=None) as batch_op:
         batch_op.add_column(sa.Column('deleted_confirm', sa.Boolean(), nullable=True))

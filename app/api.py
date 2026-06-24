@@ -3,7 +3,7 @@ from io import BytesIO
 from flask import Blueprint, request, jsonify, current_app, url_for, abort, send_file
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import db, blacklist
-from .models import HiddenNotification, User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription, Notification
+from .models import HiddenNotification, ReleaseNote, User, LoginHistory, Secret, SharedSecret, Payment, Plan, PendingSubscription, Notification
 from .utils import generate_token, send_verification_email, decrypt_secret, is_subscription_expired, is_storage_exceeded, is_encrypted, decrypt_secrets, encrypt_secret, get_subscription_details, get_unique_title, convert_utc_to_local, subscription_ended, change_subscription_plan, reset_password_email, cancel_subscription, generate_access_token, contact_email, verify_transaction, generate_apple_jwt, parse_apple_transaction, update_user_subscription, decode_apple_signed_payload, decode_jwt, generate_delete_token, send_delete_account_email, update_google_subscription, get_signed_url, upload_to_gcs, storage_client, GCS_BUCKET, _serve_file, gcs_file_exists, delete_from_gcs, get_subscription_status, parse_apple_renewal, apple_ms_to_datetime, is_upgrade, get_gcs_file_size, convert_local_to_utc
 from datetime import datetime, timedelta, timezone, date
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, get_jwt
@@ -2357,4 +2357,50 @@ def delete_all_notifications():
 
     return jsonify({'message': 'All notifications deleted successfully'}), 200
 
-    
+@api.route('/release_notes', methods=['GET'])
+def get_release_notes():
+
+    # Fetch release notes from the database
+    release_notes = (
+        ReleaseNote.query
+        .filter_by(is_active=True)
+        .order_by(ReleaseNote.release_date.desc())
+        .all()
+    )
+
+    return jsonify([
+        {
+            'id': note.id,
+            'title': note.title,
+            'version': note.version,
+            'notes': note.notes,
+            'is_active': note.is_active,
+            'release_date': note.release_date.isoformat(),
+            'created_at': note.created_at.isoformat(),
+        }
+        for note in release_notes
+    ]), 200
+
+
+@api.route('/release_notes/latest', methods=['GET'])
+def get_latest_release_note():
+
+    note = (
+        ReleaseNote.query
+        .filter_by(is_active=True)
+        .order_by(ReleaseNote.release_date.desc())
+        .first()
+    )
+
+    if not note:
+        return jsonify({'error': 'No release notes found'}), 404
+
+    return jsonify({
+        'id': note.id,
+        'title': note.title,
+        'version': note.version,
+        'notes': note.notes,
+        'is_active': note.is_active,
+        'release_date': note.release_date.isoformat(),
+        'created_at': note.created_at.isoformat(),
+    }), 200

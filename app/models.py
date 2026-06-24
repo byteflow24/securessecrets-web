@@ -279,3 +279,15 @@ class WhatsAppPendingSecret(db.Model):
     __table_args__ = (
         db.UniqueConstraint('phone', 'secret_id', name='uq_whatsapp_phone_secret'),
     )
+
+
+class ReleaseNote(db.Model):
+    __tablename__ = 'release_notes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    version = db.Column(db.String(20), nullable=False, unique=True)
+    title = db.Column(db.String(200), nullable=False)
+    release_date = db.Column(db.Date, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    notes = db.Column(db.JSON, nullable=False)
+    created_at = db.Column(TIMESTAMP, default=lambda: datetime.now(timezone.utc), nullable=False)

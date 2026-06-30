@@ -2486,3 +2486,47 @@ footer {
     color: #ee6f57;
     text-align: center;
 }
+
+.app-banner{
+    position: sticky;
+    top:0;
+    z-index:9999;
+
+    background:#121826;
+    border-bottom:1px solid rgba(255,255,255,.08);
+
+    padding:12px 18px;
+
+    backdrop-filter: blur(18px);
+}
+
+.app-banner-content{
+    display:flex;
+    align-items:center;
+}
+
+.app-banner-logo{
+    width:46px;
+    height:46px;
+    border-radius:12px;
+    margin-right:14px;
+}
+
+.app-banner-text{
+    flex:1;
+}
+
+.app-banner-text h6{
+    margin:0;
+    color:white;
+    font-weight:700;
+}
+
+.app-banner-text small{
+    color:#9FA6B2;
+}
+
+#appBannerButton{
+    border-radius:12px;
+    padding:8px 18px;
+}
